@@ -23,7 +23,8 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   folders, picked with Fuse's own file picker.
 - **Quick rescans** only read the folders that changed.
 - **Your files, left alone.** Fuse never moves or renames your files, and deletes a game's files only
-  when you ask in Settings, Storage and backups and confirm (never from Phone Link). Missing games are marked,
+  when you ask (Delete Game in its options, or Settings, Storage and backups) and confirm a question
+  that names how many files go, how much and where (never from Phone Link). Missing games are marked,
   not removed, and playlists for multi-disc games are written to Fuse's own cache.
 - **BIOS checks** report Unknown, never Missing, when a location cannot be read.
 - **Transfers that follow your rules**: how many at once, a bandwidth limit, slower or paused while
@@ -141,6 +142,9 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
 - Media already in **ES-DE and Batocera** layouts is used first.
 - **Square box art** for every game, from SteamGridDB, your own folders or a file; games without it
   show their cover whole instead of cropped.
+- **GIFs that move**: a GIF (or an animated WebP) chosen as a game's or a system's picture, its logo,
+  or your theme's picture behind everything plays wherever it is shown, and holds its first frame
+  under Reduced motion, in Low Power Mode and on the second screen while a game runs.
 - **SteamGridDB, IGDB, TheGamesDB and libretro thumbnails** fill the rest, with your own keys where a
   service needs one, by themselves after a scan if you like. When a source runs out of requests,
   the others take over. The ScreenScraper client is built in and waits for developer credentials, so in
@@ -179,6 +183,13 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   (on Android), **Search** with filters, game pages, a media manager, a folder browser, the **quick
   menu** you arrange (tiles and widgets moved, resized, added and taken out by controller, touch or
   keyboard), a **Play time** page and a guided setup.
+- **Library, All**: the chosen game in a compact stage with Play and Options, a card for each place
+  your games are (this device, RomM, your other devices, the computers that stream) with its count,
+  Jump Back In, and shelves whose tiles are sized to the screen. A mouse chooses what it points at
+  and pages a shelf with arrows; a finger presses the same buttons.
+- **The quick menu while you play**: a Playing section with the game, how long it has run, its saves,
+  emulator settings, updates, DLC and mods, a screenshot and Sync Now; tiles for Continue,
+  Downloads, Sync Now, Achievements, Favourites, Mute and Text Size.
 - **Stream from your computers**: with streaming on, the Library's All view has a shelf of the apps
   your computers offer through Sunshine or Apollo, each once, streamed through Moonlight from the
   computer you choose. A game or a whole system can stream from a computer instead of playing here,
@@ -191,6 +202,15 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   it passes under the drag. A real mouse dragged with its button held scrolls the same way.
 - **A second screen with pages**: what's chosen (or the remote while a film plays), Status with the
   battery large, and Controls with brightness, volume and switches, on the screen below or above.
+  Above the menus, a game shows its lines about it, its series, this week's play and what plays it;
+  a system shows its games; with nothing chosen, the clock, the week's play a bar a day, and the
+  games played last.
+- **Home below, as a DS has it**: with the menus on the touch screen, Home there is a grid of game
+  icons that runs sideways under a row of filters (Recent, Favourites, New, All, then each system by
+  its logo, which fills with the system's colour and picture when chosen). The first touch chooses a
+  game for the screen above, a second starts it, and a hold opens its options. A slim bar shows
+  where the grid is and slides it under a finger; a dock along the foot holds the chosen game,
+  Options, the icons' size and Play, each with its controller button.
 - **Twenty themes** and community themes from a link or a file ([docs/THEMES.md](docs/THEMES.md)), square
   box art or tall posters, four motion levels including Reduced, High contrast focus, optional glass
   panels and CRT effect, and interface sounds synthesised on the fly.

@@ -92,7 +92,7 @@ internal fun GameCarousel(kind: WidgetKind, games: List<GameCard>, feed: HomeFee
         cardShape = cardShape(),
         header = { dots -> CarouselHeader(widgetIcon(kind), widgetLabel(kind), dots, compact = compact) },
     ) { i, depth ->
-        GameSlide(shown[i], gameLine(kind, shown[i], feed), feed.systems.firstOrNull { it.platform.id == shown[i].platformId }, face, depth)
+        GameSlide(shown[i], gameLine(kind, shown[i], feed), feed.systems.firstOrNull { it.platform.id == shown[i].shownPlatform }, face, depth)
     }
 }
 
@@ -210,7 +210,7 @@ internal fun SystemsCarousel(feed: HomeFeed, face: FaceSize) {
 /** The systems in the order the carousel shows them: the one played last first, then the rest as listed. */
 internal fun systemsInOrder(feed: HomeFeed): List<PlatformCard> {
     val systems = feed.systems
-    val lead = feed.continuePlaying.firstOrNull()?.platformId?.let { id -> systems.firstOrNull { it.platform.id == id } } ?: return systems
+    val lead = feed.continuePlaying.firstOrNull()?.shownPlatform?.let { id -> systems.firstOrNull { it.platform.id == id } } ?: return systems
     return listOf(lead) + systems.filter { it !== lead }
 }
 

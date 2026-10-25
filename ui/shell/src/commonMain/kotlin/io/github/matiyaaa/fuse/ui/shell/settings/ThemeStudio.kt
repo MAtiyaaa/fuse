@@ -1134,7 +1134,7 @@ private fun detailOf(line: StudioLine, studio: StudioState, userMotion: String?)
         StudioRow.SPEED -> "How fast it drifts; none holds it still"
         StudioRow.BLUR -> "How much the art behind the panels softens"
         StudioRow.OPACITY -> "How much of the panels' colour covers the art"
-        StudioRow.PICTURE -> if (studio.picture != null) "Your own picture is behind everything. Choose another" else "A picture from this device, behind everything"
+        StudioRow.PICTURE -> if (studio.picture != null) "Your own picture is behind everything. Choose another" else "A picture or a GIF from this device, behind everything"
         StudioRow.PICTURE_DIM -> "Darker keeps text easy to read over it"
         StudioRow.PICTURE_ALIGN -> "Which part stays in view when the screen crops it"
         StudioRow.PICTURE_REMOVE -> "Back to a background Fuse draws"

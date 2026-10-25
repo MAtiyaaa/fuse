@@ -9,6 +9,10 @@ kotlin {
             api(projects.ui.fuseline)
             api(libs.coil.compose)
         }
+        androidMain.dependencies {
+            // Moving pictures (GIF, animated WebP) on Android: AnimatedImageDrawable through Coil.
+            implementation(libs.coil.gif)
+        }
         getByName("desktopTest") {
             dependencies {
                 // Pixel tests execute real Skia; compose-ui alone supplies no platform native.

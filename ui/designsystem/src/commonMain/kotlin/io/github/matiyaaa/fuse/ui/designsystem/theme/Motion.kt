@@ -30,6 +30,13 @@ fun FuselineMotion(profile: MotionProfile): FuselineMotion = FuselineMotion(prof
 fun FuselineMotion.ambientOn(quality: RenderQuality): Boolean = ambient && quality.animatedBackground
 
 /**
+ * Whether moving pictures (a GIF chosen as art, a logo or the background) play rather than hold
+ * their first frame: anything but Reduced motion, outside Low Power Mode, and not on the second
+ * screen while a game runs.
+ */
+fun FuselineMotion.picturesMove(quality: RenderQuality): Boolean = !reduced && quality.animatedBackground
+
+/**
  * Whether one-shot flourishes may run (reveals, the focus sweep, theme crossfades): anything but
  * Reduced motion, outside Low Power Mode.
  */

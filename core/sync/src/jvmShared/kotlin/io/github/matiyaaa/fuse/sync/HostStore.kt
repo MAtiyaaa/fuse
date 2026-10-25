@@ -24,6 +24,10 @@ internal data class ProfileRecord(
 /** A map of sign-ins, by key ("romm", "jellyfin:<profile>"). */
 internal val SignInsSerializer = kotlinx.serialization.builtins.MapSerializer(String.serializer(), String.serializer())
 
+/** The Hub's sign-ins, kept with the host but never in a backup of it (a backup signs nobody in). */
+internal const val HUB_SESSIONS_FILE = "hub-sessions.json"
+private val HubSessionsSerializer = kotlinx.serialization.builtins.MapSerializer(String.serializer(), Long.serializer())
+
 /**
  * A key the whole household uses (a scraper's API key, RetroAchievements' username and key):
  * "key:" and the name Fuse keeps it under on each device. Any trusted device may share one.
@@ -50,6 +54,11 @@ internal data class DeviceRecord(
     /** The Fuse it last called from, and that Fuse's protocol (0 before 0.4.2). */
     val fuseVersion: String = "",
     val protocol: Int = 0,
+    /**
+     * Signed in as the host with the host account: it manages the household from its own link, which
+     * never runs out, so updating or restarting the host never signs it out. Only unlinking it does.
+     */
+    val manager: Boolean = false,
 )
 
 @Serializable
@@ -88,6 +97,12 @@ class HostStore(
     private val sharedFile = File(dir, "shared-games.json")
     private val aliasFile = File(dir, "game-aliases.json")
     private val accountFile = File(dir, "account.json")
+    /**
+     * The Hub's sign-ins from away, each kept as its token's SHA-256 (never the token) with when it
+     * ends: kept in memory alone, an update or a restart of the host signed everyone out.
+     */
+    private val hubSessionsFile = File(dir, HUB_SESSIONS_FILE)
+    private val hubSessions = HashMap<String, Long>()
     private val outsideFile = File(dir, "outside.json")
     /** The household's RomM and Jellyfin: addresses, and sign-ins sealed with [servicesKey]. */
     private val servicesFile = File(dir, "services.json")
@@ -165,6 +180,7 @@ class HostStore(
             revisions[SHARED_SAVES] = f.readLines().mapNotNull { line -> runCatching { json.decodeFromString(SaveRevision.serializer(), line) }.getOrNull() }.toMutableList()
         }
         if (accountFile.isFile) account = runCatching { json.decodeFromString(HostAccount.serializer(), accountFile.readText()) }.getOrNull()
+        if (hubSessionsFile.isFile) runCatching { json.decodeFromString(HubSessionsSerializer, hubSessionsFile.readText()) }.getOrNull()?.let(hubSessions::putAll)
         if (outsideFile.isFile) outside = runCatching { json.decodeFromString(OutsideAddress.serializer(), outsideFile.readText()) }.getOrDefault(OutsideAddress())
         if (aliasFile.isFile) runCatching { json.decodeFromString(GameAliasesSerializer, aliasFile.readText()) }.getOrNull()?.let(aliases::putAll)
         if (sharedFile.isFile) runCatching { json.decodeFromString(SharedGames.serializer(), sharedFile.readText()).games }.getOrNull()?.let(shared::addAll)
@@ -398,11 +414,66 @@ class HostStore(
         writeAtomically(accountFile, json.encodeToString(HostAccount.serializer(), next).toByteArray())
         runCatching { accountFile.setReadable(false, false); accountFile.setReadable(true, true) }
         account = next
+        // A new password ends every Hub sign-in made with the old one.
+        if (password != null) closeHubSessions()
     }
 
     fun clearAccount() = synchronized(lock) {
         accountFile.delete()
         account = null
+        closeHubSessions()
+    }
+
+    /** Signs the Hub in for [token] until [until], letting go of sign-ins that ended before [now]. */
+    fun openHubSession(token: String, until: Long, now: Long) = synchronized(lock) {
+        hubSessions.entries.removeIf { it.value < now }
+        hubSessions[hubKey(token)] = until
+        saveHubSessions()
+    }
+
+    /** True while [token] is a Hub sign-in that hasn't ended at [now]. */
+    fun hubSessionOpen(token: String, now: Long): Boolean = synchronized(lock) {
+        val key = hubKey(token)
+        val until = hubSessions[key] ?: return false
+        if (until >= now) return true
+        hubSessions.remove(key)
+        saveHubSessions()
+        false
+    }
+
+    /**
+     * Carries [token]'s Hub sign-in on to [until] when it is used: a browser that opens the Hub now
+     * and then stays signed in for good. Written at most once a day per sign-in.
+     */
+    fun renewHubSession(token: String, until: Long): Boolean = synchronized(lock) {
+        val key = hubKey(token)
+        val was = hubSessions[key] ?: return false
+        if (until - was < RENEW_EVERY_MS) return false
+        hubSessions[key] = until
+        saveHubSessions()
+        true
+    }
+
+    /** Ends [token]'s Hub sign-in (Sign Out). */
+    fun closeHubSession(token: String) = synchronized(lock) {
+        if (hubSessions.remove(hubKey(token)) != null) saveHubSessions()
+    }
+
+    /** Ends every Hub sign-in. */
+    fun closeHubSessions() = synchronized(lock) {
+        hubSessions.clear()
+        hubSessionsFile.delete()
+    }
+
+    private fun hubKey(token: String): String = SyncCrypto.sha256(token.toByteArray())
+
+    private fun saveHubSessions() {
+        if (hubSessions.isEmpty()) {
+            hubSessionsFile.delete()
+            return
+        }
+        writeAtomically(hubSessionsFile, json.encodeToString(HubSessionsSerializer, hubSessions).toByteArray())
+        runCatching { hubSessionsFile.setReadable(false, false); hubSessionsFile.setReadable(true, true) }
     }
 
     /** True for the account's username (any case) and password. */
@@ -495,13 +566,24 @@ class HostStore(
     /** Unlinks a device: its secret stops working at once. What it synced stays. */
     fun revokeDevice(id: String): Boolean = synchronized(lock) {
         val d = devices[id] ?: return@synchronized false
-        devices[id] = d.copy(revoked = true, secret = "", opened = emptyMap())
+        devices[id] = d.copy(revoked = true, secret = "", opened = emptyMap(), manager = false)
         saveDevices()
         event(JournalEvent.DEVICE, device = id)
         true
     }
 
-    private fun deviceInfoOf(d: DeviceRecord) = DeviceInfo(d.id, d.name, d.platform, d.profile, d.lastSeen, d.lastSync, d.connection, d.revoked, d.fuseVersion, d.protocol)
+    /** Signs device [id] in (or out) as the host; false for a device that isn't linked. */
+    fun setManager(id: String, on: Boolean): Boolean = synchronized(lock) {
+        val d = devices[id]?.takeIf { !it.revoked } ?: return@synchronized false
+        if (d.manager != on) {
+            devices[id] = d.copy(manager = on)
+            saveDevices()
+            event(JournalEvent.DEVICE, device = id)
+        }
+        true
+    }
+
+    private fun deviceInfoOf(d: DeviceRecord) = DeviceInfo(d.id, d.name, d.platform, d.profile, d.lastSeen, d.lastSync, d.connection, d.revoked, d.fuseVersion, d.protocol, d.manager)
 
     /** Notes the Fuse [id] calls from, kept only when it changed (an update, or the first call from 0.4.2). */
     internal fun noteVersion(id: String, fuseVersion: String, protocol: Int) = synchronized(lock) {
@@ -1131,7 +1213,7 @@ object HostFiles {
     private val OWN = setOf(
         "host.json", "devices.json", "profiles.json", "shared-games.json", "game-aliases.json", "account.json", "outside.json",
         "journal.jsonl", "applied.json", "admin.token", "objects", "profiles", "services.json", "services.key",
-        "household", HostLeadership.HOSTS_FILE, HostLeadership.NODE_FILE, HostLeadership.SECRET_FILE,
+        "household", HostLeadership.HOSTS_FILE, HostLeadership.NODE_FILE, HostLeadership.SECRET_FILE, HUB_SESSIONS_FILE,
     )
 
     /** The host's own files and folders in [dir] (with any write a crash left half done). */
@@ -1171,6 +1253,9 @@ internal const val MIN_PASSWORD = 8
 
 /** How hard the account's password is stretched (it guards joining and the Hub from away). */
 internal const val ACCOUNT_ITERATIONS = 210_000
+
+/** A Hub sign-in is carried on when used, at most this often. */
+private const val RENEW_EVERY_MS = 24 * 60 * 60_000L
 
 /** applied.json: device id to `profile|game|kind` to what it reported. */
 private val AppliedFileSerializer: kotlinx.serialization.KSerializer<Map<String, Map<String, AppliedNote>>> = kotlinx.serialization.builtins.MapSerializer(

@@ -61,6 +61,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.emulatorSettingsSheet
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.icon
 import io.github.matiyaaa.fuse.ui.shell.app.showProblem
@@ -172,7 +173,20 @@ private fun AppState.contentFolderRow(key: ScopedKey<String>, system: PlatformId
 @Composable
 fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
     val platforms by app.store.library.platforms.collectAsState()
-    val card = platforms.firstOrNull { it.platform.id == platformId }
+    val installed by app.store.emulators.installed.collectAsState()
+    // A system with no games on this device yet (its games on RomM or another device only) has its
+    // settings all the same: made from Fuse's catalogue, with the emulators installed for it. It
+    // once waited for a card that never came, and the page never opened.
+    val card = platforms.firstOrNull { it.platform.id == platformId } ?: remember(platformId, installed) {
+        io.github.matiyaaa.fuse.library.PlatformCatalog.byId(platformId)?.let { p ->
+            val options = app.store.emulators.optionsFor(platformId)
+            val chosen = options.firstOrNull { it.installed }
+            io.github.matiyaaa.fuse.ui.shell.store.PlatformCard(
+                p, 0, io.github.matiyaaa.fuse.ui.shell.store.Art.None, chosen?.name, chosen != null, options.count { it.installed },
+                io.github.matiyaaa.fuse.model.BiosStatus.NotRequired, p.defaultLayout, emptyList(),
+            )
+        }
+    }
     val sel = remember { LinearSelection() }
     val reveal = rememberReveal(platformId)
     val p = card?.platform
@@ -191,6 +205,15 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
         if (health.size > 5) add(MenuAction("health.more", "${health.size - 5} more in System health", FuseIcons.HeartPulse, trailing = Trailing.Chevron, section = "Needs attention", onSelect = { app.go(Route.Settings("health")) }))
         val playing = "Playing"
         add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Value(card.emulatorName ?: "None installed"), detail = "${card.installedEmulators} installed for ${p.shortName}", section = playing, onSelect = { app.platformEmulatorPicker(card) }))
+        // Its emulator's own settings for every game, from here: changed in Fuse where it can, else opened in the emulator.
+        val emulatorId = card.emulatorChosen ?: app.store.emulators.optionsFor(platformId).firstOrNull { it.installed && it.name == card.emulatorName }?.id
+        if (emulatorId != null && card.emulatorInstalled) {
+            add(MenuAction(
+                "emulator.settings", "${card.emulatorName} Settings", FuseIcons.Sliders,
+                detail = "Every game's settings in ${card.emulatorName}", trailing = Trailing.Chevron, section = playing,
+                onSelect = { app.emulatorSettingsSheet(null, null, emulatorId) },
+            ))
+        }
         add(app.scopedRow(ScopedSettings.FolderMode, platformId, "Folder behaviour", FuseIcons.FolderOpen, listOf(
             FolderPolicy.AUTO to "Automatic", FolderPolicy.FOLDER_AS_GAME to "Folder is the game",
             FolderPolicy.FOLDER_BROWSER to "Open as a folder", FolderPolicy.FILE to "Files only",

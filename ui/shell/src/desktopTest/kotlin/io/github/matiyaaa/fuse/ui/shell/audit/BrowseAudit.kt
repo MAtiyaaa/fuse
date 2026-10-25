@@ -101,14 +101,14 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         useLibrary()
         libraryTab()
         waitFor("Recently played")
-        // All, where the Library opens: every game wherever it is, in shelves.
+        // All, where the Library opens: every game wherever it is, in rows.
         settle(1_200)
-        tap(PadButton.DPAD_DOWN)
-        settle()
-        shoot("All, Recently Added focused")
-        tap(PadButton.DPAD_DOWN)
-        settle()
-        shoot("All, Systems shelf")
+        shoot("All, as it opens")
+        for (n in 1..3) {
+            tap(PadButton.DPAD_DOWN)
+            settle()
+            shoot("All, $n ${if (n == 1) "row" else "rows"} down")
+        }
     }
 
     scenario("library", "streamed apps") {
@@ -211,6 +211,64 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
             viewAs(layout)
             shoot("Game Boy Advance, ${layout.words()} layout")
         }
+    }
+
+    scenario("library", "surprise me") {
+        useLibrary()
+        libraryTab()
+        waitFor("Recently played")
+        settle(1_200)
+        // Into the first row, then a game's options, which end with Surprise Me.
+        tap(PadButton.DPAD_DOWN)
+        settle(600)
+        tap(PadButton.X)
+        settle(600)
+        // Its last tab, View, holds it.
+        repeat(6) { if (!hasText("Surprise Me")) tap(PadButton.R1) }
+        waitFor("Surprise Me")
+        tapText("Surprise Me")
+        waitFor("SURPRISE ME")
+        shoot("the reel spinning", 1_400)
+        waitFor("Spin Again")
+        // The spin's own time, frame by frame (slow frames here would undercount it).
+        advanceExactly(3_000)
+        pumpUntil("the reel to stop", 10_000) { !hasText("Choosing") }
+        shoot("landed: the game, why it, and Play", 800)
+        // X spins again, and never to the same game.
+        tap(PadButton.X)
+        advanceExactly(3_000)
+        pumpUntil("the reel to stop again", 10_000) { !hasText("Choosing") }
+        shoot("spun again", 800)
+        tap(PadButton.B)
+    }
+
+    scenario("library", "smart filters") {
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED", libraryPinnedFilters = emptyList()) })
+        libraryTab()
+        waitFor("Recently played")
+        settle(1_200)
+        // Up to the tabs, then along to the toolbar's Smart filters.
+        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the tabs")
+        tapText("Smart filters", step = PadButton.DPAD_RIGHT)
+        waitFor("Pinned to the tabs")
+        settle(600)
+        shoot("each list with what it holds, and a pin for each")
+        // Five lists, then a switch for each: the third switch is Gathering dust's, flipped in place.
+        tap(PadButton.DPAD_DOWN, 7)
+        tap(PadButton.A)
+        settle(500)
+        shoot("Gathering dust pinned")
+        tap(PadButton.DPAD_UP, 7)
+        tap(PadButton.A)
+        waitFor("Unplayed")
+        settle(1_200)
+        shoot("Unplayed open: its tab beside the pinned one")
+        // Its tab, then the pinned one beside it.
+        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the tabs")
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.DPAD_DOWN)
+        settle(1_200)
+        shoot("Gathering dust, from its pinned tab")
     }
 
     scenario("library", "system folding") {

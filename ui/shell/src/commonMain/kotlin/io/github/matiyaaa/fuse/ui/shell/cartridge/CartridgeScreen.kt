@@ -304,7 +304,7 @@ fun CartridgeContent(app: AppState, embedded: Boolean, active: Boolean, topPaddi
         if (!active) return@PageEffect
         app.hero = when (row) {
             SYSTEMS -> systems.getOrNull(col)?.let(::systemRoom)
-            RECENT -> shownRecent.getOrNull(col)?.game?.let { g -> g.room(platforms.firstOrNull { it.platform.id == g.platformId }) }
+            RECENT -> shownRecent.getOrNull(col)?.game?.let { g -> g.room(platforms.firstOrNull { it.platform.id == g.shownPlatform }) }
             else -> null
         }
         app.hints = when (row) {

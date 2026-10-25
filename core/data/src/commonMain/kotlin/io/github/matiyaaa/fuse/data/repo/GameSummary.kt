@@ -65,4 +65,6 @@ data class RecommendationRow(
     val developer: String?,
     val franchise: String?,
     val rating: Int?,
+    /** The most people who can play it at once, when its details say ([mostPlayers]). */
+    val players: Int? = null,
 )

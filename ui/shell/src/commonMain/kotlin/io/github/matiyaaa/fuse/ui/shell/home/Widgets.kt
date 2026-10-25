@@ -498,6 +498,8 @@ private fun ColumnScope.PlaytimeWeek(feed: HomeFeed, room: WidgetRoom) {
     val days = feed.playtime.lastSevenDays.ifEmpty { List(7) { 0L } }
     val week = playtimeText(feed.playtime.weekSeconds)
     val total = "${playtimeText(feed.playtime.totalSeconds)} in total"
+    // How the week stands beside last week at the same point, once there is something to compare.
+    val change = weekChange(feed.playtime.week, short = true)
     if (room.wide) {
         // The header across the top; under it the value on the left and the week as a chart on the right.
         WidgetHeader(FuseIcons.Calendar, WidgetKind.PLAYTIME_WEEK.title())
@@ -506,7 +508,13 @@ private fun ColumnScope.PlaytimeWeek(feed: HomeFeed, room: WidgetRoom) {
             Column(Modifier.weight(1f)) {
                 WidgetValue(week)
                 // A short card keeps the value; the total is on the stage beside it.
-                if (!room.compact) WidgetCaption(total)
+                if (!room.compact) {
+                    if (change != null) WeekChangeLine(change) else WidgetCaption(total)
+                    // The game it was spent on most, when there is room under it.
+                    feed.playtime.week.games.firstOrNull()?.takeIf { room.roomy }?.let { (g, s) ->
+                        WidgetCaption("Most: ${g.title}, ${playtimeText(s)}")
+                    }
+                }
             }
             Spacer(Modifier.width(Space.l))
             WeekBars(days, Modifier.weight(1f).fillMaxHeight(), letters = !room.compact)
@@ -515,6 +523,7 @@ private fun ColumnScope.PlaytimeWeek(feed: HomeFeed, room: WidgetRoom) {
         WidgetHeader(FuseIcons.Calendar, WidgetKind.PLAYTIME_WEEK.title())
         Spacer(Modifier.height(Space.xs))
         WidgetValue(week)
+        if (change != null && !room.compact && !room.small) WeekChangeLine(change)
         Spacer(Modifier.height(Space.s))
         WeekBars(days, Modifier.fillMaxWidth().weight(1f), letters = false)
     }

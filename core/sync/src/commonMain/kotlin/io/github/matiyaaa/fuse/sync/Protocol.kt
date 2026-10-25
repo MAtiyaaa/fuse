@@ -238,6 +238,8 @@ data class DeviceInfo(
     /** The Fuse it runs ("0.4.2") and the protocol it speaks; empty and 0 until it calls from 0.4.2 or later. */
     val fuseVersion: String = "",
     val protocol: Int = 0,
+    /** Signed in as the host: it manages the household (devices, the account, the address from outside). */
+    val manager: Boolean = false,
 )
 
 @Serializable
@@ -371,6 +373,24 @@ data class HostAccountChange(val username: String, val password: String? = null)
 /** The host's address from outside home, set on the host (empty clears it). */
 @Serializable
 data class OutsideChange(val address: String)
+
+/**
+ * Signing a device in as the host: a challenge for this one try, and how the host account's password
+ * is stretched ([salt] null when the host has no account). [manager] says whether it already is.
+ */
+@Serializable
+data class HostSignInChallenge(val challenge: String, val salt: String? = null, val iterations: Int = 0, val manager: Boolean = false)
+
+/** The host account's username, and the password's proof over [challenge]: the password never travels. */
+@Serializable
+data class HostSignIn(val username: String, val challenge: String, val proof: String)
+
+/**
+ * The host's account changed from a device signed in as the host: the new password (when there is
+ * one) sealed with the device's own secret and [salt], so it never travels as it is.
+ */
+@Serializable
+data class SealedAccountChange(val username: String, val sealedPassword: String? = null, val salt: String = "")
 
 /** Where a request to join stands: [WAITING], [ALLOWED] (with the sealed secret), [DENIED] or [GONE] (ran out). */
 @Serializable

@@ -32,8 +32,19 @@ data class CapabilityProfile(
 @Serializable
 enum class DeviceTier { LOW, MID, HIGH }
 
+/**
+ * How hard Fuse works. [LOW_POWER] is never chosen as a profile: it is what Low Power Mode (and
+ * Automatic on a low-end device) comes to, and a profile saved as it by an older Fuse is read as
+ * Low Power Mode on ([choosable] are the ones offered).
+ */
 @Serializable
-enum class PerformanceProfile { AUTOMATIC, LOW_POWER, BALANCED, HIGH_QUALITY }
+enum class PerformanceProfile {
+    AUTOMATIC, LOW_POWER, BALANCED, HIGH_QUALITY;
+
+    companion object {
+        val choosable: List<PerformanceProfile> = listOf(AUTOMATIC, BALANCED, HIGH_QUALITY)
+    }
+}
 
 /** Concrete switches the UI reads; derived from profile + capability + Low Power Mode. */
 @Serializable
@@ -158,6 +169,11 @@ data class DisplayProfile(
      * main screen a showcase of what is chosen. Only on a device with a second screen.
      */
     val flipped: Boolean = false,
+    /**
+     * Flipped, how big Home's icons are on the touch screen: 0 fewer and larger (one row at the
+     * most), 1 as many as fit comfortably, 2 more and smaller.
+     */
+    val flippedZoom: Int = 1,
     /** The second screen shows the main screen's background (its scene or picture) behind what it shows. */
     val companionFollowsBackground: Boolean = true,
     /** Which way round Fuse turns on a device that rotates (Android). */

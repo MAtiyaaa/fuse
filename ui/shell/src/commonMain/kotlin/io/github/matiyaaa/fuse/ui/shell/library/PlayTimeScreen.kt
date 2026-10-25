@@ -54,13 +54,18 @@ import io.github.matiyaaa.fuse.ui.shell.settings.SettingsPageHeading
 import io.github.matiyaaa.fuse.ui.shell.store.PlayTimeReport
 
 /**
- * Play time: today, this week, this month and in all as four figures, the last thirty days as bars,
+ * Play time: the week so far beside the last ([io.github.matiyaaa.fuse.ui.shell.home.YourWeekPanel]),
+ * today, this month and in all as figures, the last thirty days as bars,
  * and the games of this month and the systems of all time as a list that opens what it names. Only
  * time Fuse saw counts toward the days; imported time (Steam, RetroAchievements) joins the total.
  */
 @Composable
 fun PlayTimeScreen(app: AppState) {
     val report by remember { app.store.library.playTime() }.collectAsState(PlayTimeReport())
+    val home by app.store.library.home.collectAsState()
+    val feed by app.store.achievements.feed.collectAsState()
+    val week = home.playtime.week
+    val weekAchievements = feed?.recent?.count { week.start > 0 && it.earnedAt >= week.start } ?: 0
     val sel = remember { LinearSelection() }
     PageEffect(Unit) {
         app.hero = null
@@ -75,7 +80,7 @@ fun PlayTimeScreen(app: AppState) {
                 "g${g.id.value}", g.title, null,
                 detail = "${g.platformShort}  ·  ${share(seconds, r.monthSeconds)} of ${r.month}",
                 trailing = Trailing.Value(playtimeText(seconds)),
-                art = MenuArt(g.art.tile, square = true, fallbackTitle = g.title, accent = g.accent, wide = false),
+                art = io.github.matiyaaa.fuse.ui.shell.components.gameMenuArt(g.art, g.title, g.accent, app.store.prefs.value.gameArt),
                 section = "Most played in ${r.month}",
                 onSelect = { app.activateGame(g) },
             ))
@@ -102,17 +107,24 @@ fun PlayTimeScreen(app: AppState) {
             Spacer(Modifier.height(if (short) Space.m else Space.l))
             val figures = @Composable { m: Modifier ->
                 Column(m, verticalArrangement = Arrangement.spacedBy(Space.m)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                        Figure(FuseIcons.Sun, "Today", r.todaySeconds, Modifier.weight(1f))
-                        Figure(FuseIcons.Calendar, "This week", r.weekSeconds, Modifier.weight(1f))
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                        Figure(FuseIcons.CalendarDays, r.month.ifEmpty { "This month" }, r.monthSeconds, Modifier.weight(1f))
-                        Figure(
-                            FuseIcons.Hourglass, "All time", r.totalSeconds, Modifier.weight(1f),
-                            note = if (r.importedSeconds > 0) "${playtimeText(r.importedSeconds)} imported" else null,
+                    // The week so far, beside the last at the same point, with its games.
+                    Panel(Modifier.fillMaxWidth()) {
+                        io.github.matiyaaa.fuse.ui.shell.home.YourWeekPanel(
+                            week, home.playtime.lastSevenDays, weekAchievements, onGame = { app.activateGame(it) },
+                            Modifier.fillMaxWidth().padding(Space.l), compact = short || narrow,
                         )
                     }
+                    val today = @Composable { w: Modifier -> Figure(FuseIcons.Sun, "Today", r.todaySeconds, w) }
+                    val month = @Composable { w: Modifier -> Figure(FuseIcons.CalendarDays, r.month.ifEmpty { "This month" }, r.monthSeconds, w) }
+                    val all = @Composable { w: Modifier ->
+                        Figure(FuseIcons.Hourglass, "All time", r.totalSeconds, w, note = if (r.importedSeconds > 0) "${playtimeText(r.importedSeconds)} imported" else null)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                        today(Modifier.weight(1f))
+                        month(Modifier.weight(1f))
+                        if (!narrow) all(Modifier.weight(1f))
+                    }
+                    if (narrow) all(Modifier.fillMaxWidth())
                     Panel(Modifier.fillMaxWidth().weight(1f, fill = !narrow)) {
                         Column(Modifier.fillMaxSize().padding(Space.l)) {
                             val busiest = r.days.maxOrNull() ?: 0

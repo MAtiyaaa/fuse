@@ -457,6 +457,8 @@ private fun FuseAppContent(
     val hintFlash = rememberHintFlash()
     MenuMusic(app, platform.music)
     FillFinishedToast(app)
+    // Back from a game: what was unlocked in it, said once.
+    AchievementRecap(store) { app.toasts.show(it, ToastKind.SUCCESS, FuseIcons.Trophy, durationMs = 6_000) }
     io.github.matiyaaa.fuse.ui.shell.cartridge.UploadFinishedToasts(app)
     DisposableEffect(router) {
         router.feedback = InputFeedback { event, result ->
@@ -564,7 +566,9 @@ private fun FuseAppContent(
             ) {
                 // The room fills the whole screen; everything on it keeps clear of edges a TV cuts off.
                 Box(Modifier.fillMaxSize().unseenUnderOpening(app)) {
-                    Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient, spec.wallpaper)
+                    // With the menus below and the chosen game large above, the touch screen keeps the
+                    // theme's own room, as a DS's lower screen does, and leaves the game's art to the screen above.
+                    Room(app, prefs.showHero && !LocalShowcaseElsewhere.current, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient, spec.wallpaper)
                 }
                 val margin = (calibration?.margin ?: prefs.screenMargin).coerceIn(0, 10) / 100f
                 // On an ultrawide screen (wider than about 21:9) the interface keeps a 21:9-like frame
@@ -616,6 +620,9 @@ private fun FuseAppContent(
                     QuickMenu(app)
                     OverlayHost(app)
                     CalibrationOverlay(app)
+                    // With the menus on the touch screen below, a game runs on the screen above, and
+                    // its achievements show here, big, as they unlock.
+                    if (LocalShowcaseElsewhere.current) AchievementMoments(store)
                     ToastHost(app.toasts)
                     app.capture?.let { CaptureOverlay(it) }
                     LaunchVeilView(app)
@@ -785,6 +792,7 @@ private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash, dockRoom: Dp)
     val hints = when {
         app.contextMenu != null || app.choice != null || app.problem != null || app.confirm != null -> MENU_HINTS
         app.liftedTab != null -> LIFTED_TAB_HINTS
+        app.surprise != null -> SURPRISE_HINTS
         else -> app.hints
     }
     // Content fades out under the hint line, so hints never sit on top of tiles; with a dock, on
@@ -803,6 +811,7 @@ private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash, dockRoom: Dp)
 
 private val MENU_HINTS = listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintButton.BACK, "Back"))
 private val LIFTED_TAB_HINTS = listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
+private val SURPRISE_HINTS = listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintButton.OPTIONS, "Spin Again"), Hint(HintButton.SEARCH, "Details"), Hint(HintButton.BACK, "Close"))
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */
 /** Not drawn while an opening covers the whole screen ([AppState.openingCovers]); read while drawing, so it never recomposes. */
@@ -864,8 +873,14 @@ private fun Room(
                     Appear(videoReady, enter = fadeIn(Fuse.motion.fade(Durations.DELIBERATE)), exit = fadeOut(Fuse.motion.fade(Durations.FAST))) {
                         Box(Modifier.fillMaxSize())
                     }
+                    // Never under a game: the preview went on playing behind every game started from its
+                    // page (nothing showed it, yet it decoded every frame for as long as the game ran).
+                    val gameOn = app.store.homeFeed.collectAsState().value.playtime.currentGame != null
+                    // Nor with Fuse out of sight (another app in front, the window minimised).
+                    val shown = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState().value
+                        .isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
                     Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (videoReady) 1f else 0f }) {
-                        player.Player(src, playing = app.launching == null && !app.overlayOpen, modifier = Modifier.fillMaxSize(), onFirstFrame = { videoReady = true })
+                        player.Player(src, playing = app.launching == null && !app.overlayOpen && !gameOn && shown, modifier = Modifier.fillMaxSize(), onFirstFrame = { videoReady = true })
                     }
                 }
             },

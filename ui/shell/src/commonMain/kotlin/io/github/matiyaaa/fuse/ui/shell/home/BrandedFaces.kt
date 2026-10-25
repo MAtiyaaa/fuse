@@ -109,7 +109,7 @@ internal fun ContinueFace(feed: HomeFeed, face: FaceSize) {
  */
 @Composable
 private fun ContinueSlide(game: GameCard, feed: HomeFeed, face: FaceSize, depth: CarouselDepth?, underHeader: Dp = 0.dp) {
-    val system = feed.systems.firstOrNull { it.platform.id == game.platformId }
+    val system = feed.systems.firstOrNull { it.platform.id == game.shownPlatform }
     val accent = game.accent.toColor()
     val deep = lerp(accent, Color.Black, 0.86f)
     val backdrop = game.art.hero ?: game.art.screenshot ?: game.art.grid

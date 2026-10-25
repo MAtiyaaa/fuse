@@ -15,6 +15,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -33,7 +34,10 @@ data class ExpectedHash(val algorithm: String, val hex: String)
  * moves the checked file into place.
  */
 object RangedDownload {
-    private const val BUFFER = 64 * 1024
+    private const val BUFFER = 256 * 1024
+
+    /** Bytes gathered before each write to the drive: fewer, larger writes (an SD card's are slow). */
+    private const val WRITE_BUFFER = 1 shl 20
 
     /**
      * Fetches [url] into [part]. [size] is what the source said the file is, when it did. Returns the
@@ -49,12 +53,47 @@ object RangedDownload {
         doneBefore: Long = 0,
         totalOverall: Long? = size,
         request: HttpRequestBuilder.() -> Unit = {},
+    ): Long = fetchInto(http, url, part, size, io, doneBefore, totalOverall, digest = null, request)
+
+    /**
+     * As [fetch], then checks the file as [TransferFiles.verify] does, by a hash worked out as the
+     * bytes arrive: only what an earlier try left in [part] is read again, never the whole file.
+     */
+    suspend fun fetchVerified(
+        http: HttpClient,
+        url: suspend () -> String,
+        part: File,
+        size: Long?,
+        hash: ExpectedHash?,
+        io: TransferIo,
+        doneBefore: Long = 0,
+        totalOverall: Long? = size,
+        request: HttpRequestBuilder.() -> Unit = {},
+    ): Long {
+        val digest = hash?.takeIf { it.hex.isNotBlank() }?.let { TransferFiles.messageDigest(it.algorithm) }
+        val have = fetchInto(http, url, part, size, io, doneBefore, totalOverall, digest, request)
+        io.phase(TransferPhase.VERIFYING)
+        TransferFiles.verify(part, size, hash, digested = digest?.let { TransferFiles.hex(it.digest()) })
+        return have
+    }
+
+    private suspend fun fetchInto(
+        http: HttpClient,
+        url: suspend () -> String,
+        part: File,
+        size: Long?,
+        io: TransferIo,
+        doneBefore: Long,
+        totalOverall: Long?,
+        digest: MessageDigest?,
+        request: HttpRequestBuilder.() -> Unit,
     ): Long = withContext(Dispatchers.IO) {
         part.parentFile?.mkdirs()
         var have = if (part.isFile) part.length() else 0L
         // Already whole (a restart after the last byte arrived): nothing to ask for.
         if (size != null && have == size && size > 0) {
             io.progress(doneBefore + have, totalOverall)
+            digest?.let { TransferFiles.feed(it, part, have) }
             return@withContext have
         }
         if (size != null && have > size) {
@@ -83,12 +122,16 @@ object RangedDownload {
             }
             val resuming = resp.status == HttpStatusCode.PartialContent && have > 0 && contentRangeStart(resp) == have
             if (!resuming) have = 0
+            digest?.reset()
+            if (digest != null && have > 0) TransferFiles.feed(digest, part, have)
             val length = resp.headers[HttpHeaders.ContentLength]?.toLongOrNull()
             val expected = size ?: length?.let { it + have }
             io.phase(TransferPhase.TRANSFERRING)
             io.progress(doneBefore + have, totalOverall ?: expected?.let { doneBefore + it })
             val channel = resp.bodyAsChannel()
-            FileOutputStream(part, resuming).use { out ->
+            val file = FileOutputStream(part, resuming)
+            // Closed on every way out, a pause or a dropped line too, so what arrived is on the drive to carry on from.
+            BufferedOutputStream(file, WRITE_BUFFER).use { out ->
                 val buffer = ByteArray(BUFFER)
                 while (true) {
                     val n = channel.readAvailable(buffer, 0, buffer.size)
@@ -100,11 +143,17 @@ object RangedDownload {
                     } catch (e: IOException) {
                         throw writeFailure(part, e)
                     }
+                    digest?.update(buffer, 0, n)
                     have += n
                     if (expected != null && have > expected) throw TransferFailure("The server sent more than the file's size. Try again later.")
                     io.progress(doneBefore + have, totalOverall ?: expected?.let { doneBefore + it })
                 }
-                out.fd.sync()
+                try {
+                    out.flush()
+                } catch (e: IOException) {
+                    throw writeFailure(part, e)
+                }
+                file.fd.sync()
             }
             if (expected != null && have < expected) throw TransferInterrupted("The connection closed before the file was complete.")
         }
@@ -130,36 +179,49 @@ object RangedDownload {
 object TransferFiles {
     /** The hex digest of [file] with [algorithm] ("md5", "sha1", "sha256"). */
     fun digest(file: File, algorithm: String): String {
-        val md = MessageDigest.getInstance(
-            when (algorithm.lowercase()) {
-                "md5" -> "MD5"
-                "sha1" -> "SHA-1"
-                else -> "SHA-256"
-            },
-        )
+        val md = messageDigest(algorithm)
+        feed(md, file, Long.MAX_VALUE)
+        return hex(md.digest())
+    }
+
+    /** The digest for [algorithm] ("md5", "sha1", anything else SHA-256). */
+    fun messageDigest(algorithm: String): MessageDigest = MessageDigest.getInstance(
+        when (algorithm.lowercase()) {
+            "md5" -> "MD5"
+            "sha1" -> "SHA-1"
+            else -> "SHA-256"
+        },
+    )
+
+    /** Adds the first [upTo] bytes of [file] to [md]. */
+    fun feed(md: MessageDigest, file: File, upTo: Long) {
         file.inputStream().use { input ->
-            val buf = ByteArray(1 shl 16)
-            while (true) {
-                val n = input.read(buf)
+            val buf = ByteArray(1 shl 20)
+            var left = upTo
+            while (left > 0) {
+                val n = input.read(buf, 0, minOf(buf.size.toLong(), left).toInt())
                 if (n < 0) break
                 md.update(buf, 0, n)
+                left -= n
             }
         }
-        return md.digest().joinToString("") { "%02x".format(it) }
     }
+
+    fun hex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it) }
 
     /**
      * Checks [part] against what the source said ([size], [hash]). A file of the wrong size or hash is
      * removed (it can't be trusted to carry on from) and the transfer fails, to start over when tried again.
+     * [digested] is [part]'s hash already worked out as it was written, when it was.
      */
-    fun verify(part: File, size: Long?, hash: ExpectedHash?) {
+    fun verify(part: File, size: Long?, hash: ExpectedHash?, digested: String? = null) {
         if (!part.isFile) throw TransferFailure("The downloaded file went missing before it could be checked.")
         if (size != null && part.length() != size) {
             part.delete()
             throw TransferFailure("The server sent a file of the wrong size. Try again.")
         }
         if (hash != null && hash.hex.isNotBlank()) {
-            val got = digest(part, hash.algorithm)
+            val got = digested ?: digest(part, hash.algorithm)
             if (!got.equals(hash.hex.trim(), ignoreCase = true)) {
                 part.delete()
                 throw TransferFailure("The file didn't match its checksum, so it wasn't kept. Try again.")

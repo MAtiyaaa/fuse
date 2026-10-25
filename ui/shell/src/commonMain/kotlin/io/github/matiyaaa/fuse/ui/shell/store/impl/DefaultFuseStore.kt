@@ -123,7 +123,7 @@ internal class DefaultFuseStore private constructor(
             ctx.scope,
             disk = JellyfinFiles(ctx.services),
             discovery = ctx.services.jellyfinDiscovery,
-            awake = ctx.services.awake,
+            awake = ctx.rounds,
         )
     }
     private val mediaFeed = MutableStateFlow(io.github.matiyaaa.fuse.jellyfin.MediaFeed())
@@ -596,6 +596,8 @@ internal class DefaultFuseStore private constructor(
         offlineMedia.start()
         streaming.start()
         ctx.scope.launch { ctx.playing.collect { transfers.conditions(playing = it != null) } }
+        // The achievements unlocked in the game being played, for the screens that show them.
+        achievements.followPlay()
         // Fuse Engine's Performance Governor: decorative motion follows what Fuse is doing.
         ctx.governor.start()
         ctx.scope.launch {
@@ -761,8 +763,8 @@ internal class DefaultFuseStore private constructor(
                     return@collectLatest
                 }
                 while (true) {
-                    // Asleep, Home isn't looked at: the feed is asked for again when the device wakes.
-                    ctx.services.awake.first { it }
+                    // Asleep, or under a game, Home isn't looked at: the feed is asked for again after.
+                    ctx.rounds.first { it }
                     val got = runCatching { jellyfin.widgetFeed() }.onSuccess { mediaFeed.value = it }.getOrNull()
                     // Nothing came (the server not answering yet): soon again, not in five minutes.
                     delay(if (got == null || got.isEmpty) MEDIA_FEED_RETRY_MS else MEDIA_FEED_EVERY_MS)
@@ -866,13 +868,19 @@ internal class DefaultFuseStore private constructor(
         desktopStoreOps?.startAutomatic()
         if (data.sources.all().isNotEmpty()) engine.rescan(ScanScope.QUICK)
         achievements.refresh(force = false)
-        data.cache.purgeExpired(ctx.now())
+        // Only what ran out long ago goes: an answer past its time is still what's shown offline
+        // (RetroAchievements' progress runs out in minutes, so purging at once left nothing to show
+        // after a start without a connection).
+        data.cache.purgeExpired(ctx.now() - STALE_KEPT_MS)
         runCatching { updates.checkIfDue() }
     }
 
     companion object {
         /** New games at once whose saves are looked for (a whole folder added stays a few calls). */
         const val MAX_ARRIVALS = 200
+
+        /** How long an answer is kept past its time, for showing offline, before it is purged. */
+        const val STALE_KEPT_MS = 60L * 24 * 60 * 60 * 1000
 
         /** Version of [DisplayNameCleaner]'s rules; existing names are cleaned again when it grows. */
         const val CLEAN_RULES = 2

@@ -629,7 +629,7 @@ private fun HitThumb(h: Hit, size: androidx.compose.ui.unit.Dp) {
     val c = Fuse.colors
     val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction.coerceAtLeast(0.12f) + 0.06f)
     when (h) {
-        is Hit.Game -> SquareGameArt(h.card.art, Modifier.size(size).clip(shape), fallback = { GeneratedArt(h.title, h.card.accent.toColor(), slot = ArtSlot.ICON) })
+        is Hit.Game -> io.github.matiyaaa.fuse.ui.shell.components.GameThumb(h.card.art, size, shape, fallback = { GeneratedArt(h.title, h.card.accent.toColor(), slot = ArtSlot.ICON) })
         is Hit.System -> SystemMark(h.card, size)
         is Hit.App -> Artwork(h.card.icon, Modifier.size(size).clip(shape), contentScale = androidx.compose.ui.layout.ContentScale.Fit, fallback = {
             GeneratedArt(h.title, c.accent, slot = ArtSlot.ICON)
@@ -639,7 +639,7 @@ private fun HitThumb(h: Hit, size: androidx.compose.ui.unit.Dp) {
         is Hit.Suggestion -> IconWell(h.s.key.icon(), size, shape)
         is Hit.Romm -> IconWell(FuseIcons.CloudDownload, size, shape)
         is Hit.RommMore -> IconWell(FuseIcons.ChevronDown, size, shape)
-        is Hit.RommGame -> SquareGameArt(h.g.card.art, Modifier.size(size).clip(shape), fallback = { GeneratedArt(h.title, h.g.card.accent.toColor(), slot = ArtSlot.ICON) })
+        is Hit.RommGame -> io.github.matiyaaa.fuse.ui.shell.components.GameThumb(h.g.card.art, size, shape, fallback = { GeneratedArt(h.title, h.g.card.accent.toColor(), slot = ArtSlot.ICON) })
     }
 }
 

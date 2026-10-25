@@ -346,6 +346,11 @@ private fun ColumnScope.WeekFace(feed: HomeFeed, face: FaceSize) {
     val days = p.lastSevenDays.ifEmpty { List(7) { 0L } }
     val week = playtimeText(p.weekSeconds)
     val today = "${playtimeText(days.last())} today"
+    // How the week stands beside last week at the same point, once there is something to compare.
+    val change = weekChange(p.week, short = true)
+    // This week's games (with this week's time) where it has any, else the most played of all.
+    val weekGames = p.week.games.map { (g, s) -> g.copy(playSeconds = s) }
+    val (topGames, topTitle) = if (weekGames.isNotEmpty()) weekGames to "This week" else feed.mostPlayed to "Most played"
     WidgetHeader(FuseIcons.Calendar, WidgetKind.PLAYTIME_WEEK.title())
     when (face) {
         FaceSize.SMALL -> {
@@ -367,7 +372,9 @@ private fun ColumnScope.WeekFace(feed: HomeFeed, face: FaceSize) {
             Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 Column(Modifier.weight(1f)) {
                     WidgetValue(week)
-                    if (!LocalWidgetRoom.current.compact) WidgetCaption("${playtimeText(p.totalSeconds)} in total")
+                    if (!LocalWidgetRoom.current.compact) {
+                        if (change != null) WeekChangeLine(change) else WidgetCaption("${playtimeText(p.totalSeconds)} in total")
+                    }
                 }
                 Spacer(Modifier.width(Space.l))
                 WeekBars(days, Modifier.weight(1f).fillMaxHeight(), letters = !LocalWidgetRoom.current.compact)
@@ -377,6 +384,7 @@ private fun ColumnScope.WeekFace(feed: HomeFeed, face: FaceSize) {
             Spacer(Modifier.height(Space.xs))
             WidgetValue(week)
             WidgetCaption(today)
+            if (change != null && !LocalWidgetRoom.current.compact) WeekChangeLine(change, Modifier.padding(top = Space.xxs))
             Spacer(Modifier.height(Space.m))
             WeekBars(days, Modifier.fillMaxWidth().weight(1f), letters = true)
         }
@@ -384,18 +392,19 @@ private fun ColumnScope.WeekFace(feed: HomeFeed, face: FaceSize) {
             Spacer(Modifier.height(Space.xs))
             WidgetValue(week)
             WidgetCaption("$today  ·  ${playtimeText(p.totalSeconds)} in total")
+            if (change != null) WeekChangeLine(change, Modifier.padding(top = Space.xxs))
             Spacer(Modifier.height(Space.l))
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 // Side by side on a wide face; on a tall one the week sits over the games.
-                if (maxWidth >= maxHeight || feed.mostPlayed.isEmpty()) {
+                if (maxWidth >= maxHeight || topGames.isEmpty()) {
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
                         WeekBars(days, Modifier.weight(1.4f).fillMaxHeight(), letters = true)
-                        if (feed.mostPlayed.isNotEmpty()) TopGames(feed.mostPlayed, Modifier.weight(1f).fillMaxHeight(), title = "Most played")
+                        if (topGames.isNotEmpty()) TopGames(topGames, Modifier.weight(1f).fillMaxHeight(), title = topTitle)
                     }
                 } else {
                     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Space.l)) {
                         WeekBars(days, Modifier.weight(1f).fillMaxWidth(), letters = true)
-                        TopGames(feed.mostPlayed, Modifier.weight(0.8f).fillMaxWidth(), title = "Most played")
+                        TopGames(topGames, Modifier.weight(0.8f).fillMaxWidth(), title = topTitle)
                     }
                 }
             }

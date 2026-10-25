@@ -33,6 +33,7 @@ declared in the version catalog for the platform apps and not yet used by any mo
 | Coil compose | `io.coil-kt.coil3:coil-compose` | 3.6.3 | Apache-2.0 | `ui:designsystem`, `ui:shell` | [coil](https://github.com/coil-kt/coil) |
 | Coil network (Ktor 3) | `io.coil-kt.coil3:coil-network-ktor3` | 3.6.3 | Apache-2.0 | `ui:shell` | [coil](https://github.com/coil-kt/coil) |
 | Coil SVG (with AndroidSVG on Android) | `io.coil-kt.coil3:coil-svg`, `com.caverock:androidsvg-aar` | 3.6.3 | Apache-2.0 | `ui:shell` | [coil](https://github.com/coil-kt/coil), [androidsvg](https://github.com/BigBadaboom/androidsvg) |
+| Coil GIF (Android) | `io.coil-kt.coil3:coil-gif` | 3.6.3 | Apache-2.0 | `ui:designsystem` | [coil](https://github.com/coil-kt/coil) |
 | Ktor client core, content negotiation, kotlinx JSON serialization | `io.ktor:ktor-client-core`, `:ktor-client-content-negotiation`, `:ktor-serialization-kotlinx-json` | 3.6.0 | Apache-2.0 | `core:integrations` | [ktor](https://github.com/ktorio/ktor) |
 | Ktor client OkHttp engine (with OkHttp and Okio) | `io.ktor:ktor-client-okhttp` | 3.6.0 | Apache-2.0 | `app:android` | [ktor](https://github.com/ktorio/ktor), [okhttp](https://github.com/square/okhttp) |
 | Ktor client CIO engine | `io.ktor:ktor-client-cio` | 3.6.0 | Apache-2.0 | `app:desktop` | [ktor](https://github.com/ktorio/ktor) |

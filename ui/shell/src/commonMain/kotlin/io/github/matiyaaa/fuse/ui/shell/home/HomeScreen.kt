@@ -126,7 +126,12 @@ private val COMPACT_LOGO = 72.dp
 @Composable
 fun HomeScreen(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
-    if (prefs.home.mode == HomeMode.CHANNELS) ChannelHome(app) else FlowHome(app)
+    when {
+        // The menus on the touch screen below, the chosen game above: Home as a DS's lower screen.
+        io.github.matiyaaa.fuse.ui.shell.app.LocalShowcaseElsewhere.current -> DualHome(app)
+        prefs.home.mode == HomeMode.CHANNELS -> ChannelHome(app)
+        else -> FlowHome(app)
+    }
 }
 
 /** Asks which Home style to use (Fused or Network); see [chooseHomeStyle]. */
@@ -524,7 +529,7 @@ private fun ShelfRow(
     val heroDp = with(androidx.compose.ui.platform.LocalDensity.current) { Fuse.quality.heroDecodePx.toDp() }
     PrefetchArt(
         remember(shelf.items, systems) {
-            shelf.items.map { item -> (item as? ShelfItem.Game)?.card?.let { io.github.matiyaaa.fuse.ui.shell.app.roomArt(it.art, systems[it.platformId]) } }
+            shelf.items.map { item -> (item as? ShelfItem.Game)?.card?.let { io.github.matiyaaa.fuse.ui.shell.app.roomArt(it.art, systems[it.shownPlatform]) } }
         },
         focus,
         size = heroDp,
@@ -585,7 +590,8 @@ private fun ShelfRow(
         }
         Spacer(Modifier.height(Space.s))
         val height = when (shelf.style) {
-            ShelfStyle.WIDE -> metrics.icon * 1.25f
+            // Never wider than the screen: on a phone held upright a TV's height made it run off the side.
+            ShelfStyle.WIDE -> (metrics.icon * 1.25f).coerceAtMost(widgetMax / io.github.matiyaaa.fuse.ui.shell.components.WIDE_ASPECT)
             else -> metrics.icon
         }
         LazyRow(
@@ -679,7 +685,7 @@ private fun ShelfItem.stage(shelf: Shelf?, feed: HomeFeed, cartridge: CartridgeS
 
 /** The backdrop for an item, keyed by its game or system (the second screen shows what the key names). */
 private fun ShelfItem.hero(systems: Map<io.github.matiyaaa.fuse.model.PlatformId, io.github.matiyaaa.fuse.ui.shell.store.PlatformCard>): HeroSource? = when (this) {
-    is ShelfItem.Game -> card.room(systems[card.platformId])
+    is ShelfItem.Game -> card.room(systems[card.shownPlatform])
     is ShelfItem.System -> HeroSource(card.platform.id, card.art.hero, card.platform.accent.toColor())
     else -> null
 }

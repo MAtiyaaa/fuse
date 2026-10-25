@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.painter.Painter
 import io.github.matiyaaa.fuse.ui.designsystem.effects.shimmer
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.picturesMove
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
 import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
@@ -67,6 +68,9 @@ import kotlinx.coroutines.delay
  *
  * Fitted art (logos, icons, badges, backdrops) is decoded for the space it is laid out in. Without
  * that, an SVG logo would be drawn at its own small canvas size and stretched, and come out soft.
+ *
+ * A moving picture (a GIF or an animated WebP) plays while it is shown, or holds its first frame
+ * where pictures may not move ([MovingPictures]); a GIF keeps its own colours, whatever [tint] says.
  */
 @Composable
 fun Artwork(
@@ -89,12 +93,16 @@ fun Artwork(
      * caches while Fuse is in the background).
      */
     pin: Boolean = false,
+    /** Told the picture's shape (width over height) once it is loaded, for a slot that sizes to it, such as a logo's. */
+    onAspect: ((Float) -> Unit)? = null,
     fallback: @Composable () -> Unit = {},
 ) {
     if (model == null) {
         Box(modifier) { fallback() }
         return
     }
+    val tint = tint.takeUnless { MovingPictures.looksMoving(model) }
+    val still = !Fuse.motion.picturesMove(Fuse.quality)
     val context = LocalPlatformContext.current
     val fit = backdrop || contentScale == ContentScale.Fit
     val sizer = rememberConstraintsSizeResolver()
@@ -117,10 +125,11 @@ fun Artwork(
     }
     // A picture that failed is asked for again a few times ([ArtRetry]), not kept failed while shown.
     var attempt by remember(model) { mutableStateOf(0) }
-    val request = remember(model, context, fit, decodeSizer, attempt) {
+    val request = remember(model, context, fit, decodeSizer, attempt, still) {
         ImageRequest.Builder(context).data(model).crossfade(false)
             .size(decodeSizer).scale(if (fit) Scale.FIT else Scale.FILL)
             .memoryCacheKeyExtra(ArtRetry.EXTRA, attempt.toString())
+            .apply { if (still) MovingPictures.still(this, model) }
             .build()
     }
     // On a computer, art is drawn with mipmaps: sharper where it is scaled (a tile lifting, a
@@ -131,6 +140,11 @@ fun Artwork(
     val success = state as? AsyncImagePainter.State.Success
     val failed = state is AsyncImagePainter.State.Error
     ArtRetry.Watch(failed, attempt) { attempt++ }
+    PlayWhileShown(success?.result?.image)
+    if (onAspect != null && success != null) {
+        val image = success.result.image
+        SideEffect { if (image.width > 0 && image.height > 0) onAspect(image.width.toFloat() / image.height) }
+    }
     // Art already shown this session is never faded in again; pinned art is drawn at once while the
     // loader fetches it again.
     var lastPainter by remember(model) { mutableStateOf<Painter?>(null) }

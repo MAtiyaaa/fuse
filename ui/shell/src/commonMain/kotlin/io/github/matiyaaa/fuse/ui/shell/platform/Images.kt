@@ -11,6 +11,7 @@ import coil3.svg.SvgDecoder
 import coil3.size.Precision
 import coil3.request.maxBitmapSize
 import coil3.size.Size
+import io.github.matiyaaa.fuse.ui.designsystem.media.addMovingPictures
 import io.ktor.client.HttpClient
 import okio.Path.Companion.toPath
 
@@ -59,6 +60,8 @@ fun fuseImageLoader(
         add(ThumbnailInterceptor(cacheDir))
         // System logos from the system art pack are SVG.
         add(SvgDecoder.Factory(density = { svgDensity }))
+        // GIFs and animated WebPs chosen as art, logos or the background play (MovingPictures).
+        addMovingPictures()
         components()
     }
     .precision(Precision.INEXACT)

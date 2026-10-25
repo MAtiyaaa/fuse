@@ -174,6 +174,7 @@ object SaveAdapters {
     /** The adapter for [emulatorId] (any host's id), or null when Fuse can't sync this one yet. */
     fun forEmulator(emulatorId: String): SaveAdapter? {
         val base = baseId(emulatorId)
+        if (AndroidPortSaves.handles(base)) return AndroidPortSaves
         return all.firstOrNull { base in it.emulators }
     }
 
@@ -974,7 +975,8 @@ internal object TitleMatch {
  * converts a save, so a save state never lands in an emulator or core that can't load it.
  */
 object SaveSlotFormats {
-    fun compatible(saved: String, wanted: String): Boolean = saved == wanted || SaveConversions.canConvert(saved, wanted)
+    fun compatible(saved: String, wanted: String): Boolean =
+        saved == wanted || SaveConversions.canConvert(saved, wanted) || PortSaves.compatible(saved, wanted)
 }
 
 /**
@@ -1065,6 +1067,8 @@ data class EmulatorSaves(
     val note: String? = null,
     /** Whether a chosen folder means anything to it (RetroArch says where its saves are itself). */
     val canChoose: Boolean = true,
+    /** Its name, where it isn't an emulator the device knows by its id (an Android port, by its app's name). */
+    val name: String? = null,
 ) {
     /** In the order the page lists them: what needs the person first. */
     enum class State { NOT_FOUND, FOUND, UNSUPPORTED }
@@ -1093,6 +1097,7 @@ fun SaveAdapters.survey(samples: List<SaveQuery>, env: SaveEnvironment): List<Em
             // Unreachable: why. Reached, but not certain or with a catch (melonDS's ROM list): that too.
             note = if (reached == null) spots.firstNotNullOfOrNull { it.note } else reached.note,
             canChoose = adapter !== RetroArch,
+            name = q.title.takeIf { adapter === AndroidPortSaves },
         )
     }.sortedWith(compareBy({ it.state.ordinal }, { it.emulator }))
 

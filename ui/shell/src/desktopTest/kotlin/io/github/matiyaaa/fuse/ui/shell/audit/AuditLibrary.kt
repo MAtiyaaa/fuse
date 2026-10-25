@@ -167,6 +167,61 @@ internal object AuditSystemArt {
         ImageIO.write(img, "png", file)
     }
 
+    /**
+     * A moving picture, as a GIF chosen as a system's or a game's picture: a wide scene whose light
+     * walks across it over [frames] frames, a tenth of a second each, looping.
+     */
+    fun movingPicture(file: File, color: Long, frames: Int = 6) {
+        val w = 640
+        val h = 360
+        val writer = ImageIO.getImageWritersByFormatName("gif").next()
+        ImageIO.createImageOutputStream(file).use { out ->
+            writer.output = out
+            writer.prepareWriteSequence(null)
+            val base = Color(color.toInt(), true)
+            repeat(frames) { i ->
+                val img = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+                val g = img.createGraphics()
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                g.paint = GradientPaint(0f, 0f, base.darker(), w.toFloat(), h.toFloat(), base.darker().darker().darker())
+                g.fillRect(0, 0, w, h)
+                val x = (w + 200f) * i / frames - 200f
+                g.color = Color(255, 255, 255, 90)
+                g.fill(Ellipse2D.Float(x, 60f, 240f, 240f))
+                g.color = base.brighter()
+                g.fill(Ellipse2D.Float(x + 60f, 120f, 120f, 120f))
+                g.dispose()
+                val type = javax.imageio.ImageTypeSpecifier.createFromRenderedImage(img)
+                val meta = writer.getDefaultImageMetadata(type, writer.defaultWriteParam)
+                val format = meta.nativeMetadataFormatName
+                val root = meta.getAsTree(format) as javax.imageio.metadata.IIOMetadataNode
+                fun child(name: String) = (0 until root.length).map { root.item(it) }.firstOrNull { it.nodeName == name } as javax.imageio.metadata.IIOMetadataNode?
+                    ?: javax.imageio.metadata.IIOMetadataNode(name).also { root.appendChild(it) }
+                child("GraphicControlExtension").apply {
+                    setAttribute("disposalMethod", "none")
+                    setAttribute("userInputFlag", "FALSE")
+                    setAttribute("transparentColorFlag", "FALSE")
+                    setAttribute("delayTime", "10")
+                    setAttribute("transparentColorIndex", "0")
+                }
+                if (i == 0) {
+                    // Loop for ever.
+                    child("ApplicationExtensions").appendChild(
+                        javax.imageio.metadata.IIOMetadataNode("ApplicationExtension").apply {
+                            setAttribute("applicationID", "NETSCAPE")
+                            setAttribute("authenticationCode", "2.0")
+                            userObject = byteArrayOf(1, 0, 0)
+                        },
+                    )
+                }
+                meta.setFromTree(format, root)
+                writer.writeToSequence(javax.imageio.IIOImage(img, null, meta), writer.defaultWriteParam)
+            }
+            writer.endWriteSequence()
+        }
+        writer.dispose()
+    }
+
     fun logo(file: File, text: String) {
         // Cropped to the text, as logo art is.
         val font = java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD or java.awt.Font.ITALIC, 112)

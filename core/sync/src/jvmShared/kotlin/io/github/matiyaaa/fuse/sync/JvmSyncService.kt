@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -108,7 +109,18 @@ class JvmSyncService(
 
     /** The household's games through this device's host (see [Household]). */
     val householdHere: JvmHousehold by lazy {
-        JvmHousehold(File(dir, "household"), scope, { client }, { cached.deviceId }, { cached }, busy = { _nowPlaying.value != null || !mayHash() }, clock = clock, awake = awake)
+        JvmHousehold(File(dir, "household"), scope, { client }, { cached.deviceId }, { cached }, busy = { _nowPlaying.value != null || !mayHash() }, clock = clock, awake = roundsMayRun)
+    }
+
+    /**
+     * Fuse One's own rounds may run: the device awake, and no game it follows in front. Under a game
+     * the wait for the host's news and the household's lists hold (each answer woke the Wi-Fi and the
+     * processor again under the game, every half minute for as long as it was played) and catch up
+     * the moment it ends. The game's save still goes as it is written ([watchWhilePlaying]).
+     */
+    private val roundsMayRun: StateFlow<Boolean> by lazy {
+        kotlinx.coroutines.flow.combine(awake, _nowPlaying) { a, playing -> a && playing == null }
+            .stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, awake.value && _nowPlaying.value == null)
     }
     override val household: Household get() = householdHere
     private var hostServer: SyncHost? = null
@@ -402,8 +414,8 @@ class JvmSyncService(
             var backoff = 2_000L
             var joinsChecked = false
             while (true) {
-                // Asleep, nothing is asked of the host: the first round after waking catches up on everything.
-                awake.awaitAwake()
+                // Asleep, or under a game, nothing is asked of the host: the first round after catches up on everything.
+                roundsMayRun.awaitAwake()
                 val c = client ?: break
                 try {
                     // Sends what is waiting and catches up, then waits for the host to say something changed.
@@ -421,8 +433,8 @@ class JvmSyncService(
                         scope.launch(Dispatchers.IO) { runCatching { convergeAll() } }
                         scope.launch(Dispatchers.IO) { householdConnect() }
                     }
-                    // The wait ends when the device goes to sleep: its answer would only wake it again.
-                    val page = awake.untilAsleep { c.events(since, waitSeconds = 25) } ?: continue
+                    // The wait ends when the device goes to sleep or a game starts: its answer would only wake it again.
+                    val page = roundsMayRun.untilAsleep { c.events(since, waitSeconds = 25) } ?: continue
                     householdHere.woken(page.wake)
                     if (HouseholdHost.WAKE_PLAYING in page.wake) scope.launch(Dispatchers.IO) { runCatching { lookForHosted(c) } }
                     // A device checking in is no event, so when each was last seen (and so which are
@@ -1709,9 +1721,36 @@ class JvmSyncService(
             val (session, outside) = joining ?: error("Ask the host first.")
             val link = SyncClient.joinWithAccount(session, username, password)
             joining = null
+            // The host account's own username and password: this device is signed in as the host,
+            // not only let in. A host from before 0.4.4 has no such call, and the device is simply in.
+            val probe = SyncClient(link)
+            runCatching { probe.signInAsHost(username, password) }
+                .onSuccess { log("Signed in as the host", kind = SyncActivity.HOST) }
+            probe.close()
             linkUp(if (outside != null) link.copy(remoteAddress = SyncClient.normalise(outside)) else link)
         }
     }
+
+    override suspend fun signInAsHost(username: String, password: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val c = client ?: throw SyncException("Connect this device to the host first.", "not-connected", 0)
+            runCatching { c.signInAsHost(username, password) }.getOrElse { e ->
+                // A host from before 0.4.4 doesn't know this call.
+                throw if (e is SyncException && e.status == 404) SyncException("The host runs a Fuse from before 0.4.4. Update it first, then sign in here.", "old-host", 404) else e
+            }
+            refreshLists()
+            log("Signed in as the host", kind = SyncActivity.HOST)
+        }
+    }
+
+    override suspend fun signOutAsHost(): Result<Unit> = withClient { c ->
+        c.signOutAsHost()
+        refreshLists()
+        log("No longer signed in as the host here", kind = SyncActivity.HOST)
+    }
+
+    /** True when this device is signed in as the host (it manages the household from here). */
+    private fun managing(): Boolean = _devices.value.any { it.id == cached.deviceId && it.manager }
 
     // ---------------------------------------------------------------- the host's account and outside address
 
@@ -1724,6 +1763,7 @@ class JvmSyncService(
             when {
                 store != null -> store.setAccount(username, password)
                 hostAdmin != null -> hostAdmin!!.setAccount(username, password)
+                managing() -> checkNotNull(client) { "Fuse One isn't connected." }.setAccountAsHost(username, password)
                 else -> error("Start the host first.")
             }
             adminAccount = username.trim()
@@ -1752,6 +1792,7 @@ class JvmSyncService(
             when {
                 store != null -> store.setOutsideAddress(clean)
                 hostAdmin != null -> hostAdmin!!.setOutside(clean)
+                managing() -> checkNotNull(client) { "Fuse One isn't connected." }.setOutsideAsHost(clean)
                 else -> error("Start the host first.")
             }
             adminStatus = runCatching { hostAdmin?.status() }.getOrNull() ?: adminStatus
@@ -2691,7 +2732,7 @@ class JvmSyncService(
                 }
                 // Never silent: a save that couldn't be kept says why, once per game while Fuse runs
                 // (only with a host: without one, nothing is sent anywhere).
-                if (!keepsOwn && cached.saves && here.any { sendsFor(ownerOf(query, it, profile), query.game.id) } && captured.none { it.kind != SaveKind.STATE }) whyNotKept(query, here)?.let { why ->
+                if (!keepsOwn && cached.saves && here.any { sendsFor(ownerOf(query, it, profile), query.game.id) } && captured.none { it.kind != SaveKind.STATE }) whyNotKept(query, here, endedAt - startedAt)?.let { why ->
                     if (explained.add("${query.game.id}|$why")) {
                         log("${query.title}: save not sent. $why", query.game.id, SyncActivity.FAILED)
                         _notices.tryEmit(SyncNotice.NotSynced(query.title, SaveKind.SAVE, why))
@@ -2906,11 +2947,14 @@ class JvmSyncService(
     }
 
     /**
-     * Why nothing of [query]'s save could be kept after it was played, or null when there is nothing
-     * to say (it simply didn't change, saves don't sync, or the game keeps its own saves).
+     * Why nothing of [query]'s save could be kept after it was played for [playedMs], or null when
+     * there is nothing to say (it simply didn't change, saves don't sync, the game keeps its own
+     * saves, or it was only opened and closed: a game started for a minute has usually not saved
+     * yet, and saying "no save found" then reads as a lost save).
      */
-    private fun whyNotKept(query: SaveQuery, here: List<LocalSlot>): String? {
+    private fun whyNotKept(query: SaveQuery, here: List<LocalSlot>, playedMs: Long): String? {
         if (!cached.saves || query.platform in OWN_SAVES_PLATFORMS) return null
+        if (playedMs in 0 until SHORT_PLAY_MS) return null
         val adapter = SaveAdapters.forEmulator(query.emulatorId)
             ?: return SaveAdapters.whyNot(query.emulatorId).takeIf { SaveAdapters.baseId(query.emulatorId) !in OWN_SAVES_EMULATORS }
         val spots = runCatching { adapter.locate(query, saveEnv) }.getOrDefault(emptyList()).filter { it.kind != SaveKind.STATE }
@@ -3231,6 +3275,7 @@ class JvmSyncService(
             when {
                 s != null -> s.changeDevice(id, DeviceChange(name = name))
                 hostAdmin != null -> hostAdmin!!.rename(id, name)
+                id != cached.deviceId && managing() -> client?.renameDevice(id, name)
                 else -> client?.renameSelf(name)
             }
             refreshLists()
@@ -3243,7 +3288,8 @@ class JvmSyncService(
             when {
                 s != null -> s.revokeDevice(id)
                 hostAdmin != null -> hostAdmin!!.revoke(id)
-                else -> error("Unlink other devices on the host.")
+                managing() -> checkNotNull(client) { "Fuse One isn't connected." }.unlinkDevice(id)
+                else -> error("Unlink other devices on the host, or sign in as the host here.")
             }
             refreshLists()
             refreshHostView()
@@ -3373,6 +3419,9 @@ class JvmSyncService(
 
         /** How long after an emulator closes its saves are read (it may still be writing them). */
         const val SETTLE_MS = 1_500L
+
+        /** A play shorter than this that left no save says nothing about it (see [whyNotKept]). */
+        const val SHORT_PLAY_MS = 5 * 60_000L
 
         /** When a device's records joining a profile already in use count as made: before anything real. */
         const val ADOPTED_AT = 1L

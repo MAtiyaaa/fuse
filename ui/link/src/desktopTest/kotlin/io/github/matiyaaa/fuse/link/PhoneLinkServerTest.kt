@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -128,6 +129,22 @@ class PhoneLinkServerTest {
         assertTrue("\"total\":2" in games.body, games.body)
         val id = Regex("\"id\":(\\d+)").find(games.body)!!.groupValues[1]
         assertTrue("\"title\":" in http(port, "GET", "/api/games/$id", cookie = cookie).body)
+
+        // Fuse's own downloads are in "now"; the phone pauses and resumes them, marks a favourite,
+        // looks for new games and shows a game's page on the device (starting it stays a press there).
+        assertTrue("\"transfers\":{" in nowJson.body && "\"paused\":" in nowJson.body, nowJson.body)
+        assertEquals(200, http(port, "POST", "/api/transfers/pause", cookie = cookie).status)
+        assertEquals(200, http(port, "POST", "/api/transfers/resume", cookie = cookie).status)
+        val fav = http(port, "PUT", "/api/games/$id/favorite", """{"favorite":true}""", cookie = cookie)
+        assertEquals(200, fav.status, fav.body)
+        withTimeout(10_000) { while (store.library.games(GameQuery()).first().none { it.id.value == id.toLong() && it.favorite }) kotlinx.coroutines.delay(20) }
+        assertEquals(400, http(port, "PUT", "/api/games/$id/favorite", """{"favorite":"maybe"}""", cookie = cookie).status)
+        assertEquals(404, http(port, "PUT", "/api/games/999999/favorite", """{"favorite":true}""", cookie = cookie).status)
+        assertEquals(200, http(port, "POST", "/api/rescan", cookie = cookie).status)
+        val shown = async { io.github.matiyaaa.fuse.ui.shell.app.ExternalRequests.requests.first() }
+        kotlinx.coroutines.yield()
+        assertEquals(200, http(port, "POST", "/api/games/$id/open", cookie = cookie).status)
+        assertEquals(io.github.matiyaaa.fuse.ui.shell.app.ExternalRequest.OpenGame(io.github.matiyaaa.fuse.model.GameId(id.toLong())), withTimeout(5_000) { shown.await() })
 
         // Nothing deletes, and made-up art or matches are refused.
         assertFalse(http(port, "DELETE", "/api/games/$id", cookie = cookie).status in 200..299)

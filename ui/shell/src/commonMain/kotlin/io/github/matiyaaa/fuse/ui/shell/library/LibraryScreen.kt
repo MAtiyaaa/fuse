@@ -157,6 +157,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.tileSize
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.GameSet
+import io.github.matiyaaa.fuse.ui.shell.store.SmartFilter
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemShowcase
 import kotlin.math.abs
 import kotlin.math.sqrt
@@ -176,25 +177,47 @@ sealed interface LibraryScope {
 
 /**
  * Views of the whole library. Missing, Hidden and Removed only appear while they have games; their
- * games open a menu to restore or forget them instead of playing.
+ * games open a menu to restore or forget them instead of playing. The [smart] ones (Unplayed, Play
+ * together...) appear while pinned, or while open from Smart filters.
  */
-enum class LibrarySegment(val label: String, val set: GameSet) {
+enum class LibrarySegment(val label: String, val set: GameSet, val smart: SmartFilter? = null) {
     /** Every game wherever it is: this device, RomM and the household's other devices, as shelves. */
     EVERYWHERE("All", GameSet.LIBRARY),
     /** The games on this device. */
     INSTALLED("Installed", GameSet.LIBRARY),
     FAVORITES("Favourites", GameSet.LIBRARY),
     RECENT("Recently played", GameSet.LIBRARY),
+    UNPLAYED(SmartFilter.UNPLAYED),
+    BARELY(SmartFilter.BARELY),
+    DUSTY(SmartFilter.DUSTY),
+    TOGETHER(SmartFilter.TOGETHER),
+    ADDED(SmartFilter.ADDED),
     MISSING("Missing", GameSet.MISSING),
     HIDDEN("Hidden", GameSet.HIDDEN),
     REMOVED("Removed", GameSet.REMOVED),
+    ;
+
+    constructor(smart: SmartFilter) : this(smart.label, GameSet.LIBRARY, smart)
+
+    companion object {
+        fun of(smart: SmartFilter): LibrarySegment = entries.first { it.smart == smart }
+    }
+}
+
+/** Each smart filter's mark, on its tab, its row in Smart filters and its empty view. */
+internal fun smartIcon(f: SmartFilter): ImageVector = when (f) {
+    SmartFilter.UNPLAYED -> FuseIcons.Package
+    SmartFilter.BARELY -> FuseIcons.Hourglass
+    SmartFilter.DUSTY -> FuseIcons.Archive
+    SmartFilter.TOGETHER -> FuseIcons.Users
+    SmartFilter.ADDED -> FuseIcons.Sparkles
 }
 
 /**
  * The buttons at the end of the Library header. [EMULATOR] only shows on a system that has no
- * emulator, and leads to its settings.
+ * emulator, and leads to its settings. [FILTERS] opens Smart filters.
  */
-enum class LibraryButton { SPOTLIGHT, COLLECTIONS, ADD_GAMES, EMULATOR, SYSTEM, SORT }
+enum class LibraryButton { SPOTLIGHT, COLLECTIONS, ADD_GAMES, EMULATOR, FILTERS, SYSTEM, SORT }
 
 /** Remembered per library view: which game was selected (by id, so re-sorting keeps it), and where focus was. */
 @Stable
@@ -281,8 +304,18 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             }
         }
     }.collectAsState(initial = emptyMap())
+    // How many games each smart filter holds within the system filter, for its tab and its row in Smart filters.
+    val smartCounts by remember(scope, state.system) {
+        if (scope != LibraryScope.All) flowOf(emptyMap()) else store.library.smartCounts(state.system)
+    }.collectAsState(initial = emptyMap())
+    val pinned = SmartFilter.of(prefs.libraryPinnedFilters)
     val segments = if (scope != LibraryScope.All) emptyList() else LibrarySegment.entries.filter { s ->
-        s.set == GameSet.LIBRARY || (extraCounts[s] ?: 0) > 0 || state.segment == s
+        when {
+            // A smart filter has a tab while pinned, or while it is open.
+            s.smart != null -> s.smart in pinned || state.segment == s
+            s.set == GameSet.LIBRARY -> true
+            else -> (extraCounts[s] ?: 0) > 0 || state.segment == s
+        }
     }
     val collectionsOn = prefs.collectionsEnabled
     val allCollections by store.collections.collections.collectAsState()
@@ -300,6 +333,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         if (systemCard != null && !systemCard.emulatorInstalled) add(LibraryButton.EMULATOR)
         // All is shelves, each in its own order; Recently played is always newest first.
         val browsing = scope == LibraryScope.All && (state.segment == LibrarySegment.EVERYWHERE || state.segment == LibrarySegment.RECENT)
+        if (scope == LibraryScope.All) add(LibraryButton.FILTERS)
         if (scope == LibraryScope.All && state.segment != LibrarySegment.EVERYWHERE) add(LibraryButton.SYSTEM)
         if (!browsing) add(LibraryButton.SORT)
         // How games are drawn is a setting (Settings, Library, and each system's settings), not a toolbar button.
@@ -308,7 +342,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
 
     val segment = state.segment
     val query = when (scope) {
-        LibraryScope.All -> when (segment) {
+        LibraryScope.All -> segment.smart?.let { GameQuery(platform = state.system, sort = sort, smart = it) } ?: when (segment) {
             LibrarySegment.INSTALLED -> GameQuery(platform = state.system, sort = sort, includeHidden = state.showHidden)
             LibrarySegment.FAVORITES -> GameQuery(platform = state.system, favoritesOnly = true, sort = sort)
             LibrarySegment.RECENT -> GameQuery(platform = state.system, sort = SortOrder.RECENTLY_PLAYED)
@@ -337,11 +371,14 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     }
     val selectedCard = list?.getOrNull(state.grid.index)
     // The next tiles' art and the stage logos are ready before the selection reaches them.
-    val tileArt = remember(list, layout) {
+    val posters = LocalGameArt.current == io.github.matiyaaa.fuse.model.GameArtStyle.POSTER
+    val tileArt = remember(list, layout, posters) {
         list.orEmpty().map { a ->
-            when (layout) {
-                LibraryLayout.COVER_GRID -> a.art.boxart ?: a.art.grid ?: a.art.square ?: a.art.icon
-                LibraryLayout.CAPSULE -> a.art.hero ?: a.art.grid ?: a.art.boxart
+            when {
+                layout == LibraryLayout.COVER_GRID -> a.art.boxart ?: a.art.grid ?: a.art.square ?: a.art.icon
+                layout == LibraryLayout.CAPSULE -> a.art.hero ?: a.art.grid ?: a.art.boxart
+                // The art a poster tile shows ([PosterGameArt]), so the right picture is the one ready.
+                posters -> a.art.boxart ?: a.art.square ?: a.art.icon ?: a.art.grid
                 else -> a.art.square ?: a.art.icon ?: a.art.boxart ?: a.art.grid
             }
         }
@@ -366,8 +403,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     // The rooms of the games next to the selection, decoded as the background decodes them, so
     // moving on shows them at once.
     val heroDp = with(androidx.compose.ui.platform.LocalDensity.current) { Fuse.quality.heroDecodePx.toDp() }
-    PrefetchArt(remember(list, systems) { list.orEmpty().map { roomArt(it.art, systems[it.platformId]) } }, state.grid.index, size = heroDp, limit = 2)
-    val gameSystem = selectedCard?.let { systems[it.platformId] }
+    PrefetchArt(remember(list, systems) { list.orEmpty().map { roomArt(it.art, systems[it.shownPlatform]) } }, state.grid.index, size = heroDp, limit = 2)
+    val gameSystem = selectedCard?.let { systems[it.shownPlatform] }
 
     fun choose(s: LibrarySegment) {
         if (state.segment != s) {
@@ -375,6 +412,10 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             state.grid.index = 0
             state.selectedId = null
         }
+    }
+    // Smart filters, from the header's button and the view's options (the whole library only).
+    val openFilters: (() -> Unit)? = if (scope != LibraryScope.All) null else {
+        { app.choice = filtersPicker(app, segment, smartCounts, pinned) { s -> choose(s); state.inHeader = false } }
     }
     // Another part of Fuse asked for a view (the Favourites widget): it opens on it.
     if (scope == LibraryScope.All) {
@@ -440,7 +481,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         }.orEmpty()
         val base = app.gameMenu(card, extra = remove)
         val pageName = systemCard?.platform?.name?.let { "your $it games" } ?: collection?.name?.let { "the games of $it" }
-        app.openContextMenu(base.copy(actions = base.actions + viewActions(app, state, platformId, layout, sort, list.orEmpty().takeIf { pageName != null }, pageName)))
+        app.openContextMenu(base.copy(actions = base.actions + viewActions(app, state, platformId, layout, sort, list.orEmpty().takeIf { pageName != null }, pageName, openFilters, segment.smart)))
     }
 
     fun press(button: LibraryButton) {
@@ -452,6 +493,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             LibraryButton.COLLECTIONS -> app.go(Route.Collections)
             LibraryButton.ADD_GAMES -> ownCollection?.let { app.addGamesPicker(it.id, it.name) }
             LibraryButton.EMULATOR -> platformId?.let { app.go(Route.PlatformSettings(it)) }
+            LibraryButton.FILTERS -> openFilters?.invoke()
             LibraryButton.SYSTEM -> app.choice = systemPicker(app, state, platforms.withRomm(store.romm.systems.value))
             LibraryButton.SORT -> app.choice = sortPicker(app, sort)
         }
@@ -535,7 +577,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             }
             NavAction.CONTEXT -> {
                 if (selectedCard != null) options(selectedCard)
-                else app.openContextMenu(ContextMenuSpec("Library", actions = viewActions(app, state, platformId, layout, sort)))
+                else app.openContextMenu(ContextMenuSpec("Library", actions = viewActions(app, state, platformId, layout, sort, filters = openFilters, filtering = segment.smart)))
                 NavResult.ACTIVATED
             }
             else -> NavResult.IGNORED
@@ -665,7 +707,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                     foldTools = foldTools,
                     // Folded on a short screen, the toolbar's own line (on a narrow screen) folds away.
                     foldStacked = headerFold,
-                    counts = viewCounts,
+                    counts = viewCounts + smartCounts.mapKeys { LibrarySegment.of(it.key) },
                     spotlight = spotlight?.card?.title,
                 )
             }
@@ -833,6 +875,47 @@ private fun systemPicker(app: AppState, state: LibraryViewState, platforms: List
                 detail = listOfNotNull(gamesText(p.gameCount), p.platform.manufacturer).joinToString("  ·  "),
                 trailing = Trailing.Check(state.system == p.platform.id),
                 onSelect = { pick(p.platform.id) },
+            )
+        },
+    )
+}
+
+/**
+ * Smart filters: each list to open, with what it holds and how many games, and below them a switch
+ * per list to pin it among the Library's tabs (the sheet keeps its place as they flip).
+ */
+private fun filtersPicker(
+    app: AppState,
+    active: LibrarySegment,
+    counts: Map<SmartFilter, Int>,
+    pinned: List<SmartFilter>,
+    choose: (LibrarySegment) -> Unit,
+): ChoiceSpec {
+    fun pin(f: SmartFilter) {
+        val next = if (f in pinned) pinned - f else SmartFilter.of((pinned + f).map(SmartFilter::name))
+        app.store.updatePrefs { it.copy(libraryPinnedFilters = next.map(SmartFilter::name)) }
+        app.choice = filtersPicker(app, active, counts, next, choose)
+    }
+    return ChoiceSpec(
+        title = "Smart filters",
+        icon = FuseIcons.Wand,
+        message = "Lists Fuse keeps from how you play. Pin the ones you use and they stay among the Library's tabs.",
+        options = SmartFilter.entries.map { f ->
+            MenuAction(
+                "smart.${f.name}", f.label, smartIcon(f),
+                detail = listOfNotNull(f.blurb, counts[f]?.let(::gamesText)).joinToString("  ·  "),
+                trailing = Trailing.Check(active.smart == f),
+                onSelect = {
+                    app.choice = null
+                    choose(LibrarySegment.of(f))
+                },
+            )
+        } + SmartFilter.entries.map { f ->
+            MenuAction(
+                "pin.${f.name}", f.label, if (f in pinned) FuseIcons.Pin else FuseIcons.PinOff,
+                trailing = Trailing.Switch(f in pinned),
+                section = "Pinned to the tabs",
+                onSelect = { pin(f) },
             )
         },
     )
@@ -1377,6 +1460,11 @@ private fun LibraryEmpty(
             LibrarySegment.HIDDEN -> Triple(FuseIcons.EyeOff, "No hidden games", "Games you hide from their options wait here.")
             LibrarySegment.REMOVED -> Triple(FuseIcons.Undo, "Nothing removed", "Games you remove from Fuse wait here, in case you want them back.")
             LibrarySegment.INSTALLED, LibrarySegment.EVERYWHERE -> Triple(FuseIcons.LibraryBig, "Nothing here yet", "Add a folder of games and Fuse finds them, with their art.")
+            LibrarySegment.UNPLAYED -> Triple(smartIcon(SmartFilter.UNPLAYED), "You have started every game", "Games you add wait here until you first play them.")
+            LibrarySegment.BARELY -> Triple(smartIcon(SmartFilter.BARELY), "Nothing left half tried", "Games you start and leave before half an hour show up here.")
+            LibrarySegment.DUSTY -> Triple(smartIcon(SmartFilter.DUSTY), "Nothing gathering dust", "Games you played properly and then left for two months show up here.")
+            LibrarySegment.TOGETHER -> Triple(smartIcon(SmartFilter.TOGETHER), "No games for two yet", "Games whose details say two or more can play show up here.")
+            LibrarySegment.ADDED -> Triple(smartIcon(SmartFilter.ADDED), "Nothing new lately", "Games added in the last two weeks show up here.")
         }
     }
     // A system filter can be what empties a view, so the message says so.
@@ -1406,6 +1494,9 @@ private fun viewActions(
     /** A system's or collection's games, which can go into Steam's library together. */
     page: List<GameCard>? = null,
     pageName: String? = null,
+    /** Opens Smart filters, in the whole library; [filtering] names the one open. */
+    filters: (() -> Unit)? = null,
+    filtering: SmartFilter? = null,
 ): List<MenuAction> {
     val steam = listOfNotNull(
         app.platform.steam?.takeIf { page != null && pageName != null && page.isNotEmpty() }?.let {
@@ -1416,6 +1507,18 @@ private fun viewActions(
         },
     )
     return steam + listOf(
+        MenuAction("surprise", "Surprise Me", FuseIcons.Dice, detail = if (platform != null) "A game from this system you have barely touched" else "A game from your backlog", onSelect = {
+            app.closeOverlays()
+            app.surprise = io.github.matiyaaa.fuse.ui.shell.app.SurpriseSpec(platform)
+        }),
+    ) + listOfNotNull(
+        filters?.let { open ->
+            MenuAction("filters", "Smart filters", FuseIcons.Wand, trailing = Trailing.Value(filtering?.label ?: "Off"), onSelect = {
+                app.contextMenu = null
+                open()
+            })
+        },
+    ) + listOf(
         MenuAction("sort", "Sort by", FuseIcons.Sort, trailing = Trailing.Value(sortLabel(sort)), onSelect = {
             app.contextMenu = null
             app.choice = sortPicker(app, sort)

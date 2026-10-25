@@ -180,6 +180,96 @@ class JoinTest {
     }
 
     @Test
+    fun aHubSignInOutlastsARestartUntilThePasswordChanges(): Unit = runBlocking {
+        suspend fun hub(cookie: String): String = http.request {
+            method = HttpMethod.Get
+            url.takeFrom("http://$address/hub")
+            header("CF-Connecting-IP", "203.0.113.9")
+            header("X-Forwarded-Proto", "https")
+            header("Cookie", cookie)
+        }.bodyAsText()
+        store.setAccount("mo", "correct horse")
+        val ok = http.request {
+            method = HttpMethod.Post
+            url.takeFrom("http://$address/hub/login")
+            header("CF-Connecting-IP", "203.0.113.9")
+            header("X-Forwarded-Proto", "https")
+            header("Content-Type", "application/x-www-form-urlencoded")
+            setBody("username=mo&password=correct+horse")
+        }
+        val cookie = assertNotNull(ok.headers["Set-Cookie"]).substringBefore(';')
+        val token = cookie.substringAfter('=')
+        // Kept with the host as a hash only: the token itself is never on its disk.
+        val kept = File(root, "host/hub-sessions.json")
+        assertTrue(kept.isFile)
+        assertFalse(token in kept.readText())
+
+        // An update restarts the host: still signed in.
+        host.stop()
+        store = HostStore(File(root, "host"), hostName = "Living Room PC")
+        host = SyncHost(store, port = 0, bind = "127.0.0.1", callsPerMinute = 100_000).start()
+        port = host.boundPort()
+        assertTrue("Sign Out" in hub(cookie))
+
+        // A new password signs everyone out, on disk too.
+        store.setAccount("mo", "battery staple")
+        assertTrue("Sign Out" !in hub(cookie))
+        assertFalse(kept.exists())
+    }
+
+    @Test
+    fun aHubSignInInUseNeverRunsOut() {
+        store.closeHubSessions()
+        val day = 24 * 60 * 60_000L
+        store.openHubSession("token-1", until = 1_000, now = 0)
+        // Opened again within a day: nothing to write yet.
+        assertFalse(store.renewHubSession("token-1", until = 1_000 + day - 1))
+        // A day or more on, it is carried on, and still open past where it would have ended.
+        assertTrue(store.renewHubSession("token-1", until = 1_000 + day))
+        assertTrue(store.hubSessionOpen("token-1", now = 1_000 + day - 1))
+        assertFalse(store.renewHubSession("not-signed-in", until = 1_000 + day))
+    }
+
+    @Test
+    fun aDeviceSignedInAsTheHostManagesTheHouseholdAndStaysSignedIn(): Unit = runBlocking {
+        store.setAccount("mo", "correct horse")
+        val phone = pair("Phone")
+        val deck = pair("Steam Deck")
+        val phoneId = phone.link.deviceId
+        val deckId = deck.link.deviceId
+        // Only its own name, until it signs in as the host.
+        assertEquals("not-yours", assertFailsWith<SyncException> { phone.renameDevice(deckId, "Deck") }.code)
+        assertEquals("wrong-account", assertFailsWith<SyncException> { phone.signInAsHost("mo", "not it") }.code)
+        assertFalse(store.device(phoneId)!!.manager)
+        // Any case for the username; the password never travels.
+        phone.signInAsHost("MO", "correct horse")
+        assertTrue(phone.devices().first { it.id == phoneId }.manager)
+        assertFalse(phone.devices().first { it.id == deckId }.manager)
+        phone.renameDevice(deckId, "Deck")
+        assertEquals("Deck", store.device(deckId)!!.name)
+        // The account changes from here, the new password sealed with this device's own secret.
+        phone.setAccountAsHost("mo", "battery staple")
+        assertTrue(store.checkAccount("mo", "battery staple"))
+        phone.setOutsideAsHost("https://fuse.example.com")
+        assertEquals("https://fuse.example.com", store.outsideAddress())
+        // Another device can't do any of that.
+        assertEquals("not-manager", assertFailsWith<SyncException> { deck.setOutsideAsHost("https://elsewhere.example.com") }.code)
+
+        // An update restarts the host: this device is still signed in as the host, new password and all.
+        host.stop()
+        store = HostStore(File(root, "host"), hostName = "Living Room PC")
+        host = SyncHost(store, port = 0, bind = "127.0.0.1", callsPerMinute = 100_000).start()
+        port = host.boundPort()
+        val after = SyncClient(phone.link.copy(localAddress = SyncClient.normalise(address)), http)
+        assertTrue(store.device(phoneId)!!.manager)
+        after.unlinkDevice(deckId)
+        assertTrue(store.device(deckId)!!.revoked)
+        // Signing out here is the only way it stops, short of unlinking it.
+        after.signOutAsHost()
+        assertFalse(store.device(phoneId)!!.manager)
+    }
+
+    @Test
     fun aDeviceComingThroughATunnelTeachesTheHostItsOutsideAddress(): Unit = runBlocking {
         val pc = pair("Gaming PC")
         assertEquals("", store.outsideAddress())

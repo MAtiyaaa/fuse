@@ -88,6 +88,8 @@ data class UiPrefs(
     val extensions: io.github.matiyaaa.fuse.data.settings.ExtensionSettings = io.github.matiyaaa.fuse.data.settings.ExtensionSettings(),
     /** Which view the Library opens on: "INSTALLED" (this device's games) or "ALL" (everywhere). */
     val libraryOpensOn: String = "ALL",
+    /** The smart filters pinned among the Library's tabs, by [SmartFilter] name. */
+    val libraryPinnedFilters: List<String> = emptyList(),
     /** All of Fuse's sound off: music, interface sounds and the startup sound, whatever their own switches say. */
     val muted: Boolean = false,
     /** 0..1, over every sound's own volume. */

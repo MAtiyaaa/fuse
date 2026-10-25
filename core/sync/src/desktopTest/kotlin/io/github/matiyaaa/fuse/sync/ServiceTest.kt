@@ -958,10 +958,14 @@ class ServiceTest {
         pc.hostHere("Gaming PC", installService = false).getOrThrow()
         val notices = java.util.Collections.synchronizedList(ArrayList<SyncNotice>())
         val listening = scope.launch { pc.notices.collect { notices += it } }
-        // DuckStation's folder isn't on this computer: the save can't be kept, and Fuse says so, once.
+        // A game only opened and closed (a minute) has likely saved nothing yet: nothing is said.
         val psx = SaveQuery(GameKey.of("psx", null, null, "Vagrant Story"), "psx", File(root, "vs.cue").path, "duckstation", title = "Vagrant Story")
         pc.afterExit(psx, 0, 60_000)
-        pc.afterExit(psx, 0, 60_000)
+        kotlinx.coroutines.delay(300)
+        assertTrue(notices.none { it is SyncNotice.NotSynced }, notices.toString())
+        // Played for a while, DuckStation's folder isn't on this computer: the save can't be kept, and Fuse says so, once.
+        pc.afterExit(psx, 0, 20 * 60_000)
+        pc.afterExit(psx, 0, 20 * 60_000)
         withTimeout(5_000) { while (notices.none { it is SyncNotice.NotSynced }) kotlinx.coroutines.delay(20) }
         val said = notices.filterIsInstance<SyncNotice.NotSynced>()
         assertEquals(1, said.size, said.toString())

@@ -151,6 +151,19 @@ internal fun AuditDriver.addonsScreens() {
         store.updatePrefs { it.copy(addonsOrder = emptyList()) }
     }
 
+    scenario("addons", "android ports") {
+        // Ports on Android: the games rebuilt as apps, those for the library's games first.
+        store.updatePrefs { it.copy(portsEnabled = true, addonsOrder = listOf("PORTS")) }
+        show(store)
+        tab(Destination.CARTRIDGE)
+        settle(2_500)
+        shoot("ports, as they open")
+        tap(PadButton.DPAD_DOWN, 2)
+        settle(900)
+        shoot("a port chosen")
+        store.updatePrefs { it.copy(portsEnabled = false, addonsOrder = emptyList()) }
+    }
+
     scenario("addons", "store settings") {
         show(store)
         openSettings()

@@ -82,6 +82,22 @@ internal fun AuditDriver.detailScreens() {
         }
     }
 
+    scenario("details", "deleting a game") {
+        useLibrary()
+        waitFor("Continue playing")
+        tap(PadButton.DPAD_LEFT)
+        tap(PadButton.X)
+        focusText("Delete Game")
+        shoot("Delete Game in a game's options")
+        tap(PadButton.A)
+        waitFor("This can't be undone")
+        settle(600)
+        shoot("it says exactly what goes before deleting")
+        // Cancelled: nothing is deleted.
+        tap(PadButton.B)
+        settle(400)
+    }
+
     scenario("details", "a game moved to the card") {
         controls.drives = listOf(internal, card)
         libraryStore.sources.refreshDrives()

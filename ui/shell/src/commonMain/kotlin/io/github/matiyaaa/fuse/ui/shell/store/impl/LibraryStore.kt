@@ -50,6 +50,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.LibraryOps
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.PlayTimeReport
 import io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary
+import io.github.matiyaaa.fuse.ui.shell.store.WeekRecap
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import io.github.matiyaaa.fuse.ui.shell.store.StorageSummary
@@ -97,6 +98,10 @@ private data class ActiveSession(
     val plainSave: io.github.matiyaaa.fuse.sync.SaveQuery? = null,
     /** RomM's game and the save it keeps in step, when RomM's save sync takes part. */
     val romm: Pair<Long, io.github.matiyaaa.fuse.sync.SaveQuery>? = null,
+    /** The time it was really played: its start to its end, less the screen off and the computer asleep. */
+    val clock: SessionClock = SessionClock(0),
+    /** Follows [clock] while the game runs. */
+    val watch: kotlinx.coroutines.Job? = null,
 )
 
 /** Fuse Sync, for the saves around a game: the service and how it knows games. */
@@ -164,7 +169,9 @@ internal class DefaultLibraryOps(
         // follow, and with no window there is no coming back to the front to end it: how long it
         // was played can't be known, so its session isn't counted rather than guessed.
         active?.takeIf { it.endsOnResume }?.let { open ->
+            open.watch?.cancel()
             data.playSessions.discardOpen()
+            runCatching { data.cache.remove(SESSION_NS, SESSION_ALIVE) }
             if (active?.id == open.id) active = null
         }
         ctx.playing.first { it == null }
@@ -277,8 +284,25 @@ internal class DefaultLibraryOps(
         data.playSessions.dailyTotals(7, ctx.services.utcOffsetMillis()),
         // Following what it plays as too, which its start can change a moment after.
         combine(data.playSessions.openSession(), ctx.playedAs) { open, _ -> open }.mapLatest { open -> open?.let { ctx.card(it.gameId)?.to(it.startedAt) } },
-    ) { totals, week, daily, current ->
-        PlaytimeSummary(totals.totalSeconds, week, daily.map { it.seconds }, current?.first, current?.second)
+        weekRecap(),
+    ) { totals, week, daily, current, recap ->
+        PlaytimeSummary(totals.totalSeconds, week, daily.map { it.seconds }, current?.first, current?.second, recap)
+    }
+
+    /** This week beside the last, with its three most played games as cards. */
+    private fun weekRecap(): Flow<WeekRecap> {
+        val start = ctx.weekStart()
+        return data.playSessions.week(start, ctx::now).mapLatest { w ->
+            val cards = ctx.cardsOnce(w.games.take(WEEK_GAMES).mapNotNull { data.games.summary(it.first) }).associateBy { it.id }
+            WeekRecap(
+                start = start,
+                seconds = w.seconds,
+                lastWeekSeconds = w.lastWeekSeconds,
+                lastWeekSoFar = w.lastWeekSoFar,
+                sessions = w.sessions,
+                games = w.games.take(WEEK_GAMES).mapNotNull { (id, s) -> cards[id]?.let { it to s } },
+            )
+        }
     }
 
     private val storage: Flow<StorageSummary?> = combine(
@@ -308,8 +332,14 @@ internal class DefaultLibraryOps(
      * counts as "a while ago" moves.
      */
     @OptIn(kotlinx.coroutines.FlowPreview::class)
-    private val recGames: Flow<List<RecGame<GameId>>> = flow { io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.settled(); emitAll(data.games.observeRecommendationInputs()) }
-        .debounce(RECOMMEND_SETTLE_MS)
+    /** Every game with its details and play, as suggestions and the Play together list read them. */
+    private val recRows: Flow<List<io.github.matiyaaa.fuse.data.repo.RecommendationRow>> =
+        flow { io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.settled(); emitAll(data.games.observeRecommendationInputs()) }
+            .debounce(RECOMMEND_SETTLE_MS)
+            .flowOn(Dispatchers.Default)
+            .shareIn(ctx.scope, SharingStarted.WhileSubscribed(RECOMMEND_KEEP_MS), replay = 1)
+
+    private val recGames: Flow<List<RecGame<GameId>>> = recRows
         .map { rows -> rows.map { it.toRecGame() } }
         .flowOn(Dispatchers.Default)
         .shareIn(ctx.scope, SharingStarted.WhileSubscribed(RECOMMEND_KEEP_MS), replay = 1)
@@ -457,12 +487,31 @@ internal class DefaultLibraryOps(
             query.platform != null -> withPlaced(query.platform, games.observeByPlatform(query.platform, query.sort, query.includeHidden), query.sort)
             else -> games.observeAll(query.sort, query.includeHidden)
         }
-        return if (query.collection != null || query.favoritesOnly) {
+        val listed = if (query.collection != null || query.favoritesOnly) {
             summaries.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) }
         } else {
             summaries
         }
+        val smart = query.smart ?: return listed
+        return combine(listed, if (smart == io.github.matiyaaa.fuse.ui.shell.store.SmartFilter.TOGETHER) together else flowOf(emptySet()), hourly) { list, together, _ ->
+            val now = ctx.now()
+            list.filter { smart.matches(it.id, it.lastPlayedAt, it.totalSeconds, it.addedAt, now, together) }
+        }.distinctUntilChanged()
     }
+
+    override fun smartCounts(platform: PlatformId?): Flow<Map<io.github.matiyaaa.fuse.ui.shell.store.SmartFilter, Int>> =
+        combine(summaries(GameQuery(platform = platform)), together, hourly) { list, together, _ ->
+            val now = ctx.now()
+            io.github.matiyaaa.fuse.ui.shell.store.SmartFilter.entries.associateWith { f ->
+                list.count { f.matches(it.id, it.lastPlayedAt, it.totalSeconds, it.addedAt, now, together) }
+            }
+        }.distinctUntilChanged().flowOn(Dispatchers.Default)
+
+    /** The games more than one person can play at once, as their details say. */
+    private val together: Flow<Set<GameId>> = recRows
+        .map { rows -> rows.filter { (it.players ?: 0) > 1 }.mapTo(HashSet()) { it.id } }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
 
     /**
      * A system's [own] games, with the games played with a port that show in it too (the Ports or
@@ -619,10 +668,18 @@ internal class DefaultLibraryOps(
                         ctx.portPlaces,
                     ) { lasts, chosenAt, places ->
                         lasts.filter { (id, last) -> playsAsApp(last, chosenAt[id.value.toString()]) }
-                            .associate { (id, _) -> id to (places[id] ?: io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM).let { p -> ctx.platform(p)?.shortName ?: "Ports" } }
+                            .associate { (id, _) -> id to (places[id] ?: io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM) }
                     }
                 }
-            }.distinctUntilChanged().resilient().collect { ctx.playedAs.value = it }
+            }.combine(
+                // On a computer, the games Play starts with the port chosen for them (Play With) show
+                // as Ports outside their own system too.
+                ctx.settings.map { s ->
+                    s.ports.playWith.filter { (_, port) -> port in s.ports.installed || port.startsWith(RecompKeeper.YOURS_PREFIX) }
+                        .keys.mapNotNull { it.toLongOrNull()?.let(::GameId) }
+                }.distinctUntilChanged(),
+            ) { android, chosen -> chosen.associateWith { io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM } + android }
+                .distinctUntilChanged().resilient().collect { ctx.playedAs.value = it }
         }
     }
 
@@ -1059,13 +1116,23 @@ internal class DefaultLibraryOps(
         return service.bringIntoUse(plainSaveQuery(game, emulator, coreFor(emulator, game, core)), old)
     }
 
+    /**
+     * A game played as its Android port (its app in its emulator's place): the port's own saves,
+     * by the port's package, never the emulator's. Null for anything else.
+     */
+    private fun androidPortEmulator(game: io.github.matiyaaa.fuse.model.Game): String? {
+        if (game.platformId == io.github.matiyaaa.fuse.model.AppGames.PLATFORM) return null
+        val app = io.github.matiyaaa.fuse.model.AppGames.appId(game.location.launchPath) ?: return null
+        return io.github.matiyaaa.fuse.sync.AndroidPorts.saveEmulator(app.substringBefore('/'))
+    }
+
     /** [game]'s saves for [emulator], as Syncthing looks for them: by the game's own name and system, no profile needed. */
     private suspend fun plainSaveQuery(game: io.github.matiyaaa.fuse.model.Game, emulator: InstalledEmulator, core: String?): io.github.matiyaaa.fuse.sync.SaveQuery =
         io.github.matiyaaa.fuse.sync.SaveQuery(
             game = householdKeyOf(game),
             platform = game.platformId.value,
             romPath = game.location.launchPath,
-            emulatorId = emulator.id.value,
+            emulatorId = androidPortEmulator(game) ?: emulator.id.value,
             emulatorPath = emulator.appId,
             core = core,
             serial = game.tags.serial,
@@ -1079,8 +1146,18 @@ internal class DefaultLibraryOps(
     internal suspend fun saveSamples(): List<io.github.matiyaaa.fuse.sync.SaveQuery> {
         if (ctx.installed.value.isEmpty()) emulators.detectNow()
         val settings = data.scopedSettings
+        // Android ports keep their saves apart from their emulators': each port its own row, by its name.
+        val ports = ctx.portApps.value.keys.mapNotNull { id ->
+            val (app, name) = androidPort?.invoke(id) ?: return@mapNotNull null
+            val game = data.games.get(id) ?: return@mapNotNull null
+            io.github.matiyaaa.fuse.sync.SaveQuery(
+                game = householdKeyOf(game), platform = game.platformId.value, romPath = io.github.matiyaaa.fuse.model.AppGames.path(app),
+                emulatorId = io.github.matiyaaa.fuse.sync.AndroidPorts.saveEmulator(app.substringBefore('/')), emulatorPath = app.substringBefore('/'),
+                core = null, serial = game.tags.serial, title = name,
+            )
+        }.distinctBy { it.emulatorId }
         // Every system at once: each is a lookup and a launch plan, and a big library has many.
-        return kotlinx.coroutines.coroutineScope {
+        return ports + kotlinx.coroutines.coroutineScope {
             data.games.platformCounts().first().keys.map { pid ->
                 async {
                     val summary = data.games.observeByPlatform(pid).first().firstOrNull() ?: return@async null
@@ -1115,7 +1192,7 @@ internal class DefaultLibraryOps(
             game = key,
             platform = game.platformId.value,
             romPath = game.location.launchPath,
-            emulatorId = emulator.id.value,
+            emulatorId = androidPortEmulator(game) ?: emulator.id.value,
             emulatorPath = emulator.appId,
             core = core,
             // Emulators that keep saves by a game's id (RPCS3, PPSSPP, the 3DS and Switch) need it.
@@ -1152,7 +1229,11 @@ internal class DefaultLibraryOps(
         val startedAt = ctx.now()
         playedWhileAway = true
         val sessionId = data.playSessions.start(game, emulator, startedAt)
-        active = ActiveSession(sessionId, game, endsOnResume = awaitExit == null, save = save, plainSave = plainSave, romm = romm)
+        val clock = SessionClock(startedAt)
+        active = ActiveSession(
+            sessionId, game, endsOnResume = awaitExit == null, save = save, plainSave = plainSave, romm = romm,
+            clock = clock, watch = watchSession(sessionId, clock),
+        )
         // Fuse Sync keeps the save moving while the game runs, and tells the other devices it is being played.
         val link = sync
         if (save != null && link != null) ctx.scope.launch { runCatching { link.service.playing(save, startedAt) } }
@@ -1171,13 +1252,45 @@ internal class DefaultLibraryOps(
         }
     }
 
+    /**
+     * Follows a running session: the screen going off and on, the computer sleeping (its clock
+     * jumping between two waits), and a heartbeat kept every other wait, so a session Fuse didn't
+     * see end ends where Fuse last saw it ([recoverSession]). With the screen off nothing ticks, so
+     * the device is never woken for it.
+     */
+    private fun watchSession(sessionId: Long, clock: SessionClock): kotlinx.coroutines.Job = ctx.scope.launch {
+        val screen = ctx.services.interactive
+        launch { screen.collect { on -> clock.screen(on, ctx.now()) } }
+        heartbeat(sessionId, clock)
+        var ticks = 0
+        while (true) {
+            if (!screen.value) screen.first { it }
+            val from = ctx.now()
+            delay(SessionClock.TICK_MS)
+            val now = ctx.now()
+            if (screen.value) clock.tick(from, now)
+            if (++ticks % 2 == 0) heartbeat(sessionId, clock)
+        }
+    }
+
+    private suspend fun heartbeat(sessionId: Long, clock: SessionClock) {
+        runCatching {
+            data.cache.put(SESSION_NS, SESSION_ALIVE, clock.heartbeat(sessionId, ctx.now()), SessionClock.Heartbeat.serializer(), ctx.now(), ttlMs = null)
+        }
+    }
+
     private suspend fun endSession(sessionId: Long) {
-        val save = active?.takeIf { it.id == sessionId }?.save
+        val session = active?.takeIf { it.id == sessionId }
+        session?.watch?.cancel()
+        val save = session?.save
         // Syncthing sends the save the game just wrote.
-        active?.takeIf { it.id == sessionId }?.plainSave?.let { q -> syncthing?.let { st -> afterGame { st.afterExit(q) } } }
+        session?.plainSave?.let { q -> syncthing?.let { st -> afterGame { st.afterExit(q) } } }
         // RomM's save sync sends it too, when it changed and RomM's didn't.
-        active?.takeIf { it.id == sessionId }?.romm?.let { (romId, q) -> rommSaves?.let { rs -> afterGame { delay(ROMM_SETTLE_MS); rs.afterExit(q, romId) } } }
-        val ended = data.playSessions.end(sessionId, ctx.now())
+        session?.romm?.let { (romId, q) -> rommSaves?.let { rs -> afterGame { delay(ROMM_SETTLE_MS); rs.afterExit(q, romId) } } }
+        // Played time only: the screen off and the computer asleep don't count.
+        val now = ctx.now()
+        val ended = data.playSessions.end(sessionId, session?.clock?.takeIf { it.startedAt > 0 }?.endAt(now) ?: now)
+        runCatching { data.cache.remove(SESSION_NS, SESSION_ALIVE) }
         // RomM counts the session too, for a game from RomM, when the person sends their changes there.
         ended?.endedAt?.let { end -> rommChange?.invoke(ended.gameId) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Played(romId, ended.startedAt, end) } }
         // Fuse Sync counts the session and keeps the save the game just wrote.
@@ -1231,9 +1344,21 @@ internal class DefaultLibraryOps(
         ctx.governor.onForeground(false)
     }
 
-    /** On start: closes a session left open when Fuse was stopped while a game ran. */
+    /**
+     * On start: closes a session left open when Fuse was stopped while a game ran, where Fuse last
+     * saw it going (its heartbeat), less the time the screen was off. Without a heartbeat for it,
+     * how long it went on can't be known, so it isn't counted rather than counted until now.
+     */
     suspend fun recoverSession() {
-        data.playSessions.resumeOpen(ctx.now())
+        if (active != null) return
+        val beat = runCatching { data.cache.get(SESSION_NS, SESSION_ALIVE, SessionClock.Heartbeat.serializer(), ctx.now()) }.getOrNull()
+        val open = data.playSessions.openSession().first()
+        when {
+            open == null -> Unit
+            beat != null && beat.session == open.id -> data.playSessions.resumeOpen(beat.endAt)
+            else -> data.playSessions.discardOpen()
+        }
+        runCatching { data.cache.remove(SESSION_NS, SESSION_ALIVE) }
     }
 
     // Edits -----------------------------------------------------------------------------------------
@@ -1846,6 +1971,9 @@ private fun SortOrder.comparator(): Comparator<io.github.matiyaaa.fuse.data.repo
 
 private const val HOUR_MS = 3_600_000L
 
+/** How many of the week's games its recap names. */
+private const val WEEK_GAMES = 3
+
 /** How long the library stays still before suggestions are worked out again (a scan changes many games). */
 private const val RECOMMEND_SETTLE_MS = 2_000L
 
@@ -1888,6 +2016,10 @@ private val ARCHIVES = setOf("zip", "7z", "rar", "gz", "chd", "rvz", "cso", "zso
 
 /** Emulators finish writing a moment after they close: RomM's save sync waits that long. */
 private const val ROMM_SETTLE_MS = 1_500L
+
+/** Where a running session's heartbeat is kept ([SessionClock.Heartbeat]). */
+private const val SESSION_NS = "session"
+private const val SESSION_ALIVE = "alive"
 
 /** A system's play picked from its games: the time in all, how many played, and the [SystemActivity]'s few. */
 internal data class SystemPick(

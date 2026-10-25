@@ -588,6 +588,8 @@ data class LibraryPreferences(
     val purgedGames: List<Long> = emptyList(),
     /** Which view the Library opens on: "INSTALLED" (games on this device) or "ALL" (everywhere they are). */
     val opensOn: String = "ALL",
+    /** The smart filters pinned among the Library's tabs ("UNPLAYED", "TOGETHER"...), by name. */
+    val pinnedFilters: List<String> = emptyList(),
     /** Emulator settings a person saved to give their games at once; theirs on every device. */
     val settingProfiles: List<OwnSettingProfile> = emptyList(),
 )
@@ -716,9 +718,12 @@ data class DownloadSettings(
     val chosen: Boolean = false,
     /** Kilobytes a second for all transfers together; 0 for no limit. */
     val bandwidthKbps: Int = 0,
-    /** "FULL", "REDUCED" or "PAUSE" while a game is being played. */
-    val downloadsWhilePlaying: String = "REDUCED",
-    val uploadsWhilePlaying: String = "REDUCED",
+    /**
+     * "FULL" or "PAUSE" while a game is being played, the same for both since 0.4.4 (one switch,
+     * [transfersWhilePlaying]); "REDUCED", the default before, reads as FULL.
+     */
+    val downloadsWhilePlaying: String = "FULL",
+    val uploadsWhilePlaying: String = "FULL",
     val wifiOnly: Boolean = false,
     /** Transfers move only while plugged in. */
     val chargingOnly: Boolean = false,
@@ -730,7 +735,16 @@ data class DownloadSettings(
     val resumeOnStart: Boolean = true,
     /** Days finished transfers stay listed. */
     val keepFinishedDays: Int = 7,
-)
+) {
+    /**
+     * Downloads and uploads carry on while a game is being played (on, the default), or wait until
+     * it closes: one switch for both. A pause chosen before for either one reads as off.
+     */
+    val transfersWhilePlaying: Boolean get() = downloadsWhilePlaying != "PAUSE" && uploadsWhilePlaying != "PAUSE"
+
+    /** These settings with transfers carrying on while playing, or not. */
+    fun withTransfersWhilePlaying(on: Boolean): DownloadSettings = (if (on) "FULL" else "PAUSE").let { copy(downloadsWhilePlaying = it, uploadsWhilePlaying = it) }
+}
 
 @Serializable
 data class CartridgeSettings(

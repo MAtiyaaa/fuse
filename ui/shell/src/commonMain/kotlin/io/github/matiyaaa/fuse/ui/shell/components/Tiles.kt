@@ -87,6 +87,12 @@ fun GameArtStyle.baseForWidth(width: Dp): Dp = when (this) {
     GameArtStyle.POSTER -> width / POSTER_WIDTH
 }
 
+/** The base size whose [tileSize] is exactly [height] tall: for grids whose rows set the height. */
+fun GameArtStyle.baseForHeight(height: Dp): Dp = when (this) {
+    GameArtStyle.BOX_ART -> height
+    GameArtStyle.POSTER -> height / POSTER_HEIGHT
+}
+
 /** Corner of a game tile in this art style, as a fraction of its short side. Posters are softer, like a case. */
 @Composable
 internal fun GameArtStyle.cornerFraction(): Float =
@@ -95,6 +101,30 @@ internal fun GameArtStyle.cornerFraction(): Float =
 /** Corner of portrait covers (Capsule Mode, Cover grid), as a fraction of their short side. */
 @Composable
 internal fun coverCornerFraction(): Float = Fuse.geometry.tileCornerFraction * COVER_CORNER
+
+/**
+ * A game's picture for a list row: its square art, or its poster (a case's shape) when Game art is
+ * set to posters, so a list of games looks as its grids do.
+ */
+fun gameMenuArt(art: Art, title: String, accent: Long, style: GameArtStyle): io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt =
+    if (style == GameArtStyle.POSTER) {
+        io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt(art.boxart ?: art.tile, portrait = true, fallbackTitle = title, accent = accent, wide = false)
+    } else {
+        io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt(art.tile, square = true, fallbackTitle = title, accent = accent, wide = false)
+    }
+
+/**
+ * A game's art in a small picture of [size] (search results, lists): a square, or a poster as tall
+ * as [size] when Game art is set to posters.
+ */
+@Composable
+fun GameThumb(art: Art, size: Dp, shape: androidx.compose.ui.graphics.Shape, modifier: Modifier = Modifier, fallback: @Composable () -> Unit = {}) {
+    if (LocalGameArt.current == GameArtStyle.POSTER) {
+        PosterGameArt(art, modifier.size(size * POSTER_WIDTH / POSTER_HEIGHT, size).clip(shape), fallback = fallback)
+    } else {
+        SquareGameArt(art, modifier.size(size).clip(shape), fallback = fallback)
+    }
+}
 
 /**
  * A game's art as a poster: its portrait cover, else its square art or icon drawn whole over a soft
@@ -169,7 +199,7 @@ fun GameIconTile(
     ) {
         val art = Modifier.fillMaxSize().alpha(if (card.dimmed) MISSING_ART_ALPHA else 1f)
         val label = card.platformShort.takeIf { LocalTileShowsSystem.current }
-        val border = LocalTileBorders.current.of(card.platformId)
+        val border = LocalTileBorders.current.of(card.shownPlatform)
         // A border that names the system takes the tag; generated art then leaves it out.
         val artLabel = label.takeUnless { border.carriesTag }
         if (poster) {
@@ -199,7 +229,7 @@ fun GameCoverTile(
     val corner = coverCornerFraction()
     val shape = remember(corner) { SquircleShape.fraction(corner) }
     val label = card.platformShort.takeIf { LocalTileShowsSystem.current }
-    val border = LocalTileBorders.current.of(card.platformId)
+    val border = LocalTileBorders.current.of(card.shownPlatform)
     val artLabel = label.takeUnless { border.carriesTag }
     Tile(
         selected = selected,
@@ -719,7 +749,7 @@ private const val COVER_CORNER = 0.55f
 private const val WIDE_CORNER = 0.7f
 
 /** Wide tiles are a little wider than 16:9, so a logo and a caption fit beside each other. */
-private const val WIDE_ASPECT = 1.78f
+internal const val WIDE_ASPECT = 1.78f
 
 /** Blur of the soft copy behind art drawn whole. */
 private val BACKDROP_BLUR = 14.dp

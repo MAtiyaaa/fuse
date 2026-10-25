@@ -1,11 +1,14 @@
 package io.github.matiyaaa.fuse.ui.shell.platform
 
+import coil3.BitmapImage
 import coil3.decode.DataSource
+import coil3.getExtra
 import coil3.intercept.Interceptor
 import coil3.request.ImageResult
 import coil3.request.SuccessResult
 import coil3.size.Dimension
 import io.github.matiyaaa.fuse.model.ArtworkSizing
+import io.github.matiyaaa.fuse.ui.designsystem.media.MovingPictures
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,6 +28,7 @@ import okio.Path.Companion.toPath
  *
  * Only local files are copied (art Fuse keeps on disk). A copy is keyed by the file's path, when it
  * last changed and the size bucket, so new art is copied again; the folder is trimmed to [MAX_BYTES].
+ * A moving picture (a GIF, an animated WebP) is never copied: a small copy would be its first frame.
  */
 class ThumbnailInterceptor(cacheDir: String) : Interceptor {
     private val dir = "${cacheDir.trimEnd('/')}/thumbs".toPath()
@@ -41,6 +45,8 @@ class ThumbnailInterceptor(cacheDir: String) : Interceptor {
         val changed = runCatching { fs.metadataOrNull(path.toPath())?.lastModifiedAtMillis }.getOrNull() ?: return chain.proceed()
         val alpha = path.endsWith(".png", ignoreCase = true) || path.endsWith(".webp", ignoreCase = true) || path.endsWith(".svg", ignoreCase = true)
         if (path.endsWith(".svg", ignoreCase = true)) return chain.proceed()
+        // A GIF is read whole, also past a still copy an earlier Fuse made of it.
+        if (path.endsWith(".gif", ignoreCase = true)) return chain.proceed()
         val name = "$path|$changed|${ArtworkSizing.bucket(longest)}".encodeUtf8().sha1().hex() + if (alpha) ".png" else ".jpg"
         val thumb = dir / name
         if (runCatching { fs.exists(thumb) }.getOrDefault(false)) {
@@ -48,8 +54,10 @@ class ThumbnailInterceptor(cacheDir: String) : Interceptor {
             if (small is SuccessResult) return small
         }
         val result = chain.proceed()
-        if (result is SuccessResult && result.dataSource != DataSource.MEMORY_CACHE && result.dataSource != DataSource.MEMORY) {
-            val image = result.image
+        // Only a still picture, decoded as it moves (not a first frame asked for alone), is copied.
+        val still = result is SuccessResult && result.image is BitmapImage && !request.getExtra(MovingPictures.Still)
+        if (still && result.dataSource != DataSource.MEMORY_CACHE && result.dataSource != DataSource.MEMORY) {
+            val image = (result as SuccessResult).image
             scope.launch {
                 writes.withPermit {
                     runCatching {

@@ -529,6 +529,41 @@ class PortsStoreTest {
     }
 
     @Test
+    fun aNesRecompilationIsHandedThePersonsOwnRomByItsPathAndStartsStraightIntoIt(): Unit = runBlocking {
+        // A made-up NES ROM, its iNES header left out of the CRC32 as nesrecomp's verify_rom leaves it out.
+        val data = ByteArray(40960) { (it * 13).toByte() }
+        val crc = io.github.matiyaaa.fuse.launch.ports.PortRomCheck.crc32(data).toString(16).padStart(8, '0')
+        val roms = Files.createTempDirectory("fuse-ports-nes").toFile()
+        val rom = File(roms, "Yoshi (USA).nes").apply { writeBytes(byteArrayOf(0x4E, 0x45, 0x53, 0x1A) + ByteArray(12) + data) }
+        val wrong = File(roms, "Yoshi (Europe).nes").apply { writeBytes(byteArrayOf(0x4E, 0x45, 0x53, 0x1A) + ByteArray(12) + data.copyOf().also { it[5] = 1 }) }
+        val list = """
+            {"format":1,"revision":2,"ports":[
+              {"id":"eggport","name":"EggPort","game":"Yoshi","about":"Made up.","homepage":"https://example.org/egg","version":"0.1.0",
+               "builds":[{"os":"linux","url":"https://example.org/egg.zip","size":${build.size},"sha256":"${sha(build)}","kind":"ZIP","run":"skyport"}],
+               "data":[{"id":"rom","name":"Its ROM","about":"The USA one.","needs":[],"rom":{"system":"nes","crc32":"$crc"}}],
+               "args":["{data:rom}"],"source":"made up"}
+            ]}
+        """.trimIndent()
+        val (services, files) = services(list = list)
+        val store = createFuseStore(services, scope)
+        assertNotNull(store.library.addGameFile(rom.absolutePath, PlatformId("nes"), title = "Yoshi"))
+        assertNotNull(store.library.addGameFile(wrong.absolutePath, PlatformId("nes"), title = "Yoshi Europe"))
+        store.ports.open()
+        store.until("listed") { it.loaded }
+
+        // The one copy it is made from is the only one offered, and used without asking.
+        assertEquals(listOf(rom.absolutePath.replace('\\', '/')), store.ports.copiesInLibrary("eggport", "rom").map { it.folder })
+        assertEquals("That isn't the ROM it is made from. The USA one.", store.ports.chooseFolder("eggport", "rom", wrong.absolutePath))
+        store.ports.install("eggport")
+        store.until("set up") { it.port("eggport")?.ready == true }
+        val launcher = PortLauncher.decode(File(files.folder, "eggport/eggport.fuseport").readText())!!
+        assertEquals(rom.absolutePath.replace('\\', '/'), launcher.argv.last(), "its ROM by its path, so it opens no picker of its own")
+        assertFalse(File(files.folder, "eggport/home").listFiles().orEmpty().any { it.name.endsWith(".nes") }, "nothing is put in its home")
+        assertTrue(rom.readBytes().copyOfRange(16, rom.length().toInt()).contentEquals(data), "the person's file is untouched")
+        roms.deleteRecursively()
+    }
+
+    @Test
     fun anUpdateThatCantGoInLeavesTheWorkingCopyAndAStoppedOneIsPutBack(): Unit = runBlocking {
         File(game, "SKY.DAT").writeBytes(ByteArray(16) { 7 })
         val (services, files) = services()

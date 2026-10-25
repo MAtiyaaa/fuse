@@ -16,6 +16,7 @@ import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.GameCollection
 import io.github.matiyaaa.fuse.model.GameId
+import io.github.matiyaaa.fuse.model.RecentAchievement
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
@@ -288,7 +289,7 @@ interface ThemeOps {
 
 /**
  * Space on the drives the library lives on, what each game takes (every disc, track and folder
- * file) and deleting games' files. Deleting is only offered on the device, in Settings, Storage.
+ * file) and deleting games' files: in Settings, Storage, and from a game's own options.
  */
 interface StorageOps {
     /** The latest measurement; null until [refresh] first runs. Updates as games are measured. */
@@ -297,6 +298,8 @@ interface StorageOps {
     fun refresh()
     /** What [game] takes on disk, or null when it is gone. */
     suspend fun size(game: GameId): Long?
+    /** Every file [game] is made of on disk (what deleting it removes), or null when it is gone. */
+    suspend fun files(game: GameId): io.github.matiyaaa.fuse.library.storage.GameFileSet? = null
     /**
      * Deletes the games' files (all discs, tracks and folder contents; never saves next to them)
      * and forgets the games. Only paths inside the game's library folder are touched.
@@ -424,6 +427,8 @@ data class GameQuery(
     val includeHidden: Boolean = false,
     val sort: SortOrder = SortOrder.TITLE,
     val set: GameSet = GameSet.LIBRARY,
+    /** Only the library's games in this list (Unplayed, Play together...). */
+    val smart: SmartFilter? = null,
 )
 
 /** Which games a [GameQuery] lists: the library, or games whose files are gone, hidden or removed. */
@@ -486,6 +491,9 @@ interface LibraryOps {
     fun counts(query: GameQuery): Flow<GameCounts> = games(query).map { list ->
         GameCounts(list.size, list.count { it.favorite }, list.count { it.lastPlayedAt != null })
     }
+
+    /** How many of the library's games (of [platform], or every system) each [SmartFilter] holds, from the games alone. */
+    fun smartCounts(platform: PlatformId?): Flow<Map<SmartFilter, Int>> = kotlinx.coroutines.flow.flowOf(emptyMap())
 
     /**
      * [platform]'s play here ([SystemActivity]): worked out from its games without their art, the
@@ -1116,6 +1124,91 @@ interface AchievementOps {
 
     /** Puts back what signing the emulators in changed. */
     suspend fun signOutEmulators(): Boolean = false
+
+    /**
+     * The game being played and the achievements unlocked in it as Fuse notices them; kept once it
+     * closes ([PlayUnlocks.endedAt]), for its recap, until the next game starts.
+     */
+    val playing: StateFlow<PlayUnlocks> get() = MutableStateFlow(PlayUnlocks())
+
+    /**
+     * Something on screen shows unlocks as they come (the second screen while a game runs): until
+     * the returned function is called, RetroAchievements is asked about new ones every minute. With
+     * nothing showing them, it is asked once, as the game closes.
+     */
+    fun showLive(): () -> Unit = {}
+}
+
+/**
+ * A game being played (or the one just played, [endedAt]) and what was unlocked in it, oldest first,
+ * as RetroAchievements reported them. [set] is the game's set as it stands, those unlocks included;
+ * null without one.
+ */
+data class PlayUnlocks(
+    val game: GameId? = null,
+    val since: Long = 0L,
+    val endedAt: Long? = null,
+    val set: AchievementState? = null,
+    val unlocks: List<RecentAchievement> = emptyList(),
+) {
+    /**
+     * With what RetroAchievements answered about [recent] unlocks: those in this game ([raGameId])
+     * since it started (a little before, for clocks that differ) not already counted, oldest first.
+     */
+    fun with(recent: List<RecentAchievement>, raGameId: Long): PlayUnlocks {
+        val known = unlocks.mapTo(HashSet()) { it.achievement.id }
+        val news = recent
+            .filter { it.achievement.gameId == raGameId && it.earnedAt >= since - CLOCK_SLACK_MS && it.achievement.id !in known }
+            .distinctBy { it.achievement.id }
+            .sortedBy { it.earnedAt }
+        if (news.isEmpty()) return this
+        return copy(unlocks = unlocks + news, set = set?.withUnlocks(news))
+    }
+
+    companion object {
+        /** How far apart this device's clock and RetroAchievements' may be. */
+        const val CLOCK_SLACK_MS = 2 * 60_000L
+    }
+}
+
+/** This set with [news] unlocked: each one earned when it was, the counts and points with them. */
+fun AchievementState.withUnlocks(news: List<RecentAchievement>): AchievementState {
+    if (news.isEmpty()) return this
+    val byId = news.associateBy { it.achievement.id }
+    if (achievements.isEmpty()) {
+        val fresh = news.size
+        return copy(
+            earned = (earned + fresh).coerceAtMost(total),
+            earnedHardcore = (earnedHardcore + news.count { it.hardcore }).coerceAtMost(total),
+            pointsEarned = (pointsEarned + news.sumOf { it.achievement.points }).coerceAtMost(points.takeIf { it > 0 } ?: Int.MAX_VALUE),
+        )
+    }
+    var earnedNow = 0
+    var hardNow = 0
+    var pointsNow = 0
+    val list = achievements.map { a ->
+        val n = byId[a.id]
+        when {
+            n == null -> a
+            n.hardcore && a.earnedHardcoreAt == null -> {
+                if (!a.earned) { earnedNow++; pointsNow += a.points }
+                hardNow++
+                a.copy(earnedAt = a.earnedAt ?: n.earnedAt, earnedHardcoreAt = n.earnedAt)
+            }
+            !a.earned -> {
+                earnedNow++
+                pointsNow += a.points
+                a.copy(earnedAt = n.earnedAt)
+            }
+            else -> a
+        }
+    }
+    return copy(
+        achievements = list,
+        earned = (earned + earnedNow).coerceAtMost(total),
+        earnedHardcore = (earnedHardcore + hardNow).coerceAtMost(total),
+        pointsEarned = pointsEarned + pointsNow,
+    )
 }
 
 interface AppOps {

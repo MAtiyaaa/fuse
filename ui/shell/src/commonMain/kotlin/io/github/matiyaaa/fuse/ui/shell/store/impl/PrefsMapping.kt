@@ -5,6 +5,7 @@ import io.github.matiyaaa.fuse.data.settings.DestinationSetting
 import io.github.matiyaaa.fuse.data.settings.StoredTheme
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.LibraryLayout
+import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.ThemeCodec
 import io.github.matiyaaa.fuse.model.ThemeSpec
@@ -63,6 +64,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         defaultLayout = scoped.layout,
         gameArt = library.gameArt,
         libraryOpensOn = library.opensOn,
+        libraryPinnedFilters = library.pinnedFilters,
         steam = steam,
         extensions = extensions,
         showHero = scoped.showHero,
@@ -71,8 +73,9 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         videoDelaySeconds = videoPreview.delaySeconds,
         input = input.migrated(),
         display = display,
-        performance = performance.profile,
-        lowPower = performance.lowPowerMode,
+        // One switch for Low Power: an older Fuse's Low power profile is Low Power Mode on.
+        performance = performance.profile.takeIf { it != PerformanceProfile.LOW_POWER } ?: PerformanceProfile.AUTOMATIC,
+        lowPower = performance.lowPowerMode || performance.profile == PerformanceProfile.LOW_POWER,
         performanceOverlay = performance.overlay,
         sound = if (!sound.enabled) SoundProfile.OFF else sound.profile ?: theme.sound,
         soundVolume = sound.volume,
@@ -167,7 +170,9 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             rememberPlace = prefs.rememberPlace,
             standbyMinutes = prefs.standbyMinutes.coerceIn(0, 120),
         ),
-        performance = performance.copy(profile = prefs.performance, lowPowerMode = prefs.lowPower, overlay = prefs.performanceOverlay),
+        performance = performance.copy(
+            profile = prefs.performance.takeIf { it != PerformanceProfile.LOW_POWER } ?: PerformanceProfile.AUTOMATIC,
+            lowPowerMode = prefs.lowPower || prefs.performance == PerformanceProfile.LOW_POWER, overlay = prefs.performanceOverlay),
         input = prefs.input,
         display = prefs.display,
         scraping = scraping.copy(
@@ -201,6 +206,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             gameArt = prefs.gameArt,
             systemTiles = prefs.systemTiles,
             opensOn = prefs.libraryOpensOn,
+            pinnedFilters = prefs.libraryPinnedFilters,
         ),
         sound = sound.copy(
             enabled = prefs.sound != SoundProfile.OFF,

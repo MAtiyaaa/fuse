@@ -83,6 +83,11 @@ import io.github.matiyaaa.fuse.ui.shell.store.RommLink
 import io.github.matiyaaa.fuse.ui.shell.store.RommPresence
 import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import io.github.matiyaaa.fuse.ui.designsystem.input.mouseHover
+import kotlinx.coroutines.launch
 
 /**
  * One game on the All page, wherever it is: on this device, on RomM, or on another device of the
@@ -268,15 +273,53 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         local + remote + elsewhere
     }
 
+    // Where the games are: this device, RomM, the household's other devices, the computers that
+    // stream. Shown as the first row when there is more than one, each opening its whole list.
+    val householdState by store.reach.state.collectAsState()
+    val sources = remember(platforms, rommOn, rommState.link, rommSystems, householdState, streamed, streamHosts) {
+        buildList {
+            val here = platforms.filter { it.gameCount > 0 }
+            add(SourceCard(SRC_HERE, "This device", FuseIcons.HardDrive, gamesText(here.sumOf { it.gameCount }), if (here.size == 1) "1 system" else "${here.size} systems", live = null))
+            // RomM once it is turned on and set up; turned off, it has no card.
+            if (rommOn && rommState.link != RommLink.OFF) {
+                val (detail, live) = when (rommState.link) {
+                    RommLink.ONLINE -> "Connected" to true
+                    RommLink.CONNECTING -> "Connecting" to null
+                    RommLink.OFFLINE -> "Not answering, its list as it was" to false
+                    RommLink.SIGNED_OUT -> "Sign in again in Settings" to false
+                    else -> "Off" to false
+                }
+                add(SourceCard(SRC_ROMM, "RomM", FuseIcons.Cloud, gamesText(rommSystems.sumOf { it.games }), detail, live))
+            }
+            if (householdState.linked && householdState.devices.isNotEmpty()) {
+                val on = householdState.devices.count { it.online }
+                add(SourceCard(SRC_DEVICES, "Other devices", FuseIcons.MonitorSmartphone, gamesText(householdState.games), "$on of ${householdState.devices.size} on now", live = on > 0))
+            }
+            if (streamed.isNotEmpty()) {
+                val on = streamHosts.count { it.online == true }
+                add(SourceCard(SRC_STREAM, "Your computers", FuseIcons.Cast, if (streamed.size == 1) "1 app" else "${streamed.size} apps", if (streamHosts.size == 1) "1 computer streams" else "${streamHosts.size} computers stream", live = on > 0))
+            }
+        }
+    }
+    // Where you left off: the games last played here, to carry on from.
+    val jump = remember(home.continuePlaying, home.recentlyPlayed) {
+        home.continuePlaying.ifEmpty { home.recentlyPlayed }.take(JUMP_LIMIT).map { EverywhereGame.Here(it) }
+    }
+
+    val anything = recent.isNotEmpty() || systems.isNotEmpty() || jump.isNotEmpty() || onRomm.isNotEmpty() || elsewhere.isNotEmpty() || streamed.isNotEmpty()
     val rows = buildList {
+        if (anything && sources.size > 1) add(ROW_SOURCES)
+        if (jump.isNotEmpty()) add(ROW_JUMP)
         if (recent.isNotEmpty()) add(ROW_RECENT)
         if (systems.isNotEmpty()) add(ROW_SYSTEMS)
         if (rommOn && onRomm.isNotEmpty()) add(ROW_ROMM)
         if (elsewhere.isNotEmpty()) add(ROW_ELSEWHERE)
         if (streamed.isNotEmpty()) add(ROW_STREAM)
     }
-    // Each shelf ends in See All (systems excepted: the Systems tab holds them all already).
+    // Each shelf of games ends in See All (the systems and the sources open their own lists already).
     fun sizeOf(key: String) = when (key) {
+        ROW_SOURCES -> sources.size
+        ROW_JUMP -> jump.size + 1
         ROW_RECENT -> recent.size + 1
         ROW_SYSTEMS -> systems.size
         ROW_ROMM -> onRomm.size + 1
@@ -289,6 +332,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
     val row = rows.getOrNull(sel.row)
     val col = row?.let { sel.column(it) } ?: 0
     fun gamesOf(key: String?): List<EverywhereGame> = when (key) {
+        ROW_JUMP -> jump
         ROW_RECENT -> recent
         ROW_ROMM -> onRomm
         ROW_ELSEWHERE -> elsewhere
@@ -297,11 +341,12 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
     }
     val chosen = gamesOf(row).getOrNull(col)
     val chosenSystem = if (row == ROW_SYSTEMS) systems.getOrNull(col) else null
+    val chosenSource = if (row == ROW_SOURCES) sources.getOrNull(col) else null
     // Games arriving (another device answering, RomM's list coming in) can reorder a shelf: the
     // selection stays on the game it was on, never on whatever slid into its place.
     val following = remember { HashMap<String, String>() }
     val lists = remember { HashMap<String, List<EverywhereGame>>() }
-    for (key in listOf(ROW_RECENT, ROW_ROMM, ROW_ELSEWHERE, ROW_STREAM)) {
+    for (key in listOf(ROW_JUMP, ROW_RECENT, ROW_ROMM, ROW_ELSEWHERE, ROW_STREAM)) {
         val games = gamesOf(key)
         val at = sel.column(key)
         val was = following[key]
@@ -321,25 +366,56 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         is EverywhereGame.Streamed -> streamFrom(app, e.app)
     }
     fun options(e: EverywhereGame) = when (e) {
-        is EverywhereGame.Here -> app.openContextMenu(app.gameMenu(e.card))
+        is EverywhereGame.Here -> app.openContextMenu(
+            app.gameMenu(e.card).let { menu ->
+                // For when nothing in view calls: a reel that lands on a game from the backlog.
+                menu.copy(actions = menu.actions + io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("surprise", "Surprise Me", FuseIcons.Dice, detail = "A game from your backlog", onSelect = {
+                    app.closeOverlays()
+                    app.surprise = io.github.matiyaaa.fuse.ui.shell.app.SurpriseSpec()
+                }))
+            },
+        )
         is EverywhereGame.OnRomm -> app.openContextMenu(io.github.matiyaaa.fuse.ui.shell.romm.gameMenu(app, e.game))
         is EverywhereGame.Elsewhere -> app.openContextMenu(householdMenu(app, e.game, romm = rommState.canUpload))
         is EverywhereGame.Streamed -> streamFrom(app, e.app, always = true)
     }
     // Every game of the system from everywhere, installed or not, each once.
     fun openSystem(s: EverywhereSystem) = app.go(Route.SystemEverywhere(s.card.platform.id, s.card.platform.name, s.rommSlug))
+    fun showView(segment: LibrarySegment, sort: io.github.matiyaaa.fuse.model.SortOrder? = null) {
+        sort?.let { s -> app.store.updatePrefs { it.copy(librarySort = s) } }
+        view.segment = segment
+        view.grid.index = 0
+        view.selectedId = null
+    }
+    fun openSource(s: SourceCard) = when (s.key) {
+        SRC_HERE -> showView(LibrarySegment.INSTALLED)
+        SRC_ROMM -> app.go(Route.RommGames(null, "On RomM"))
+        SRC_DEVICES -> app.go(Route.HouseholdGames(null, "On other devices"))
+        else -> app.openStreaming()
+    }
     fun seeAll(key: String) = when (key) {
+        ROW_JUMP -> showView(LibrarySegment.RECENT)
         // Everything on this device, newest first: the Installed view sorted by when games came.
-        ROW_RECENT -> {
-            app.store.updatePrefs { it.copy(librarySort = io.github.matiyaaa.fuse.model.SortOrder.RECENTLY_ADDED) }
-            view.segment = LibrarySegment.INSTALLED
-            view.grid.index = 0
-            view.selectedId = null
-        }
+        ROW_RECENT -> showView(LibrarySegment.INSTALLED, io.github.matiyaaa.fuse.model.SortOrder.RECENTLY_ADDED)
         ROW_ROMM -> app.go(Route.RommGames(null, "On RomM"))
         ROW_ELSEWHERE -> app.go(Route.HouseholdGames(null, "On other devices"))
         ROW_STREAM -> app.openStreaming()
         else -> Unit
+    }
+    // What Select does on what is chosen: the same for a press, a click and a tap.
+    fun activate(key: String, i: Int) {
+        when (key) {
+            ROW_SOURCES -> sources.getOrNull(i)?.let(::openSource)
+            ROW_SYSTEMS -> systems.getOrNull(i)?.let(::openSystem)
+            else -> gamesOf(key).getOrNull(i)?.let(::open) ?: seeAll(key)
+        }
+    }
+    // A click, a tap or the mouse pointing chooses it, as the D-pad would.
+    fun point(key: String, i: Int) {
+        app.focusZone = io.github.matiyaaa.fuse.ui.shell.app.FocusZone.CONTENT
+        view.inHeader = false
+        sel.row = rows.indexOf(key).coerceAtLeast(0)
+        sel.setColumn(key, i)
     }
 
     PageEffect(focused, chosen?.card?.id, chosen?.card?.art, chosenSystem?.card?.art) {
@@ -353,11 +429,11 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
     PageEffect(focused, row, col, chosen == null) {
         if (!focused) return@PageEffect
         app.hints = when {
-            row == ROW_SYSTEMS -> listOf(Hint(HintButton.CONFIRM, "Open"))
+            row == ROW_SOURCES || row == ROW_SYSTEMS -> listOf(Hint(HintButton.CONFIRM, "Open"))
             chosen == null && row != null -> listOf(Hint(HintButton.CONFIRM, "See all"))
-            col == 0 && row != null && chosen != null && chosen !is EverywhereGame.Streamed -> listOf(Hint(HintButton.CONFIRM, if (chosen is EverywhereGame.Here) app.gameConfirmLabel else "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.DPAD, "Left: See all"))
-            chosen is EverywhereGame.Here -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"))
             chosen is EverywhereGame.Streamed -> listOf(Hint(HintButton.CONFIRM, "Stream"), Hint(HintButton.OPTIONS, "Choose computer"))
+            col == 0 && chosen != null -> listOf(Hint(HintButton.CONFIRM, if (chosen is EverywhereGame.Here) app.gameConfirmLabel else "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.DPAD, "Left: See all"))
+            chosen is EverywhereGame.Here -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"))
             chosen != null -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"))
             else -> emptyList()
         }
@@ -367,13 +443,13 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
             NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> {
                 // Left from a shelf's first game reaches its See all, at the far end, in one press.
                 val key = row
-                if (e.action == NavAction.LEFT && key != null && key != ROW_SYSTEMS && col == 0 && sizeOf(key) > 1) {
+                if (e.action == NavAction.LEFT && key != null && key.endsInSeeAll() && col == 0 && sizeOf(key) > 1) {
                     sel.setColumn(key, sizeOf(key) - 1)
                     return@InputLayer NavResult.MOVED
                 }
                 val r = if (rows.isEmpty()) NavResult.IGNORED else sel.move(e.action, rows, ::sizeOf)
                 when {
-                    // Up from the first shelf goes to the Library's tabs.
+                    // Up from the first row goes to the Library's tabs.
                     r == NavResult.IGNORED && e.action == NavAction.UP -> { view.inHeader = true; NavResult.MOVED }
                     r == NavResult.IGNORED -> NavResult.BLOCKED
                     else -> r
@@ -381,18 +457,14 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
             }
             NavAction.SELECT -> {
                 val key = row ?: return@InputLayer NavResult.BLOCKED
-                when {
-                    key == ROW_SYSTEMS -> systems.getOrNull(col)?.let(::openSystem)
-                    chosen != null -> open(chosen)
-                    else -> seeAll(key)
-                }
+                activate(key, col)
                 NavResult.ACTIVATED
             }
             NavAction.CONTEXT -> {
                 chosen?.let(::options)
                 if (chosen != null) NavResult.ACTIVATED else NavResult.BLOCKED
             }
-            // The triggers jump along a shelf a screenful at a time, to its See all at the end and back.
+            // The triggers jump along a row a screenful at a time, to its See all at the end and back.
             NavAction.PAGE_DOWN, NavAction.PAGE_UP -> {
                 val key = row ?: return@InputLayer NavResult.BLOCKED
                 val last = sizeOf(key) - 1
@@ -409,52 +481,78 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
     val density = androidx.compose.ui.platform.LocalDensity.current
     val glide by androidx.compose.runtime.rememberUpdatedState(Fuse.motion.followScroll())
     BoxWithConstraints(modifier.testTag("library.all")) {
-        val tile = LocalTileMetrics.current.icon
         if (rows.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(horizontal = Space.gutter), contentAlignment = Alignment.CenterStart) {
-                FText("Games you add show up here, with what's on RomM and your other devices when those are set up.", Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 3)
+            io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState(
+                FuseIcons.Library, "Nothing here yet",
+                Modifier.fillMaxSize().padding(horizontal = Space.gutter),
+                message = "Every game you have shows here: the ones on this device, and what is on RomM and your other devices once they are set up.",
+                actionLabel = "Add a game folder", actionSelected = focused, actionIcon = FuseIcons.FolderPlus,
+                onAction = { app.go(Route.Settings("library")) },
+                compact = maxHeight < STAGE_FROM,
+            )
+            InputLayer(enabled = focused) { e ->
+                when (e.action) {
+                    NavAction.SELECT -> { app.go(Route.Settings("library")); NavResult.ACTIVATED }
+                    NavAction.UP -> { view.inHeader = true; NavResult.MOVED }
+                    else -> NavResult.IGNORED
+                }
             }
             return@BoxWithConstraints
         }
-        // What you're on, and where it is, always in the same place above the shelves (as Installed's
-        // stage does), so moving along a shelf never makes the page jump. Small screens skip it.
+        // Tiles sized to the screen: a few whole ones and the edge of the next, so a phone held
+        // upright shows a row of games rather than two, and a TV doesn't run them small.
+        val metrics = LocalTileMetrics.current
+        val tile = shelfTile(maxWidth, metrics.gap, metrics.icon)
+        // What you're on, and where it is, always in the same place above the shelves, with its
+        // buttons for a mouse or a finger. A short screen names it under its shelf instead.
         val stage = maxHeight >= STAGE_FROM
-        // Only scrolls when the chosen shelf won't be wholly on screen once its name has opened
-        // under it, so shelves that fit keep their titles. The glide measures the shelf every frame,
-        // so the shelf it left closing above it never carries it past.
+        val stageH = stageHeight(maxHeight)
+        // Only scrolls when the chosen row won't be wholly on screen once its name has opened
+        // under it, so rows that fit keep their titles. The glide measures the row every frame,
+        // so the row it left closing above it never carries it past.
         LaunchedEffect(sel.row) {
             if (rows.isEmpty()) return@LaunchedEffect
             val to = sel.row.coerceIn(0, rows.lastIndex)
-            val grows = if (!stage && rows[to] != ROW_SYSTEMS) with(density) { (Space.xxl + Space.l).roundToPx() } else 0
+            val grows = if (!stage && rows[to].endsInSeeAll()) with(density) { (Space.xxl + Space.l).roundToPx() } else 0
             val info = list.layoutInfo
             val seen = info.visibleItemsInfo.firstOrNull { it.index == to }
             val whole = seen != null && seen.offset >= info.viewportStartOffset && seen.offset + seen.size + grows <= info.viewportEndOffset
             if (!whole) list.glideTo(to, spec = glide, settleMs = io.github.matiyaaa.fuse.ui.fuseline.Durations.SLOW)
         }
-        if (stage) AllStage(chosen, chosenSystem, if (row != null && chosen == null && chosenSystem == null) row else null, Modifier.fillMaxWidth().height(stageHeight(maxHeight)))
+        if (stage) {
+            AllStage(
+                chosen, chosenSystem, chosenSource,
+                seeAllOf = if (row != null && chosen == null && chosenSystem == null && chosenSource == null) shelfName(row) else null,
+                onPrimary = { row?.let { activate(it, col) } },
+                onOptions = chosen?.takeIf { it !is EverywhereGame.Streamed || it.app.hosts.size > 1 }?.let { c -> { options(c) } },
+                primaryLabel = when (chosen) {
+                    is EverywhereGame.Here -> app.gameConfirmLabel
+                    is EverywhereGame.Streamed -> "Stream"
+                    null -> if (chosenSystem != null || chosenSource != null) "Open" else "See all"
+                    else -> "Open"
+                },
+                modifier = Modifier.fillMaxWidth().height(stageH),
+            )
+        }
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().padding(top = if (stage) stageHeight(maxHeight) else 0.dp).fadingEdges(list, top = Space.l, bottom = Space.xl).dragScroll(list),
+            modifier = Modifier.fillMaxSize().padding(top = if (stage) stageH else 0.dp).fadingEdges(list, top = Space.l, bottom = Size.hintHeight + Space.s).dragScroll(list),
             contentPadding = PaddingValues(top = Space.s, bottom = Size.hintHeight + Space.l),
             verticalArrangement = Arrangement.spacedBy(Space.m),
         ) {
             for ((r, key) in rows.withIndex()) item(key) {
                 val selected = if (focused && sel.row == r) sel.column(key) else -1
                 when (key) {
-                    ROW_SYSTEMS -> SystemsShelf(systems, selected, tile) { i -> sel.row = r; sel.setColumn(key, i); openSystem(systems[i]) }
+                    ROW_SOURCES -> SourcesBand(sources, selected, maxWidth, onOpen = { i -> point(key, i); activate(key, i) }, onPoint = { i -> point(key, i) })
+                    ROW_SYSTEMS -> SystemsShelf(systems, selected, tile, onOpen = { i -> point(key, i); activate(key, i) }, onPoint = { i -> point(key, i) })
                     else -> {
-                        val (title, icon) = when (key) {
-                            ROW_RECENT -> "Recently Added" to FuseIcons.Sparkles
-                            ROW_ROMM -> "On RomM" to FuseIcons.Cloud
-                            ROW_STREAM -> "Stream From Your Computers" to FuseIcons.Cast
-                            else -> "On Other Devices" to FuseIcons.MonitorSmartphone
-                        }
                         val games = gamesOf(key)
                         EverywhereShelf(
-                            title, icon, games, selected, tile,
-                            onOpen = { i -> sel.row = r; sel.setColumn(key, i); open(games[i]) },
-                            onOptions = { i -> sel.row = r; sel.setColumn(key, i); options(games[i]) },
-                            onSeeAll = { sel.row = r; sel.setColumn(key, games.size); seeAll(key) },
+                            shelfName(key), shelfIcon(key), games, selected, tile,
+                            onOpen = { i -> point(key, i); open(games[i]) },
+                            onOptions = { i -> point(key, i); options(games[i]) },
+                            onSeeAll = { point(key, games.size); seeAll(key) },
+                            onPoint = { i -> point(key, i) },
                             noun = if (key == ROW_STREAM) "app" else "game",
                             named = !stage,
                         )
@@ -468,11 +566,66 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
 /** What a shelf's game is across arrivals: its kind and id, as the shelf keys its tiles. */
 private fun identity(g: EverywhereGame): String = g::class.simpleName + g.card.id.value
 
+private const val ROW_SOURCES = "sources"
+private const val ROW_JUMP = "jump"
 private const val ROW_RECENT = "recent"
 private const val ROW_SYSTEMS = "systems"
 private const val ROW_ROMM = "romm"
 private const val ROW_ELSEWHERE = "elsewhere"
 private const val ROW_STREAM = "stream"
+
+/** Rows of games end in a See all tile; the sources and the systems open lists of their own. */
+private fun String.endsInSeeAll(): Boolean = this != ROW_SOURCES && this != ROW_SYSTEMS
+
+private fun shelfName(key: String): String = when (key) {
+    ROW_JUMP -> "Jump Back In"
+    ROW_RECENT -> "Recently Added"
+    ROW_ROMM -> "On RomM"
+    ROW_STREAM -> "Stream From Your Computers"
+    ROW_SYSTEMS -> "Systems"
+    ROW_SOURCES -> "Where Your Games Are"
+    else -> "On Other Devices"
+}
+
+private fun shelfIcon(key: String): ImageVector = when (key) {
+    ROW_JUMP -> FuseIcons.History
+    ROW_RECENT -> FuseIcons.Sparkles
+    ROW_ROMM -> FuseIcons.Cloud
+    ROW_STREAM -> FuseIcons.Cast
+    ROW_SYSTEMS -> FuseIcons.Chip
+    else -> FuseIcons.MonitorSmartphone
+}
+
+/** A place games are, for the row of them at the top of All. [live] is whether it answers now, when that means anything. */
+@Immutable
+internal data class SourceCard(val key: String, val title: String, val icon: ImageVector, val count: String, val detail: String, val live: Boolean?)
+
+private const val SRC_HERE = "here"
+private const val SRC_ROMM = "romm"
+private const val SRC_DEVICES = "devices"
+private const val SRC_STREAM = "stream"
+
+/** The most games Jump Back In holds. */
+private const val JUMP_LIMIT = 20
+
+/**
+ * A shelf's tile on a screen [width] wide: a few whole tiles and the edge of the next, never larger
+ * than the theme's own tile, nor so small its art can't be read.
+ */
+internal fun shelfTile(width: Dp, gap: Dp, largest: Dp): Dp {
+    val showing = when {
+        width < 480.dp -> 3.4f
+        width < 760.dp -> 4.4f
+        width < 1100.dp -> 5.5f
+        width < 1500.dp -> 6.6f
+        else -> 7.6f
+    }
+    val room = width - Space.gutter - gap * kotlin.math.floor(showing)
+    return (room / showing).coerceIn(MIN_SHELF_TILE, largest.coerceAtLeast(MIN_SHELF_TILE))
+}
+
+/** The smallest a shelf's tile gets. */
+private val MIN_SHELF_TILE = 84.dp
 
 /**
  * Streams [a] through Moonlight. With one computer offering it (and not [always] asking), straight
@@ -507,6 +660,68 @@ private fun streamFrom(app: AppState, a: StreamedApp, always: Boolean = false) {
     )
 }
 
+/**
+ * Where the games are, as a row of cards: how many each place holds and whether it answers now.
+ * On a wide screen they share the width; on a narrow one they scroll.
+ */
+@Composable
+private fun SourcesBand(sources: List<SourceCard>, selected: Int, width: Dp, onOpen: (Int) -> Unit, onPoint: (Int) -> Unit) {
+    val state = rememberLazyListState()
+    io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(state, if (selected >= 0) maxOf(0, selected - 1) else -1)
+    val gap = LocalTileMetrics.current.gap
+    val shared = (width - Space.gutter * 2 - gap * (sources.size - 1)) / sources.size
+    val cardW = shared.coerceIn(SOURCE_MIN_W, SOURCE_MAX_W)
+    LazyRow(
+        state = state,
+        modifier = Modifier.dragScroll(state, Orientation.Horizontal),
+        contentPadding = PaddingValues(horizontal = Space.gutter, vertical = Space.m),
+        horizontalArrangement = Arrangement.spacedBy(gap),
+    ) {
+        itemsIndexed(sources, key = { _, s -> s.key }) { i, s ->
+            SourceTile(s, selected == i, Modifier.width(cardW).mouseHover { onPoint(i) }) { onOpen(i) }
+        }
+    }
+}
+
+@Composable
+private fun SourceTile(s: SourceCard, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val c = Fuse.colors
+    val here = s.key == SRC_HERE
+    Tile(
+        selected,
+        modifier.height(SOURCE_H),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(io.github.matiyaaa.fuse.ui.designsystem.theme.Radius.l),
+        cornerFraction = 0.12f,
+        onClick = onClick,
+        maxGrow = Space.s,
+        label = "${s.title}, ${s.count}, ${s.detail}",
+    ) {
+        Row(
+            Modifier.fillMaxSize().background(c.surface).padding(horizontal = Space.l),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(Size.touch).clip(CircleShape).background(if (here) c.accentSoft else c.text.copy(alpha = if (c.isDark) 0.08f else 0.06f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                FuseIcon(s.icon, size = Size.iconL, tint = if (here) c.accent else c.text)
+            }
+            Spacer(Modifier.width(Space.m))
+            Column(Modifier.weight(1f)) {
+                FText(s.title, Fuse.type.label, color = c.textMuted, maxLines = 1)
+                FText(s.count, Fuse.type.titleSmall, maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (s.live != null) {
+                        Box(Modifier.size(STATUS_DOT).clip(CircleShape).background(if (s.live) c.success else c.textFaint))
+                        Spacer(Modifier.width(Space.xs))
+                    }
+                    FText(s.detail, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
 /** A shelf of games from any source, its chosen one named underneath, ending in See All. */
 @Composable
 private fun EverywhereShelf(
@@ -518,6 +733,7 @@ private fun EverywhereShelf(
     onOpen: (Int) -> Unit,
     onOptions: (Int) -> Unit,
     onSeeAll: () -> Unit,
+    onPoint: (Int) -> Unit,
     /** What the shelf holds, for its count ("game", or "app" for what computers stream). */
     noun: String = "game",
     /** The chosen one is named under the shelf (no stage above to name it). */
@@ -527,23 +743,26 @@ private fun EverywhereShelf(
     io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(state, if (selected >= 0) maxOf(0, selected - 1) else -1)
     Column {
         ShelfHeader(title, icon, if (games.size == 1) "1 $noun" else "${games.size} ${noun}s", onSeeAll)
-        LazyRow(
-            state = state,
-            modifier = Modifier.dragScroll(state, Orientation.Horizontal),
-            contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)),
-            horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap),
-        ) {
-            itemsIndexed(games, key = { _, g -> g::class.simpleName + g.card.id.value }) { i, g ->
-                when (g) {
-                    is EverywhereGame.Here -> androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.shell.components.LocalTileShowsInstalled provides true) {
-                        GameIconTile(g.card, selected == i, size = tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
+        MouseScrolledRow(state) {
+            LazyRow(
+                state = state,
+                modifier = Modifier.dragScroll(state, Orientation.Horizontal),
+                contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)),
+                horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap),
+            ) {
+                itemsIndexed(games, key = { _, g -> g::class.simpleName + g.card.id.value }) { i, g ->
+                    val m = Modifier.mouseHover { onPoint(i) }
+                    when (g) {
+                        is EverywhereGame.Here -> androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.shell.components.LocalTileShowsInstalled provides true) {
+                            GameIconTile(g.card, selected == i, m, size = tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
+                        }
+                        is EverywhereGame.OnRomm -> RommTile(g.game, selected == i, tile, m, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
+                        is EverywhereGame.Elsewhere -> HouseholdTile(g.game, selected == i, tile, m, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
+                        is EverywhereGame.Streamed -> GameIconTile(g.card, selected == i, m, size = tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
                     }
-                    is EverywhereGame.OnRomm -> RommTile(g.game, selected == i, tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
-                    is EverywhereGame.Elsewhere -> HouseholdTile(g.game, selected == i, tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
-                    is EverywhereGame.Streamed -> GameIconTile(g.card, selected == i, size = tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
                 }
+                item("seeall") { SeeAllTile(selected == games.size, tile, Modifier.mouseHover { onPoint(games.size) }, onSeeAll) }
             }
-            item("seeall") { SeeAllTile(selected == games.size, tile, onSeeAll) }
         }
         if (!named) return@Column
         val chosen = games.getOrNull(selected)
@@ -566,24 +785,65 @@ private fun EverywhereShelf(
 
 /** The systems with games anywhere: the library's first, then systems only RomM has. */
 @Composable
-private fun SystemsShelf(systems: List<EverywhereSystem>, selected: Int, tile: Dp, onOpen: (Int) -> Unit) {
+private fun SystemsShelf(systems: List<EverywhereSystem>, selected: Int, tile: Dp, onOpen: (Int) -> Unit, onPoint: (Int) -> Unit) {
     val state = rememberLazyListState()
     io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(state, if (selected >= 0) maxOf(0, selected - 1) else -1)
     Column {
         ShelfHeader("Systems", FuseIcons.Chip, if (systems.size == 1) "1 system" else "${systems.size} systems", null)
-        LazyRow(state = state, modifier = Modifier.dragScroll(state, Orientation.Horizontal), contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {
-            itemsIndexed(systems, key = { _, s -> s.card.platform.id.value }) { i, s ->
-                SystemTile(s.card, selected == i, size = tile, onClick = { onOpen(i) })
+        MouseScrolledRow(state) {
+            LazyRow(state = state, modifier = Modifier.dragScroll(state, Orientation.Horizontal), contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {
+                itemsIndexed(systems, key = { _, s -> s.card.platform.id.value }) { i, s ->
+                    SystemTile(s.card, selected == i, Modifier.mouseHover { onPoint(i) }, size = tile, onClick = { onOpen(i) })
+                }
             }
         }
     }
 }
 
+/**
+ * A row a mouse can page through: pointing at it shows an arrow at each end it can still scroll
+ * towards, a screenful a click. A controller, the keyboard and a finger move it as before.
+ */
+@Composable
+private fun MouseScrolledRow(state: androidx.compose.foundation.lazy.LazyListState, content: @Composable () -> Unit) {
+    val hover = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    Box(Modifier.hoverable(hover)) {
+        content()
+        fun page(forward: Boolean) {
+            scope.launch {
+                val width = state.layoutInfo.viewportSize.width
+                state.animateScrollBy((if (forward) 1 else -1) * width * PAGE_SHARE)
+            }
+        }
+        val c = Fuse.colors
+        @Composable
+        fun Arrow(forward: Boolean, show: Boolean) {
+            io.github.matiyaaa.fuse.ui.fuseline.Appear(
+                visible = hovered && show,
+                modifier = Modifier.align(if (forward) Alignment.CenterEnd else Alignment.CenterStart).padding(horizontal = Space.s),
+                enter = io.github.matiyaaa.fuse.ui.fuseline.fadeIn(Fuse.motion.fade(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST)),
+                exit = io.github.matiyaaa.fuse.ui.fuseline.fadeOut(Fuse.motion.fade(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST)),
+            ) {
+                Box(Modifier.clip(CircleShape).background(c.surfaceOverlay)) {
+                    io.github.matiyaaa.fuse.ui.designsystem.components.IconButton(
+                        if (forward) FuseIcons.ChevronRight else FuseIcons.ChevronLeft, selected = false, onClick = { page(forward) },
+                        size = ARROW_SIZE, contentDescription = if (forward) "Scroll right" else "Scroll left",
+                    )
+                }
+            }
+        }
+        Arrow(false, state.canScrollBackward)
+        Arrow(true, state.canScrollForward)
+    }
+}
+
 /** The tile that ends a shelf: an arrow into the shelf's whole list. */
 @Composable
-private fun SeeAllTile(selected: Boolean, size: Dp, onClick: () -> Unit) {
+private fun SeeAllTile(selected: Boolean, size: Dp, modifier: Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
-    Tile(selected, Modifier.size(size).semantics { contentDescription = "See all" }, onClick = onClick) {
+    Tile(selected, modifier.size(size).semantics { contentDescription = "See all" }, onClick = onClick) {
         Box(Modifier.fillMaxSize().background(c.surface), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(Size.touch).clip(CircleShape).background(c.text.copy(alpha = if (c.isDark) 0.1f else 0.06f)), contentAlignment = Alignment.Center) {
@@ -596,7 +856,6 @@ private fun SeeAllTile(selected: Boolean, size: Dp, onClick: () -> Unit) {
     }
 }
 
-
 /**
  * A shelf's title, with how many it holds and, at the far end, See all as a button (the triggers
  * reach it from the shelf too).
@@ -604,19 +863,22 @@ private fun SeeAllTile(selected: Boolean, size: Dp, onClick: () -> Unit) {
 @Composable
 private fun ShelfHeader(title: String, icon: ImageVector, count: String, onSeeAll: (() -> Unit)?) {
     val c = Fuse.colors
-    Row(Modifier.fillMaxWidth().padding(horizontal = Space.gutter), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = Space.gutter).heightIn(min = Size.touch), verticalAlignment = Alignment.CenterVertically) {
         FuseIcon(icon, size = Size.iconS, tint = c.accent)
         Spacer(Modifier.width(Space.s))
-        FText(title, Fuse.type.titleSmall, maxLines = 1)
-        Spacer(Modifier.width(Space.s))
-        FText(count, Fuse.type.caption, color = c.textFaint, maxLines = 1)
-        Spacer(Modifier.weight(1f))
+        // The name keeps all the room but the count's, which goes first on a narrow screen.
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            FText(title, Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+            Spacer(Modifier.width(Space.s))
+            FText(count, Fuse.type.caption, color = c.textFaint, maxLines = 1)
+        }
         if (onSeeAll != null) {
             Row(
                 Modifier
+                    .heightIn(min = Size.touch)
                     .clip(io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape)
                     .fuseClickable(shape = io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape, role = Role.Button, onClick = onSeeAll)
-                    .padding(horizontal = Space.m, vertical = Space.xs),
+                    .padding(horizontal = Space.m),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 FText("See all", Fuse.type.label, color = c.textMuted, maxLines = 1)
@@ -628,16 +890,28 @@ private fun ShelfHeader(title: String, icon: ImageVector, count: String, onSeeAl
 }
 
 /**
- * The All page's stage: the chosen game's logo (or its name), and under it where it is (here, on
- * RomM, on another device, streamed), its system and year; a system says how many games it has.
+ * The All page's stage: what is chosen, drawn small (a game's art, a system's or a place's mark),
+ * with its name, where it is and its system and year, and the buttons a mouse or a finger uses on
+ * it (a controller's own buttons do the same, as the hints say).
  */
 @Composable
-private fun AllStage(chosen: EverywhereGame?, system: EverywhereSystem?, seeAllOf: String?, modifier: Modifier) {
+private fun AllStage(
+    chosen: EverywhereGame?,
+    system: EverywhereSystem?,
+    source: SourceCard?,
+    seeAllOf: String?,
+    onPrimary: () -> Unit,
+    onOptions: (() -> Unit)?,
+    primaryLabel: String,
+    modifier: Modifier,
+) {
     val c = Fuse.colors
-    Box(modifier.padding(horizontal = Space.gutter).padding(top = Space.m, bottom = Space.m), contentAlignment = Alignment.BottomStart) {
+    BoxWithConstraints(modifier.padding(horizontal = Space.gutter).padding(top = Space.m, bottom = Space.m), contentAlignment = Alignment.BottomStart) {
+        val thumb = (maxHeight).coerceAtMost(STAGE_THUMB_MAX)
+        val wide = maxWidth >= STAGE_WIDE
         val motion = Fuse.motion
         io.github.matiyaaa.fuse.ui.fuseline.Swap(
-            targetState = Triple(chosen?.let { it::class.simpleName + it.card.id.value }, system?.card?.platform?.id?.value, seeAllOf),
+            targetState = listOf(chosen?.let { it::class.simpleName + it.card.id.value }, system?.card?.platform?.id?.value, source?.key, seeAllOf),
             transitionSpec = {
                 io.github.matiyaaa.fuse.ui.fuseline.fadeIn(motion.fade(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST)) togetherWith
                     io.github.matiyaaa.fuse.ui.fuseline.fadeOut(motion.fade(io.github.matiyaaa.fuse.ui.fuseline.Durations.INSTANT))
@@ -645,37 +919,72 @@ private fun AllStage(chosen: EverywhereGame?, system: EverywhereSystem?, seeAllO
             contentAlignment = Alignment.BottomStart,
             label = "allStage",
         ) { _ ->
-            Column(verticalArrangement = Arrangement.Bottom) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                val shape = androidx.compose.foundation.shape.RoundedCornerShape(io.github.matiyaaa.fuse.ui.designsystem.theme.Radius.l)
                 when {
-                    chosen != null -> {
-                        val card = chosen.card
-                        val logo = card.art.logo
-                        val name: @Composable () -> Unit = { FText(card.title, Fuse.type.display, maxLines = 2) }
-                        if (logo != null) {
-                            io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(
-                                logo, Modifier.height(STAGE_LOGO).widthIn(max = 520.dp).fillMaxWidth(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Fit, focusX = 0f, focusY = 1f, loading = false, fallback = name,
+                    chosen != null -> io.github.matiyaaa.fuse.ui.shell.components.GameThumb(chosen.card.art, thumb, shape, fallback = { MarkBox(FuseIcons.Gamepad, thumb) })
+                    system != null -> MarkBox(FuseIcons.Chip, thumb, system.card.platform.accent.toColor(), system.card.platform.shortName)
+                    source != null -> MarkBox(source.icon, thumb)
+                    else -> MarkBox(FuseIcons.ChevronsRight, thumb)
+                }
+                Spacer(Modifier.width(Space.l))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.Bottom) {
+                    val title = chosen?.card?.title ?: system?.card?.platform?.name ?: source?.title ?: "See all"
+                    val logo = chosen?.card?.art?.logo
+                    val name: @Composable () -> Unit = { FText(title, if (wide) Fuse.type.display else Fuse.type.title, maxLines = 2) }
+                    if (logo != null && wide) {
+                        io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(
+                            logo, Modifier.height(STAGE_LOGO).widthIn(max = 480.dp).fillMaxWidth(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit, focusX = 0f, focusY = 1f, loading = false, fallback = name,
+                        )
+                    } else name()
+                    Spacer(Modifier.height(Space.s))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                        when {
+                            chosen != null -> {
+                                WhereChip(chosen)
+                                FText(listOfNotNull(chosen.card.platformShort, chosen.card.year?.toString()).joinToString("  ·  "), Fuse.type.label, color = c.textMuted, maxLines = 1)
+                            }
+                            system != null -> FText(
+                                listOfNotNull(gamesText(system.card.gameCount).takeIf { system.local }, if (system.local) "on this device" else "on RomM or your other devices").joinToString(" "),
+                                Fuse.type.label, color = c.textMuted, maxLines = 1,
                             )
-                        } else name()
-                        Spacer(Modifier.height(Space.s))
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                            WhereChip(chosen)
-                            FText(listOfNotNull(card.platformShort, card.year?.toString()).joinToString("  ·  "), Fuse.type.label, color = c.textMuted, maxLines = 1)
+                            source != null -> FText("${source.count}  ·  ${source.detail}", Fuse.type.label, color = c.textMuted, maxLines = 1)
+                            seeAllOf != null -> FText("All of $seeAllOf, in a list of its own", Fuse.type.label, color = c.textMuted, maxLines = 1)
                         }
                     }
-                    system != null -> {
-                        FText(system.card.platform.name, Fuse.type.display, maxLines = 1)
-                        Spacer(Modifier.height(Space.s))
-                        FText(listOfNotNull(gamesText(system.card.gameCount).takeIf { system.local }, if (system.local) "on this device" else "on RomM or your other devices").joinToString(" "), Fuse.type.label, color = c.textMuted, maxLines = 1)
-                    }
-                    seeAllOf != null -> {
-                        FText("See all", Fuse.type.display, maxLines = 1)
-                        Spacer(Modifier.height(Space.s))
-                        FText("Every one, in a list of its own", Fuse.type.label, color = c.textMuted, maxLines = 1)
+                    Spacer(Modifier.height(Space.m))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                        val primaryIcon = when {
+                            chosen is EverywhereGame.Here -> FuseIcons.Play
+                            chosen is EverywhereGame.Streamed -> FuseIcons.Cast
+                            chosen != null -> FuseIcons.Info
+                            else -> FuseIcons.ChevronRight
+                        }
+                        io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton(
+                            primaryLabel, selected = false, onClick = onPrimary, icon = primaryIcon,
+                            kind = io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind.PRIMARY, height = STAGE_BUTTON,
+                        )
+                        if (onOptions != null) {
+                            io.github.matiyaaa.fuse.ui.designsystem.components.IconButton(FuseIcons.More, selected = false, onClick = onOptions, size = STAGE_BUTTON, contentDescription = "Options")
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/** A square mark for what has no art of its own: an icon, or a system's short name, on a soft fill. */
+@Composable
+private fun MarkBox(icon: ImageVector, size: Dp, tint: androidx.compose.ui.graphics.Color? = null, words: String? = null) {
+    val c = Fuse.colors
+    val fill = tint?.copy(alpha = 0.22f) ?: c.text.copy(alpha = if (c.isDark) 0.08f else 0.06f)
+    Box(
+        Modifier.size(size).clip(androidx.compose.foundation.shape.RoundedCornerShape(io.github.matiyaaa.fuse.ui.designsystem.theme.Radius.l)).background(c.surface).background(fill),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (words != null) FText(words, Fuse.type.title, maxLines = 1) else FuseIcon(icon, size = size * 0.36f, tint = tint ?: c.text)
     }
 }
 
@@ -703,14 +1012,37 @@ private fun WhereChip(g: EverywhereGame) {
     }
 }
 
-/** The stage's height: a third of the page, within reason. */
-private fun stageHeight(page: Dp): Dp = (page * 0.26f).coerceIn(140.dp, 230.dp)
+/** The stage's height: about a fifth of the page, within reason. */
+private fun stageHeight(page: Dp): Dp = (page * 0.24f).coerceIn(150.dp, 220.dp)
 
 /** Shorter pages than this have no stage: the chosen game is named under its shelf instead. */
 private val STAGE_FROM = 520.dp
 
+/** From this width the stage sets its title in the display face, a game's logo in its place. */
+private val STAGE_WIDE = 640.dp
+
 /** The logo's height on the stage. */
-private val STAGE_LOGO = 96.dp
+private val STAGE_LOGO = 72.dp
+
+/** The stage's art at its largest. */
+private val STAGE_THUMB_MAX = 196.dp
+
+/** The stage's buttons: a step under the standard height, so they sit with its words. */
+private val STAGE_BUTTON = 40.dp
+
+/** A source card's size. */
+private val SOURCE_H = 88.dp
+private val SOURCE_MIN_W = 220.dp
+private val SOURCE_MAX_W = 340.dp
+
+/** The dot saying whether a source answers now. */
+private val STATUS_DOT = 8.dp
+
+/** A shelf's arrows for a mouse. */
+private val ARROW_SIZE = 40.dp
+
+/** How much of its width one click of a shelf's arrow scrolls. */
+private const val PAGE_SHARE = 0.8f
 
 /** How far the triggers jump along a shelf. */
 private const val PAGE_STEP = 6

@@ -28,6 +28,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertContentEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
@@ -494,6 +495,10 @@ class StoreIntegrationTest {
             assertTrue(big.card.title.startsWith("Big Game"), big.card.title)
             assertEquals(3, big.files)
             assertTrue(big.bytes >= 5000)
+            // What a game's own Delete Game names before it asks: the cue and both tracks, never the save.
+            val files = assertNotNull(store.storage.files(big.card.id))
+            assertEquals(3, files.fileCount)
+            assertTrue(files.paths.none { it.endsWith(".srm") }, files.paths.toString())
 
             val report = store.storage.delete(listOf(big.card.id))
             assertEquals(1, report.deleted)
@@ -501,6 +506,8 @@ class StoreIntegrationTest {
             assertTrue(File(lib, "psx").list()!!.toSet() == setOf("Big Game (USA).srm", "Small Game (USA).chd"), File(lib, "psx").list()!!.toList().toString())
             val left = withTimeout(10_000) { store.library.games(GameQuery()).first { it.size == 1 } }
             assertTrue(left.single().title.startsWith("Small Game"))
+            // Gone, it has no files left to name.
+            assertNull(store.storage.files(big.card.id))
         } finally {
             lib.deleteRecursively()
         }

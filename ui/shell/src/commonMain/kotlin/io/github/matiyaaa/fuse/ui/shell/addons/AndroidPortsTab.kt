@@ -5,6 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -174,6 +176,8 @@ internal fun AndroidPortsTab(app: AppState, active: Boolean, topPadding: Dp) {
     BoxWithConstraints(Modifier.fillMaxSize().testTag("android-ports")) {
         val compact = maxHeight < 560.dp || maxWidth < 600.dp
         val wide = maxWidth >= 900.dp
+        // A phone held upright: the page's buttons take a line of their own under its title.
+        val narrow = maxWidth < 600.dp
         LazyColumn(
             state = list,
             modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(list, top = Space.xl, bottom = Space.xl).dragScroll(list),
@@ -181,7 +185,7 @@ internal fun AndroidPortsTab(app: AppState, active: Boolean, topPadding: Dp) {
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m),
         ) {
             item("head") {
-                Header(state, actions, focused && row == "head", col, compact, wide) { i ->
+                Header(state, actions, focused && row == "head", col, compact, wide, narrow) { i ->
                     app.focusZone = FocusZone.CONTENT
                     sel.row = 0
                     sel.setColumn("head", i)
@@ -249,9 +253,18 @@ private fun counts(state: AndroidPortsState): Map<PortFilter, Int> = mapOf(
 
 /** The page's line: what it lists, from which lists, and the few things to do. */
 @Composable
-private fun Header(state: AndroidPortsState, actions: List<TopAction>, inHead: Boolean, col: Int, compact: Boolean, wide: Boolean, onAction: (Int) -> Unit) {
+private fun Header(state: AndroidPortsState, actions: List<TopAction>, inHead: Boolean, col: Int, compact: Boolean, wide: Boolean, narrow: Boolean, onAction: (Int) -> Unit) {
     val c = Fuse.colors
-    Row(Modifier.padding(horizontal = Space.gutter).widthIn(max = 960.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    val pills: @Composable () -> Unit = {
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+            actions.forEachIndexed { i, a ->
+                val chosen = inHead && col == i
+                ActionPill(a, chosen, wide || chosen || i < 2) { onAction(i) }
+            }
+        }
+    }
+    Column(Modifier.padding(horizontal = Space.gutter).widthIn(max = 960.dp).fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(if (compact) 36.dp else 44.dp).clip(RoundedCornerShape(Fuse.geometry.control)).background(c.accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
             FuseIcon(FuseIcons.Boxes, size = Size.iconM, tint = c.accent)
         }
@@ -269,14 +282,14 @@ private fun Header(state: AndroidPortsState, actions: List<TopAction>, inHead: B
                     state.listedAt?.let { "Open Ports Games, $it" },
                 ).joinToString("  ·  ")
             }
-            FText(line, Fuse.type.caption, color = if (state.problem != null) c.warning else c.textMuted, maxLines = 1)
+            FText(line, Fuse.type.caption, color = if (state.problem != null) c.warning else c.textMuted, maxLines = if (narrow) 2 else 1)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-            actions.forEachIndexed { i, a ->
-                val chosen = inHead && col == i
-                ActionPill(a, chosen, wide || chosen || i < 2) { onAction(i) }
-            }
-        }
+        if (!narrow) pills()
+    }
+    if (narrow) {
+        Spacer(Modifier.height(Space.s))
+        Box(Modifier.horizontalScroll(rememberScrollState())) { pills() }
+    }
     }
 }
 
@@ -284,7 +297,8 @@ private fun Header(state: AndroidPortsState, actions: List<TopAction>, inHead: B
 @Composable
 private fun Filters(filters: List<PortFilter>, counts: Map<PortFilter, Int>, active: PortFilter, focused: Boolean, onPick: (PortFilter) -> Unit) {
     val c = Fuse.colors
-    Row(Modifier.padding(horizontal = Space.gutter).widthIn(max = 960.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+    // Scrolls rather than clips where the four don't fit (a phone held upright).
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Space.gutter).widthIn(max = 960.dp), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
         for (f in filters) {
             val on = f == active
             val bg by fuselineColor(

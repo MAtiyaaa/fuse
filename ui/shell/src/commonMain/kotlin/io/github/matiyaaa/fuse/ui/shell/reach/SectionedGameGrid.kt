@@ -89,7 +89,7 @@ fun SectionedGameGrid(
     val systems by app.store.library.platforms.collectAsState()
     PageEffect(focused, chosen?.card?.id, chosen?.card?.art, room) {
         val c = chosen?.card
-        if (focused) app.hero = c?.room(systems.firstOrNull { it.platform.id == c.platformId }) ?: room
+        if (focused) app.hero = c?.room(systems.firstOrNull { it.platform.id == c.shownPlatform }) ?: room
     }
     BoxWithConstraints(Modifier.fillMaxSize().testTag(tag)) {
         val gap = LocalTileMetrics.current.gap

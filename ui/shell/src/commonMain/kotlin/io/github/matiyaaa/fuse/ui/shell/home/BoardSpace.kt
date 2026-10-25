@@ -237,7 +237,7 @@ internal class HomeSpace(
             return io.github.matiyaaa.fuse.ui.shell.jellyfin.heroOf(item)
         }
         val game = w?.let { shownGame(it.kind, at) } ?: return null
-        return game.room(systems[game.platformId])
+        return game.room(systems[game.shownPlatform])
     }
 
     private fun shownGame(kind: WidgetKind, at: Int) = boardGames(kind, feed).let { it.getOrNull(at) ?: it.firstOrNull() }

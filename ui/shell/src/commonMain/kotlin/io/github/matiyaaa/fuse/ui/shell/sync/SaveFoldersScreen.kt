@@ -143,7 +143,7 @@ private fun saveFolderRows(app: AppState, list: List<EmulatorSaves>?, installed:
         return@buildList
     }
     for (e in list) {
-        val name = (installed.firstOrNull { it.id.value == e.emulatorId } ?: installed.firstOrNull { SaveAdapters.baseId(it.id.value) == e.emulator })?.name
+        val name = e.name ?: (installed.firstOrNull { it.id.value == e.emulatorId } ?: installed.firstOrNull { SaveAdapters.baseId(it.id.value) == e.emulator })?.name
             ?: e.emulator.replaceFirstChar { it.uppercase() }
         val systems = e.systems.mapNotNull { PlatformCatalog.byId(PlatformId(it))?.shortName }.distinct().take(3).joinToString(", ")
         val about = when (e.state) {

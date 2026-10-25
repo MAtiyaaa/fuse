@@ -530,7 +530,7 @@ private fun storageRows(
                 detail = if (away != null) "${g.card.platformShort}  ·  ${away.label}" else "${g.card.platformShort}  ·  ${g.files} ${if (g.files == 1) "file" else "files"}",
                 trailing = Trailing.Value(bytesText(g.bytes)),
                 // Square art for every game, so titles line up and the list stays compact.
-                art = MenuArt(g.card.art.tile, square = true, fallbackTitle = g.card.title, accent = g.card.accent, wide = false),
+                art = io.github.matiyaaa.fuse.ui.shell.components.gameMenuArt(g.card.art, g.card.title, g.card.accent, app.store.prefs.value.gameArt),
                 // A game whose drive is out can't be picked: Fuse can't see which files are its own.
                 unavailableReason = away?.let { "${g.card.platformShort}  ·  On ${it.driveLabel}, not connected" },
                 onSelect = { onPick(g.card.id) },

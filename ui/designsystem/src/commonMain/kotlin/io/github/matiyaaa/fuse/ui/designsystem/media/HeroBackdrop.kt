@@ -55,6 +55,7 @@ import coil3.size.Precision
 import coil3.size.Scale
 import io.github.matiyaaa.fuse.model.RenderQuality
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.picturesMove
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ambientOn
 import io.github.matiyaaa.fuse.ui.fuseline.Curves
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
@@ -340,10 +341,13 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
     val canBlur = Fuse.quality.blur
     // Art that failed is asked for again a few times ([ArtRetry]), so the room fills in once it can.
     var attempt by remember { mutableStateOf(0) }
-    val request = remember(source.model, context, px, attempt) { heroRequest(context, source.model, px, attempt) }
+    // A moving picture plays where pictures may move; a blurred room is baked once, so it holds still.
+    val still = source.blurred || !motion.picturesMove(Fuse.quality)
+    val request = remember(source.model, context, px, attempt, still) { heroRequest(context, source.model, px, attempt, still) }
     val loader = rememberAsyncImagePainter(request, contentScale = ContentScale.Crop)
     val state by loader.state.collectAsStateCompat()
     ArtRetry.Watch(state is AsyncImagePainter.State.Error, attempt) { attempt++ }
+    PlayWhileShown((state as? AsyncImagePainter.State.Success)?.result?.image)
     // A room shown before is drawn at once from the picture held for it ([ShownArt]), even when the
     // system emptied the image cache while Fuse was in the background, so it never pops in.
     val loaded = state as? AsyncImagePainter.State.Success
@@ -649,7 +653,8 @@ private val BOX_ART_BLUR = 48.dp
 private const val FROZEN_SCALE = 4
 
 /** One background decode, the same everywhere, so art warmed ahead of time is found in memory. */
-fun heroRequest(context: PlatformContext, model: Any?, px: Int, attempt: Int = 0): ImageRequest =
+fun heroRequest(context: PlatformContext, model: Any?, px: Int, attempt: Int = 0, still: Boolean = false): ImageRequest =
     ImageRequest.Builder(context).data(model).size(px, px).precision(Precision.INEXACT).scale(Scale.FIT)
         .apply { if (attempt > 0) memoryCacheKeyExtra(ArtRetry.EXTRA, attempt.toString()) }
+        .apply { if (still) MovingPictures.still(this, model) }
         .build()

@@ -104,8 +104,10 @@ internal fun LibraryHeader(
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Every button names its value when there is room; on narrow screens only the focused one does.
         val roomy = maxWidth >= ROOMY_WIDTH
-        // On a portrait phone the tabs keep the whole width and the toolbar takes a line of its own.
-        val stacked = maxWidth < STACK_WIDTH
+        // On a portrait phone the tabs keep the whole width and the toolbar takes a line of its own,
+        // unless it is a button or two beside the Library's tabs, which scroll: a line for one round
+        // button left a band of nothing between the tabs and the games.
+        val stacked = maxWidth < STACK_WIDTH && !(scope == LibraryScope.All && header.count { it is HeaderItem.Button } <= 2)
         val title: @Composable () -> Unit = {
             when {
                 scope == LibraryScope.All -> LibraryTabs(header, state.segment, count, counts, ::focused, onView)
@@ -135,6 +137,7 @@ internal fun LibraryHeader(
                         LibraryButton.COLLECTIONS -> "Collections" to FuseIcons.LibraryBig
                         LibraryButton.ADD_GAMES -> "Add or remove games" to FuseIcons.ListPlus
                         LibraryButton.EMULATOR -> "No emulator installed" to FuseIcons.Warning
+                        LibraryButton.FILTERS -> "Smart filters" to FuseIcons.Wand
                         LibraryButton.SYSTEM -> (system?.platform?.shortName ?: "All systems") to FuseIcons.Filter
                         LibraryButton.SORT -> sortLabel(sort) to FuseIcons.Sort
                     }
@@ -142,12 +145,14 @@ internal fun LibraryHeader(
                         button == LibraryButton.EMULATOR -> ToolTone.WARNING
                         button == LibraryButton.SPOTLIGHT -> ToolTone.ON
                         button == LibraryButton.SYSTEM && system != null -> ToolTone.ON
+                        button == LibraryButton.FILTERS && state.segment.smart != null -> ToolTone.ON
                         else -> ToolTone.PLAIN
                     }
                     ToolButton(
                         label, icon, focused = focused(i), tone = tone,
-                        // The spotlight names its game where there is room, like the plain buttons.
-                        showLabel = roomy || focused(i) || (tone != ToolTone.PLAIN && button != LibraryButton.SPOTLIGHT),
+                        // The spotlight names its game where there is room, like the plain buttons; a
+                        // smart filter in use is named by its tab already.
+                        showLabel = roomy || focused(i) || (tone != ToolTone.PLAIN && button != LibraryButton.SPOTLIGHT && button != LibraryButton.FILTERS),
                     ) { onButton(i, button) }
                 }
             }
@@ -226,7 +231,8 @@ private fun LibraryTabs(
         items = views.map { s ->
             ViewTab(
                 label = s.label,
-                icon = if (s == LibrarySegment.MISSING) FuseIcons.FileQuestion else null,
+                // A smart filter's tab wears its mark, so the lists Fuse keeps read apart from the views.
+                icon = if (s == LibrarySegment.MISSING) FuseIcons.FileQuestion else s.smart?.let(::smartIcon),
                 warn = s == LibrarySegment.MISSING,
                 badge = (if (s == active && s != LibrarySegment.EVERYWHERE) count else counts[s] ?: count.takeIf { s == active })?.toString(),
             )

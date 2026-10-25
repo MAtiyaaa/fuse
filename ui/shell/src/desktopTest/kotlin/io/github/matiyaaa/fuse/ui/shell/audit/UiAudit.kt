@@ -186,6 +186,9 @@ class UiAudit {
 
     @Test fun flippedH() = audit(AuditSize.H) { flippedShowcase() }
 
+    /** The screen above on the AYN Thor at its largest text, the tightest it gets. */
+    @Test fun flippedJ() = audit(AuditSize.J) { flippedShowcase() }
+
     @Test fun lowerScreenL() = audit(AuditSize.L) { flippedMenus(); jellyfinDualScreens() }
 
     @Test fun companionL() = audit(AuditSize.L) { companionScreens() }

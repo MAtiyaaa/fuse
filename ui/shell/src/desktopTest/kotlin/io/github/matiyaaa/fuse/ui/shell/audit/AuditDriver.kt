@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
@@ -524,6 +525,17 @@ internal class AuditDriver(
             ui.mainClock.advanceTimeBy(step)
             left -= step
         }
+    }
+
+    /** Touches the first control whose click is labelled [label] (a button that shows only an icon or a glyph), then settles for [settleMs]. */
+    fun pressLabelled(label: String, settleMs: Long = STEP_MS * 3) {
+        val matcher = androidx.compose.ui.test.SemanticsMatcher("clicks as \"$label\"") {
+            it.config.getOrNull(androidx.compose.ui.semantics.SemanticsActions.OnClick)?.label == label
+        }
+        val nodes = ui.onAllNodes(matcher, useUnmergedTree = true)
+        if (nodes.fetchSemanticsNodes().isEmpty()) throw NotCovered("Nothing on screen clicks as \"$label\"")
+        nodes[0].performClick()
+        settle(settleMs)
     }
 
     /** Touch input on the whole window, in window pixels. A finger stays down between calls. */

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.Canvas
@@ -7,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -158,9 +161,24 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi, displaySession: io.githu
             val filmShown = player?.item != null && !io.github.matiyaaa.fuse.ui.player.PlayerPlacement.withMenus && pager.currentPage == 0
             HorizontalPager(state = pager, modifier = Modifier.fillMaxSize().dragScroll(pager, Orientation.Horizontal, enabled = !filmShown, flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(pager)), beyondViewportPageCount = 1, userScrollEnabled = !filmShown) { page ->
                 when (page) {
-                    0 -> Box(Modifier.fillMaxSize()) {
+                    0 -> Box(
+                        Modifier.fillMaxSize().drawBehind {
+                            // A game's colour, glowing softly behind its cover. Drawn here, under the
+                            // page's own content, so a change of game never shows it cut square.
+                            if (target !is GameCard && target !is GameId) return@drawBehind
+                            val glow = hero?.accent ?: return@drawBehind
+                            val at = androidx.compose.ui.geometry.Offset(size.width * 0.85f, size.height * 0.55f)
+                            val r = size.width * 0.45f
+                            drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = 0.28f), Color.Transparent), center = at, radius = r), radius = r, center = at)
+                        },
+                    ) {
                         BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.gutter, vertical = Space.l)) {
                             val compact = maxHeight < 380.dp
+                            // The room left for the page under the top line and over the dots: a
+                            // two-screen handheld's upper screen at its largest text (AYN Thor) has
+                            // about 220 dp, where a logo, a few lines and the numbers can't all fit.
+                            val tight = maxHeight - Size.hudLine - SHOWCASE_DOTS < TIGHT_BELOW
+                            val wide = maxWidth >= 640.dp
                             val motion = Fuse.motion
                             Swap(
                                 targetState = ShowcaseContent(target, direction),
@@ -180,12 +198,12 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi, displaySession: io.githu
                                 label = "showcase",
                             ) { content ->
                                 when (val t = content.target) {
-                                    is GameCard -> ShowcaseGame(store, t.id, playingSince = home.playtime.currentSince, compact = compact)
-                                    is GameId -> ShowcaseGame(store, t, playingSince = null, compact = compact)
-                                    is PlatformId -> systems.firstOrNull { it.platform.id == t }?.let { ShowcaseSystem(it, compact) }
-                                    is CollectionId -> ShowcaseCollection(store, t, compact)
+                                    is GameCard -> ShowcaseGame(store, t.id, playingSince = home.playtime.currentSince, compact = compact, tight = tight)
+                                    is GameId -> ShowcaseGame(store, t, playingSince = null, compact = compact, tight = tight)
+                                    is PlatformId -> systems.firstOrNull { it.platform.id == t }?.let { ShowcaseSystem(store, it, compact, tight) }
+                                    is CollectionId -> ShowcaseCollection(store, t, compact, tight)
                                     is io.github.matiyaaa.fuse.jellyfin.MediaItem -> ShowcaseMedia(t, compact, minimal = prefs.jellyfin.browsingCompanion == "MINIMAL")
-                                    else -> ShowcaseIdle(time, home.recentlyPlayed.ifEmpty { home.continuePlaying }, compact)
+                                    else -> ShowcaseIdle(time, home.recentlyPlayed.ifEmpty { home.continuePlaying }, home.playtime, compact, wide, tight)
                                 }
                             }
                         }
@@ -246,6 +264,16 @@ internal object ShowcasePage {
 /** Room kept at the bottom of the first page for the page dots. */
 private val SHOWCASE_DOTS = 28.dp
 
+/** Below this much room for the page, it leaves out a game's lines and draws its logo and covers smaller. */
+private val TIGHT_BELOW = 260.dp
+
+/** Covers' height: on a tight page, a compact one, and with room. */
+private fun coverHeight(compact: Boolean, tight: Boolean): Dp = when {
+    tight -> 72.dp
+    compact -> 96.dp
+    else -> 150.dp
+}
+
 private data class ShowcaseContent(val target: Any?, val direction: Int)
 
 /**
@@ -280,7 +308,7 @@ private fun ShowcaseMedia(item: io.github.matiyaaa.fuse.jellyfin.MediaItem, comp
 
 /** A game, large: logo, facts, a few lines about it, then its numbers, with its cover at the right. */
 @Composable
-private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, compact: Boolean) {
+private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, compact: Boolean, tight: Boolean) {
     val flow = remember(id) { store.library.game(id) }
     val detail by flow.collectAsState(initial = null)
     val d = detail ?: return
@@ -293,14 +321,7 @@ private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, comp
             delay(15_000)
         }
     }
-    val glow = Color(d.platform.accent)
-    BoxWithConstraints(
-        Modifier.fillMaxSize().drawBehind {
-            // The system's colour, glowing softly behind the cover.
-            val at = androidx.compose.ui.geometry.Offset(size.width * 0.85f, size.height * 0.55f)
-            drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = 0.28f), Color.Transparent), center = at, radius = size.width * 0.45f), radius = size.width * 0.45f, center = at)
-        },
-    ) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val cover = d.art.boxart ?: d.art.grid
         val coverH = (maxHeight * 0.78f).coerceAtMost(420.dp)
         // Without box art, Fuse's own drawn cover for it, so the right side is never empty.
@@ -323,7 +344,7 @@ private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, comp
                 if (d.art.logo != null) {
                     Artwork(
                         d.art.logo,
-                        Modifier.widthIn(max = 520.dp).fillMaxWidth(0.55f).height(if (compact) 96.dp else 150.dp),
+                        Modifier.widthIn(max = 520.dp).fillMaxWidth(0.55f).height(if (tight) 64.dp else if (compact) 96.dp else 150.dp),
                         contentScale = ContentScale.Fit,
                         focusX = 0f,
                         fadeIn = true,
@@ -332,25 +353,30 @@ private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, comp
                 } else {
                     title()
                 }
-                // What it is.
+                // What it is: as many of these as the line has room for, in this order.
                 val facts = listOfNotNull(
                     d.platform.name,
                     meta.releaseYear?.toString(),
                     meta.genres.firstOrNull(),
+                    d.collections.firstOrNull { it.kind == io.github.matiyaaa.fuse.model.CollectionKind.SERIES }?.name,
                     meta.players?.let { p -> if (p == "1") "1 player" else "$p players" },
                     meta.developer,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                    facts.take(4).forEachIndexed { i, f -> Fact(f, dot = if (i == 0) Color(d.platform.accent) else null) }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), maxLines = 1) {
+                    facts.forEachIndexed { i, f -> Fact(f, dot = if (i == 0) Color(d.platform.accent) else null) }
                 }
-                meta.description?.takeIf { it.isNotBlank() && !compact }?.let {
-                    FText(it, Fuse.type.body, color = c.text.copy(alpha = 0.82f), maxLines = 3, modifier = Modifier.widthIn(max = 720.dp))
+                meta.description?.takeIf { it.isNotBlank() && !tight }?.let {
+                    FText(it, Fuse.type.body, color = c.text.copy(alpha = 0.82f), maxLines = if (compact) 2 else 3, modifier = Modifier.widthIn(max = 720.dp))
                 }
-                // What you have done with it.
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.xl), verticalAlignment = Alignment.CenterVertically) {
+                // What you have done with it, and what plays it: the first that fit, on one line.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
+                    verticalArrangement = Arrangement.spacedBy(Space.s),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                    maxLines = if (compact) 1 else 2,
+                ) {
                     val play = d.game.play
                     Numbers(FuseIcons.Clock, if (play.totalSeconds > 0) playtimeText(play.totalSeconds) else "Not played yet", "played")
-                    play.lastPlayedAt?.let { Numbers(FuseIcons.History, agoText(it), "last played") }
                     d.achievements?.takeIf { it.total > 0 }?.let { a ->
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                             Ring(a.earned / a.total.toFloat(), 34.dp)
@@ -360,6 +386,11 @@ private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, comp
                             }
                         }
                     }
+                    if (d.secondsThisWeek > 0 && d.secondsThisWeek < play.totalSeconds) {
+                        Numbers(FuseIcons.Calendar, playtimeText(d.secondsThisWeek), "this week")
+                    }
+                    if (playingSince == null) play.lastPlayedAt?.let { Numbers(FuseIcons.History, agoText(it), "last played") }
+                    (d.emulator.port ?: d.emulator.selected?.name)?.let { Numbers(FuseIcons.Gamepad, it, if (d.emulator.port != null) "its port" else "plays it") }
                 }
             }
             if (showCover) {
@@ -381,28 +412,39 @@ private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, comp
     }
 }
 
-/** A system: its logo in white, how many games, and the emulator that plays them. */
+/**
+ * A system: its logo in white, how many games, the emulator that plays them, and its games, those
+ * played last first.
+ */
 @Composable
-private fun ShowcaseSystem(card: PlatformCard, compact: Boolean) {
+private fun ShowcaseSystem(store: FuseStore, card: PlatformCard, compact: Boolean, tight: Boolean) {
     val c = Fuse.colors
-    Column(Modifier.fillMaxSize().padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.m, Alignment.Bottom)) {
+    val flow = remember(card.platform.id) { store.library.games(GameQuery(platform = card.platform.id, sort = io.github.matiyaaa.fuse.model.SortOrder.RECENTLY_PLAYED)) }
+    val games by flow.collectAsState(initial = emptyList())
+    Column(Modifier.fillMaxSize().padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(if (tight) Space.s else Space.m, Alignment.Bottom)) {
         val name: @Composable () -> Unit = { FText(card.platform.name, if (compact) Fuse.type.display else Fuse.type.hero, maxLines = 2) }
         if (card.art.logo != null) {
-            Artwork(card.art.logo, Modifier.widthIn(max = 520.dp).fillMaxWidth(0.5f).height(if (compact) 90.dp else 140.dp), contentScale = ContentScale.Fit, focusX = 0f, tint = Color.White, fallback = name)
+            Artwork(card.art.logo, Modifier.widthIn(max = 520.dp).fillMaxWidth(0.5f).height(if (tight) 56.dp else if (compact) 80.dp else 140.dp), contentScale = ContentScale.Fit, focusX = 0f, tint = Color.White, fallback = name)
         } else {
             name()
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), maxLines = 1) {
             Fact(if (card.gameCount == 1) "1 game" else "${card.gameCount} games", dot = Color(card.platform.accent))
             card.emulatorName?.let { Fact(if (card.emulatorInstalled) "Plays in $it" else "$it is not installed") }
+            val played = games.sumOf { it.playSeconds }
+            if (played > 0) Fact("${playtimeText(played)} played")
         }
-        FText(card.platform.name, Fuse.type.caption, color = c.textFaint, maxLines = 1)
+        if (games.isNotEmpty()) {
+            Spacer(Modifier.height(if (compact) 0.dp else Space.s))
+            FText(if (games.first().lastPlayedAt != null) "PLAYED LAST" else "IN YOUR LIBRARY", Fuse.type.overline, color = c.textMuted, maxLines = 1)
+            Covers(games.take(8), coverHeight(compact, tight))
+        }
     }
 }
 
 /** A collection: its name and how many games, over its first game's room. */
 @Composable
-private fun ShowcaseCollection(store: FuseStore, id: CollectionId, compact: Boolean) {
+private fun ShowcaseCollection(store: FuseStore, id: CollectionId, compact: Boolean, tight: Boolean) {
     val collections by store.collections.collections.collectAsState()
     val collection = collections.firstOrNull { it.id == id } ?: return
     val flow = remember(id) { store.library.games(GameQuery(collection = id)) }
@@ -410,28 +452,68 @@ private fun ShowcaseCollection(store: FuseStore, id: CollectionId, compact: Bool
     Column(Modifier.fillMaxSize().padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.m, Alignment.Bottom)) {
         Fact(if (collection.kind == io.github.matiyaaa.fuse.model.CollectionKind.SERIES) "Series" else "Collection")
         FText(collection.name, if (compact) Fuse.type.display else Fuse.type.hero, maxLines = 2)
-        Covers(games.take(6), if (compact) 96.dp else 150.dp)
+        Covers(games.take(8), coverHeight(compact, tight))
     }
 }
 
-/** Nothing in focus: the time over the room, and the games played last. */
+/**
+ * Nothing in focus: the time over the room, the week's play beside it (where there is the width),
+ * and the games played last.
+ */
 @Composable
-private fun ShowcaseIdle(time: String, recent: List<GameCard>, compact: Boolean) {
+private fun ShowcaseIdle(time: String, recent: List<GameCard>, playtime: io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary, compact: Boolean, wide: Boolean, tight: Boolean) {
     val c = Fuse.colors
     Column(Modifier.fillMaxSize().padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.s, Alignment.Bottom)) {
-        FText(time, if (compact) Fuse.type.display else Fuse.type.hero, maxLines = 1)
-        FText(formatDate(), Fuse.type.title, color = c.textMuted, maxLines = 1)
-        if (recent.isNotEmpty()) {
-            Spacer(Modifier.height(Space.l))
-            FText("PLAYED LAST", Fuse.type.overline, color = c.textMuted, maxLines = 1)
-            Covers(recent.take(6), if (compact) 96.dp else 150.dp)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                FText(time, if (compact) Fuse.type.display else Fuse.type.hero, maxLines = 1)
+                FText(formatDate(), Fuse.type.title, color = c.textMuted, maxLines = 1)
+            }
+            if (wide && playtime.totalSeconds > 0) {
+                Spacer(Modifier.width(Space.xl))
+                ShowcaseWeek(playtime, compact)
+            }
         }
+        if (recent.isNotEmpty()) {
+            if (!tight) Spacer(Modifier.height(if (compact) Space.s else Space.l))
+            FText("PLAYED LAST", Fuse.type.overline, color = c.textMuted, maxLines = 1)
+            Covers(recent.take(8), coverHeight(compact, tight))
+        }
+    }
+}
+
+/** The week's play, as the Home widget shows it: the time, today's share and a bar a day. */
+@Composable
+private fun ShowcaseWeek(playtime: io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary, compact: Boolean) {
+    val c = Fuse.colors
+    val days = playtime.lastSevenDays.ifEmpty { List(7) { 0L } }
+    val shape = RoundedCornerShape(Fuse.geometry.panel)
+    Row(
+        Modifier
+            .width(if (compact) 300.dp else 360.dp)
+            .clip(shape)
+            .background(c.ink.copy(alpha = 0.45f))
+            .border(Size.stroke, c.text.copy(alpha = 0.12f), shape)
+            .padding(Space.l),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(Space.l),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                FuseIcon(FuseIcons.Calendar, size = Size.iconS, tint = c.accent)
+                FText("THIS WEEK", Fuse.type.overline, color = c.textMuted, maxLines = 1)
+            }
+            FText(if (playtime.weekSeconds > 0) playtimeText(playtime.weekSeconds) else "Nothing yet", Fuse.type.title, maxLines = 1)
+            FText("${playtimeText(days.last())} today", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        }
+        io.github.matiyaaa.fuse.ui.shell.home.WeekBars(days, Modifier.weight(1f).height(if (compact) 64.dp else 88.dp), letters = !compact)
     }
 }
 
 @Composable
 private fun Covers(games: List<GameCard>, height: Dp) {
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+    // As many as the width holds, whole: a cover is never cut at the screen's edge.
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.m), maxLines = 1) {
         for (g in games) {
             Artwork(
                 g.art.boxart ?: g.art.tile,

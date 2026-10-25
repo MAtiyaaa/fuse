@@ -103,9 +103,17 @@ data class GameCard(
     val pinned: Boolean = false,
     /** How Play starts it from the list it is in: with its port (in Ports or Android), its emulator (in its own system), or as chosen. */
     val via: PlayVia = PlayVia.DEFAULT,
+    /**
+     * The system it plays as from outside a system's own list, when that isn't its own: Ports (or
+     * Android) for a game played with its port. Its icon, name and colour are shown then.
+     */
+    val playsOn: PlatformId? = null,
 ) {
     /** Drawn dimmed: its file is gone, or its drive can't be reached right now. */
     val dimmed: Boolean get() = missing || unavailable != null
+
+    /** The system the card shows: the one it plays as ([playsOn]), else its own. */
+    val shownPlatform: PlatformId get() = playsOn ?: platformId
 }
 
 /**
@@ -225,6 +233,23 @@ data class PlaytimeSummary(
     val currentGame: GameCard? = null,
     /** When the open session started (epoch millis), while a game is running. */
     val currentSince: Long? = null,
+    /** This week beside the last, and its games ([WeekRecap]). */
+    val week: WeekRecap = WeekRecap(),
+)
+
+/**
+ * The week so far: its time, last week's in all and up to the same moment (for a fair comparison
+ * partway through), the sessions played, and its games by time, most first. [start] is when it
+ * began (a Monday's local midnight), so its achievements can be told from older ones.
+ */
+@Immutable
+data class WeekRecap(
+    val start: Long = 0,
+    val seconds: Long = 0,
+    val lastWeekSeconds: Long = 0,
+    val lastWeekSoFar: Long = 0,
+    val sessions: Int = 0,
+    val games: List<Pair<GameCard, Long>> = emptyList(),
 )
 
 /** Where play time went: today, this week, this month, all of it, per day, per game and per system. */
@@ -712,7 +737,8 @@ sealed interface EmulatorSettingsView {
         val profiles: List<SettingProfileView> = emptyList(),
     ) : EmulatorSettingsView
 
-    data class Unavailable(val title: String, val reason: String) : EmulatorSettingsView
+    /** Fuse can't change them here; [open] is the emulator to change them in, when it is installed here. */
+    data class Unavailable(val title: String, val reason: String, val open: Pair<EmulatorId, String>? = null) : EmulatorSettingsView
 }
 
 /** One of every setting (Fuse Tune), with its value here and where that comes from. */
@@ -748,7 +774,7 @@ sealed interface EverySettingView {
         val count: Int get() = sections.sumOf { it.values.size }
     }
 
-    data class Unavailable(val title: String, val reason: String) : EverySettingView
+    data class Unavailable(val title: String, val reason: String, val open: Pair<EmulatorId, String>? = null) : EverySettingView
 }
 
 /** Places [FamilyMoves.offers] to bring an emulator's family's things from, and what was brought already. */

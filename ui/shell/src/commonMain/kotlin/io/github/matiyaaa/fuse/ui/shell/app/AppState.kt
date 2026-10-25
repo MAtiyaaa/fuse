@@ -250,6 +250,9 @@ class AppState(
     /** Text to read before it is saved or shared ([TextPreviewOverlay]). */
     var textPreview by mutableStateOf<TextPreviewSpec?>(null)
 
+    /** Surprise Me, open ([SurpriseOverlay]). */
+    var surprise by mutableStateOf<SurpriseSpec?>(null)
+
     /** Pictures shown one at a time over everything, top bar included (a game's screenshots). */
     var gallery by mutableStateOf<GallerySpec?>(null)
 
@@ -367,7 +370,7 @@ class AppState(
     var launching by mutableStateOf<LaunchVeil?>(null)
 
     val overlayOpen: Boolean
-        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || saveConflict != null || whoAreYou != null || profileEdit != null || profileMerge || pairing || textPreview != null || phoneTyping
+        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || saveConflict != null || whoAreYou != null || profileEdit != null || profileMerge || pairing || textPreview != null || surprise != null || phoneTyping
 
     fun openContextMenu(spec: ContextMenuSpec) {
         contextMenu = spec
@@ -383,6 +386,7 @@ class AppState(
         screenPrompt = null
         problem = null
         textPreview = null
+        surprise = null
         buttonDetect = false
     }
 

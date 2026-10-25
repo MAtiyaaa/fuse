@@ -605,11 +605,23 @@ with Sync Now, Switch Profile and Add a Device.
 **Host Account** (on the host: Settings, Fuse One) is one username and password for the
 times nobody is at a screen:
 
-- **Joining from away.** A device asking to join can choose **Use the Host's Account**. It
+- **Joining from away.** A device asking to join can choose **Sign In as the Host**. It
   stretches the password itself and proves it knows it over the key exchange of that one request,
-  so the password never travels, and a recorded request can't be replayed.
-- **The Hub from away.** The Hub at the outside address asks to sign in; the session lasts twelve
-  hours and is kept in a cookie only the browser sends back to that page.
+  so the password never travels, and a recorded request can't be replayed. Joining this way also
+  signs the device in as the host (below).
+- **Signing in as the host from a device.** On a device already in, Settings, Fuse One, **Sign In
+  as the Host** asks for the username and password once. The password proves itself over a
+  challenge the host makes for that one try (`/manage`), so it never travels either. The host marks
+  the device as one that manages it (`manager` in `devices.json`), and from then on the device
+  renames and unlinks the other devices, changes the account (a new password goes sealed with the
+  device's own secret) and sets the address from outside, all through its own link. That link never
+  runs out, so updating or restarting the host, from the device or on the host, never signs it out.
+  Only **Sign Out as the Host** on that device, or unlinking it, ends it.
+- **The Hub from away.** The Hub at the outside address asks to sign in, once. The sign-in is kept
+  in a cookie only the browser sends back to that page, and the host keeps only a hash of it, in its
+  data folder (never in a backup), so updating or restarting the host doesn't sign you out. Each
+  time the Hub is opened the sign-in is carried on for another 400 days (the longest a browser
+  keeps a cookie), so one in use never runs out. Sign Out, or a new password, ends it.
 
 Five wrong passwords in ten minutes make that caller wait. Without an account, devices join only
 with someone at a screen, and the Hub opens on the host computer only.

@@ -242,7 +242,10 @@ internal class NativeSettingsStore(
             val starts = startsIn(game)
             when {
                 starts != null && family(starts) in FAMILIES -> starts
-                starts != null -> return no("Fuse can't change ${starts.name}'s settings", "This game starts in ${starts.name}, which keeps its own settings; change them there. $SUPPORTED")
+                starts != null -> return null to EmulatorSettingsView.Unavailable(
+                    "${starts.name}'s settings are in ${starts.name}", "This game starts in ${starts.name}, which keeps its own settings: open it to change them. $SUPPORTED",
+                    open = starts.id to starts.name,
+                )
                 else -> PLATFORM_FAMILY[game.platformId.value]?.let { f -> ctx.installed.value.firstOrNull { family(it) == f } }
                     ?: return no("No emulator to set up", "$SUPPORTED None of them plays this game here.")
             }
@@ -253,7 +256,12 @@ internal class NativeSettingsStore(
         val name = installed.name
         // On Android, only an emulator whose files are in shared storage; the others' are in their own private folders.
         if (ctx.host == io.github.matiyaaa.fuse.model.Host.ANDROID && family !in NativeSettings.onAndroid) {
-            return no("Fuse can't reach $name's settings here", "$name keeps its settings in its own private folder on Android, which no other app can open; change them in $name. ${NativeSettings.ON_ANDROID}")
+            // Said with a way there: the emulator opens on its own settings' home, a press away.
+            return null to EmulatorSettingsView.Unavailable(
+                "$name's settings are in $name",
+                "$name keeps its settings in its own private folder on Android, which no other app can open. Open $name to change them. ${NativeSettings.ON_ANDROID}",
+                open = installed.id to name,
+            )
         }
         // ARMSX2 numbers its own releases, not PCSX2's: which of PCSX2's it follows isn't known.
         val version = installed.version.takeUnless { installed.id.value.substringAfter('.') in NativeSettings.ownVersions }
@@ -571,7 +579,7 @@ internal class NativeSettingsStore(
      */
     suspend fun every(id: GameId?, emulator: EmulatorId?): EverySettingView {
         val (t, unavailable) = target(id, emulator)
-        if (t == null) return EverySettingView.Unavailable(unavailable!!.title, unavailable.reason)
+        if (t == null) return EverySettingView.Unavailable(unavailable!!.title, unavailable.reason, unavailable.open)
         val offered = offered(t).filter { (s, _) -> !t.forGame || s.perGame }
         val all = offered.map { it.first }
         val locks = offered.mapNotNull { (s, why) -> why?.let { s.id to it } }.toMap()

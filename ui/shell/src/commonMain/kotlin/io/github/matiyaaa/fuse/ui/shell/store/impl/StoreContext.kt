@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -83,6 +84,18 @@ internal class StoreContext(
 
     /** The game being played on this device right now, if any (transfers ease off or pause meanwhile). */
     val playing = MutableStateFlow<GameId?>(null)
+
+    /**
+     * Whether Fuse's own optional rounds on the network may run: the device awake ([FuseServices.awake])
+     * and no game in front. A game has the device: Jellyfin's and RomM's checks every half minute
+     * kept its Wi-Fi and processor busy under every game, which on a handheld was battery the game
+     * could have had. They catch up the moment the game ends. Saves are never held by this.
+     */
+    val rounds: kotlinx.coroutines.flow.StateFlow<Boolean> by lazy {
+        combine(services.awake, playing) { awake, game -> awake && game == null }
+            .distinctUntilChanged()
+            .stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, services.awake.value && playing.value == null)
+    }
 
     /** Strong household identity evidence, supplied by Reach before an external scraper search. */
     var householdProviderClaims: suspend (io.github.matiyaaa.fuse.model.Game) -> List<io.github.matiyaaa.fuse.model.ProviderClaim> = { emptyList() }
@@ -148,7 +161,7 @@ internal class StoreContext(
      * by game, with the system a card names for them there (Ports, or Android) in place of their own.
      * Set by the library.
      */
-    val playedAs = MutableStateFlow<Map<GameId, String>>(emptyMap())
+    val playedAs = MutableStateFlow<Map<GameId, PlatformId>>(emptyMap())
 
     /** Games Fuse shows but doesn't have (RomM's and other devices', by negative id), set by the stores that keep them. */
     @kotlin.concurrent.Volatile var remoteGames: RemoteGames? = null
@@ -197,15 +210,18 @@ internal class StoreContext(
      * [summary] as a card. [playedAs] names the system it plays in from outside a system's own list,
      * when that is its port's ([StoreContext.playedAs]); a system's list passes none.
      */
-    fun summaryToCard(summary: GameSummary, media: MediaSet?, offlineRoots: List<OfflineRoot> = offline.value, playedAs: Map<GameId, String> = this.playedAs.value): GameCard {
-        val platform = platform(summary.platformId)
+    fun summaryToCard(summary: GameSummary, media: MediaSet?, offlineRoots: List<OfflineRoot> = offline.value, playedAs: Map<GameId, PlatformId> = this.playedAs.value): GameCard {
+        val playsOn = playedAs[summary.id]?.takeIf { it != summary.platformId }
+        // A game played with its port shows as the port's system: its name, icon and colour.
+        val platform = platform(playsOn ?: summary.platformId) ?: platform(summary.platformId)
         val away = if (offlineRoots.isEmpty() || summary.isApp) null else offlineRoots.firstOrNull { it.holds(summary.folderPath) }
         return GameCard(
             id = summary.id,
             platformId = summary.platformId,
             title = summary.displayTitle,
-            platformShort = playedAs[summary.id] ?: platform?.shortName ?: summary.platformId.value.uppercase(),
+            platformShort = platform?.shortName ?: if (playsOn != null) "Ports" else summary.platformId.value.uppercase(),
             accent = platform?.accent ?: DEFAULT_ACCENT,
+            playsOn = playsOn,
             art = media?.let(Art::from)?.let(::withAppIcon) ?: Art.None,
             favorite = summary.favorite,
             lastPlayedAt = summary.lastPlayedAt,

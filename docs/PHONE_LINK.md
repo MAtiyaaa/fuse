@@ -1,9 +1,10 @@
 # Phone Link
 
 Phone Link lets a phone on the same Wi-Fi see and manage the library on a device running Fuse:
-what is playing, what Cartridge is downloading, browsing the library, fixing a game's name,
-details and art, starting bulk art fills, and looking at and downloading the device's screenshots
-and recordings. It never deletes anything, never shows or changes keys or passwords, and never
+what is playing, what Fuse and Cartridge are downloading (pausing and resuming Fuse's own),
+browsing the library, showing a game's page on the device, marking favourites, looking for new
+games, fixing a game's name, details and art, starting bulk art fills, and looking at and
+downloading the device's screenshots and recordings. It never deletes anything, never shows or changes keys or passwords, and never
 changes Phone Link's own settings.
 
 ## How it works
@@ -63,9 +64,15 @@ in or not.
     "queued": 3,
     "recent": [{"romId": 12, "title": "...", "platform": "psx", "finishedAt": 1727700000000, "gameId": 5 | null}]
   },
-  "fill": FillProgress | null
+  "fill": FillProgress | null,
+  "transfers": {
+    "active": 1, "queued": 2, "failed": 0, "progress": 0.31 | null, "paused": false,
+    "items": [{"title": "Bloodborne", "upload": false, "state": "active|queued|waiting|paused|failed", "done": 123, "total": 456 | null, "progress": 0.27 | null}]
+  }
 }
 ```
+`transfers` is Fuse's own downloads and uploads on this device (RomM's, the household's, the
+Store's), the first six of them; the device's Downloads page has the rest.
 `FillProgress`: `{"done": 12, "total": 340, "current": "Pepsiman" | null, "added": 40, "details": 9,
 "finished": false, "cancelled": false, "needsYou": [{"id": 5, "title": "Pepsiman"}]}`. `needsYou` lists
 games with several close matches (Identify game picks one); the web app shows the count and the
@@ -101,6 +108,15 @@ device lists them in Settings.
 
 Phones can only pick what Fuse listed to them: the server remembers the matches and images it sent
 (per game) and refuses anything else, so a phone can't make Fuse fetch an arbitrary address.
+
+### From the phone
+| Route | Body | Result |
+|---|---|---|
+| `POST /api/games/{id}/open` | | `{"ok": true}`: the game's page opens on the device. Starting it stays a press there (or on the Remote's controller). Needs "Open games in Fuse" |
+| `PUT /api/games/{id}/favorite` | `{"favorite": true}` | `{"ok": true, "favorite": true}` |
+| `POST /api/rescan` | | `{"ok": true}`: a quick look through the game folders for new games |
+| `POST /api/transfers/pause` | | `{"ok": true}`: every transfer of Fuse's on the device pauses |
+| `POST /api/transfers/resume` | | `{"ok": true}`: and carries on |
 
 ### Bulk
 | Route | Body | Result |

@@ -155,6 +155,8 @@ data class MenuArt(
     val accent: Long = 0xFF8A93A6,
     /** The slot is logo-wide, so labels line up with rows that show a logo; off in lists of square art only. */
     val wide: Boolean = true,
+    /** A poster (a game case, taller than wide), for lists of games when Game art is set to posters. */
+    val portrait: Boolean = false,
 )
 
 /**
@@ -245,15 +247,16 @@ fun MenuRow(
         }
         action.art?.let { art ->
             Box(Modifier.width(if (art.wide) MENU_ART_WIDTH else MENU_ART_HEIGHT).height(MENU_ART_HEIGHT), contentAlignment = Alignment.CenterStart) {
-                val square = Modifier.size(MENU_ART_HEIGHT).clip(RoundedCornerShape(Fuse.geometry.control))
+                val square = (if (art.portrait) Modifier.size(MENU_ART_HEIGHT * PORTRAIT_WIDTH, MENU_ART_HEIGHT) else Modifier.size(MENU_ART_HEIGHT))
+                    .clip(RoundedCornerShape(Fuse.geometry.control))
                 val generated: @Composable () -> Unit = {
                     art.fallbackTitle?.let { GeneratedArt(it, Color(art.accent), square, slot = ArtSlot.ICON) }
                 }
                 if (art.model != null) {
                     Artwork(
                         art.model,
-                        if (art.square) square else Modifier.fillMaxSize(),
-                        contentScale = if (art.square) ContentScale.Crop else ContentScale.Fit,
+                        if (art.square || art.portrait) square else Modifier.fillMaxSize(),
+                        contentScale = if (art.square || art.portrait) ContentScale.Crop else ContentScale.Fit,
                         focusX = 0f,
                         fallback = generated,
                     )
@@ -459,8 +462,15 @@ fun MenuHeader(
 
 /** A group's divider and name inside a [MenuList]. */
 @Composable
-private fun MenuSectionHeader(label: String, first: Boolean) {
+private fun MenuSectionHeader(label: String, first: Boolean, grouped: Boolean = false) {
     val c = Fuse.colors
+    if (grouped) {
+        // Each group is a card of its own: its name sits above it, with room between the cards.
+        Column(Modifier.fillMaxWidth().padding(top = if (first) Space.xxs else Space.l, bottom = Space.xs)) {
+            if (label.isNotBlank()) SectionLabel(label, Modifier.padding(start = ROW_CONTENT_START, bottom = Space.xxs))
+        }
+        return
+    }
     Column(Modifier.fillMaxWidth().padding(top = if (first) 0.dp else Space.xs, bottom = Space.xxs)) {
         if (!first) {
             Box(Modifier.fillMaxWidth().padding(horizontal = Space.xs).height(Size.divider).background(c.hairline))
@@ -499,6 +509,11 @@ fun MenuList(
      * list sits on (a plain gradient, no offscreen layer). Off outside a panel.
      */
     fadeEdges: Boolean = false,
+    /**
+     * Each group of rows (rows with the same [MenuAction.section]) on a card of its own, its name
+     * above it, instead of a divider between groups: for long pages of settings.
+     */
+    grouped: Boolean = false,
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
@@ -576,6 +591,8 @@ fun MenuList(
     val danger = c.danger
     val corner = Fuse.geometry.control
     val outline = if (Fuse.look.highContrastFocus) c.focus else null
+    val groupFill = c.text.copy(alpha = if (c.isDark) 0.04f else 0.035f)
+    val groupEdge = c.hairline
     // Rows rise into place and fade in once, a little after one another, when the list first
     // appears (never again on changes or moves). Off under Reduced motion and in Low Power Mode.
     // The rise and stagger are the motion profile's, the same as every other reveal.
@@ -625,6 +642,23 @@ fun MenuList(
             val outlineWidth = Size.focusStroke.toPx()
             val outlineStroke = Stroke(outlineWidth)
             onDrawBehind {
+            if (grouped && actions.isNotEmpty()) {
+                val info = state.layoutInfo
+                val gap = Space.xxs.toPx()
+                val pad = Space.xs.toPx()
+                val radius = (corner.toPx() + pad)
+                clipRect {
+                    for (g in layout.groups) {
+                        val gt = layout.edge(g.first.toFloat(), info, gap, bottom = false) ?: continue
+                        val gb = layout.edge(g.last.toFloat(), info, gap, bottom = true) ?: continue
+                        if (gb < 0f || gt > size.height) continue
+                        val top = gt - pad
+                        val h = gb - gt + pad * 2
+                        drawRoundRect(groupFill, Offset(0f, top), size.copy(height = h), CornerRadius(radius))
+                        drawRoundRect(groupEdge, Offset(0f, top), size.copy(height = h), CornerRadius(radius), style = Stroke(Size.stroke.toPx()))
+                    }
+                }
+            }
             if (shown <= 0.01f || actions.isEmpty()) return@onDrawBehind
             val info = state.layoutInfo
             val t = layout.edge(top.value, info, gapPx = Space.xxs.toPx(), bottom = false) ?: return@onDrawBehind
@@ -677,7 +711,7 @@ fun MenuList(
                 translationY = (1f - p) * rise.toPx()
             }
             layout.sectionBefore(i)?.let { label ->
-                item(key = "menu.section.$i.${a.id}") { Box(arrive) { MenuSectionHeader(label, first = i == 0) } }
+                item(key = "menu.section.$i.${a.id}") { Box(arrive) { MenuSectionHeader(label, first = i == 0, grouped = grouped) } }
             }
             item(key = a.id) {
                 MenuRow(
@@ -709,6 +743,13 @@ private class MenuLayout(
     private val sections: Array<String?>,
     private val indents: IntArray,
 ) {
+    /** The actions of each group, first to last: a new group starts at each section's first row. */
+    val groups: List<IntRange> = buildList {
+        var start = 0
+        for (i in 1 until items.size) if (sections[i] != null) { add(start until i); start = i }
+        if (items.isNotEmpty()) add(start until items.size)
+    }
+
     fun itemOf(action: Int): Int = if (items.isEmpty()) 0 else items[action.coerceIn(0, items.size - 1)]
 
     fun sectionBefore(action: Int): String? = sections.getOrNull(action)
@@ -802,6 +843,9 @@ private const val REVEAL_ROWS = FuselineMotion.STAGGER_MAX
 
 private val MENU_ART_WIDTH = 104.dp
 private val MENU_ART_HEIGHT = 44.dp
+
+/** A portrait thumbnail's width as a share of its height: a game case (2:3, as posters are). */
+private const val PORTRAIT_WIDTH = 0.68f
 private val BAR_WIDTH = 3.dp
 private val BAR_HEIGHT = 22.dp
 private val ICON_WELL = 32.dp

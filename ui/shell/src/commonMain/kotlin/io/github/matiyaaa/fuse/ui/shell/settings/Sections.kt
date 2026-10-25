@@ -1903,7 +1903,7 @@ fun performanceRows(app: AppState): List<MenuAction> {
         labelled("Performance") {
             add(app.choiceRow(
                 "profile", "Performance profile", FuseIcons.Gauge, p.performance,
-                listOf(PerformanceProfile.AUTOMATIC to "Automatic", PerformanceProfile.LOW_POWER to "Low power", PerformanceProfile.BALANCED to "Balanced", PerformanceProfile.HIGH_QUALITY to "High quality"),
+                PerformanceProfile.choosable.map { it to performanceLabel(it) },
                 detail = "Now: " + performanceSummary(p.performance, p.lowPower, cap, app.platform.host) +
                     "\nAutomatic picks for this device: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }}",
             ) { v -> app.store.updatePrefs { it.copy(performance = v) } })

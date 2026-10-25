@@ -163,10 +163,15 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
     val prefs by store.prefs.collectAsState()
     val standby by session.standby.collectAsState()
     val spec = prefs.theme
+    // A game on the main screen has the device: this screen keeps its picture and words but stops
+    // moving (no drifting art, moving background or Fusi), as in Low Power. It drew every frame at
+    // the panel's full rate under every game, which on a two-screen handheld was battery the game
+    // could have had. A touch still turns its pages.
+    val gameOn = store.homeFeed.collectAsState().value.playtime.currentGame != null
     FuseTheme(
         spec = spec,
         motion = prefs.motion,
-        quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower),
+        quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower || gameOn),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
         colorVision = prefs.colorVision,
@@ -237,7 +242,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 HeroBackdrop(hero, Modifier.fillMaxSize(), dim = if (cinema) 0.38f else 0.25f, gradient = if (cinema) 0.9f else 0.75f, settleMs = 30)
             }
             // Fusi, when she is down here, plays in front of the art.
-            if (prefs.display.companionFollowsBackground && spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.FUSI && !cinema) {
+            if (prefs.display.companionFollowsBackground && spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.FUSI && !cinema && !gameOn) {
                 io.github.matiyaaa.fuse.ui.designsystem.background.FusiPet(io.github.matiyaaa.fuse.ui.designsystem.background.FusiScreen.BOTTOM)
             }
             // Status and controls sit on a deeper shade, so their cards read over any art.
@@ -320,8 +325,12 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Space.s),
                 )
             }
+            // Achievements unlocked in the game being played, big as they come (not while this
+            // screen is put away or off, when nothing would see them).
+            val putAway = prefs.display.secondScreenHidden && !prefs.display.flipped && !pictureHere
+            if (!putAway && !CompanionControls.screenOff) AchievementMoments(store)
             // Put away (Settings, Display, or the quick menu): dark, until it is shown again.
-            if (prefs.display.secondScreenHidden && !prefs.display.flipped && !pictureHere) HiddenScreen(store)
+            if (putAway) HiddenScreen(store)
             // Screen off: black until touched, saying so for a moment.
             if (CompanionControls.screenOff) {
                 Box(
@@ -453,7 +462,7 @@ internal fun List<PlatformCard>.withRomm(romm: List<io.github.matiyaaa.fuse.ui.s
 /** The backdrop for what the companion shows: the game's background art, or the system's. */
 @Composable
 internal fun companionHero(store: FuseStore, systems: List<PlatformCard>, target: Any?): HeroSource? = when (target) {
-    is GameCard -> target.room(systems.firstOrNull { it.platform.id == target.platformId })
+    is GameCard -> target.room(systems.firstOrNull { it.platform.id == target.shownPlatform })
     is GameId -> {
         val flow = remember(target) { store.library.game(target) }
         val detail by flow.collectAsState(initial = null)
@@ -680,32 +689,7 @@ private fun SystemShowcase(card: PlatformCard) {
 /** The game being played: its logo over its room, how long this session has run, and its achievements. */
 @Composable
 private fun NowPlaying(store: FuseStore, game: GameCard, since: Long?, onAchievements: (GameId) -> Unit) {
-    var now by remember { mutableLongStateOf(kotlin.time.Clock.System.now().toEpochMilliseconds()) }
-    LaunchedEffect(since) {
-        while (since != null) {
-            now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-            delay(15_000)
-        }
-    }
-    val flow = remember(game.id) { store.library.game(game.id) }
-    val detail by flow.collectAsState(initial = null)
-    GameLogo(game.art.logo, game.title) {
-        // Clear air between the logo and the session pill, so neither crowds the other.
-        Spacer(Modifier.height(Space.xxl))
-        val session = since?.let { "  ·  ${playtimeText(((now - it) / 1000).coerceAtLeast(0))}" }.orEmpty()
-        Row(
-            Modifier.clip(PillShape).background(Fuse.colors.ink.copy(alpha = 0.55f)).padding(horizontal = Space.m, vertical = Space.xs + 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.s),
-        ) {
-            Box(Modifier.size(7.dp).clip(CircleShape).background(Fuse.colors.accent))
-            FText("Playing$session", Fuse.type.label, maxLines = 1)
-        }
-        detail?.achievements?.takeIf { it.total > 0 }?.let { a ->
-            Spacer(Modifier.height(Space.l))
-            AchievementBar(a, onOpen = { onAchievements(game.id) })
-        }
-    }
+    SessionPage(store, game, since, onAchievements)
 }
 
 /**
