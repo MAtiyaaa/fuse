@@ -1,0 +1,31 @@
+-- Fuse 0.4.5: Library Health. What it reads to find art that points nowhere, art kept for games no
+-- longer in the library, and the same file found twice; and the scoped repairs it offers. None of
+-- these ever touches a game's own files, or a picture the person chose.
+
+-- Every picture kept as a file on this device.
+localPictures:
+SELECT id, owner_type, owner_id, local_path, source, remote_url IS NOT NULL AS has_web FROM media
+WHERE local_path IS NOT NULL;
+
+-- Pictures of games the library no longer has at all (not missing or removed: gone from it).
+orphanPictures:
+SELECT COUNT(*) FROM media
+WHERE owner_type = 'game' AND NOT EXISTS (SELECT 1 FROM game g WHERE g.id = CAST(media.owner_id AS INTEGER));
+
+removeOrphanPictures:
+DELETE FROM media
+WHERE owner_type = 'game' AND NOT EXISTS (SELECT 1 FROM game g WHERE g.id = CAST(media.owner_id AS INTEGER));
+
+-- A downloaded picture whose file is gone goes back to its web address (fetched again when shown).
+pointToWeb:
+UPDATE media SET local_path = NULL WHERE id IN ? AND remote_url IS NOT NULL AND source <> 'USER';
+
+-- A downloaded picture whose file is gone, with no web address to go back to, is forgotten, so the
+-- next fill can find another.
+forgetPictures:
+DELETE FROM media WHERE id IN ? AND remote_url IS NULL AND source <> 'USER';
+
+-- Present games' files, to find one file found twice.
+presentFiles:
+SELECT id, platform_id, path, size_bytes FROM game
+WHERE removed_at IS NULL AND +missing = 0 AND size_bytes > 0;

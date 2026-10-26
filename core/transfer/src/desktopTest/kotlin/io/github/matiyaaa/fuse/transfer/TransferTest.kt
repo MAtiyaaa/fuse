@@ -15,8 +15,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.nio.file.Files
 import java.security.MessageDigest
@@ -355,12 +357,14 @@ class TransferTest {
         m.register(FileHandler(server))
         val id = m.enqueue(download("Paused.bin"))
         m.awaitStatus(id, TransferStatus.ACTIVE)
-        delay(300)
+        // Paused once something has arrived (a fixed wait raced a slow runner, which had nothing yet).
+        withTimeout(10_000) { m.live(id).first { it.doneBytes > 0 } }
         m.pause(id).join()
         val paused = m.awaitStatus(id, TransferStatus.PAUSED)
         val part = File(root, "games/.Paused.bin.fuse-part")
         assertTrue(part.exists())
-        assertTrue(paused.doneBytes > 0 || part.length() > 0)
+        assertTrue(paused.doneBytes > 0)
+        assertEquals(paused.doneBytes, part.length())
         m.configure(TransferSettings())
         m.resume(id).join()
         m.awaitStatus(id, TransferStatus.DONE)

@@ -340,15 +340,17 @@ internal class DefaultLibraryOps(
             .shareIn(ctx.scope, SharingStarted.WhileSubscribed(RECOMMEND_KEEP_MS), replay = 1)
 
     private val recGames: Flow<List<RecGame<GameId>>> = recRows
-        .map { rows -> rows.map { it.toRecGame() } }
+        .map { rows -> ctx.work.run(BackgroundWork.Job.SUGGESTIONS) { rows.map { it.toRecGame() } } }
         .flowOn(Dispatchers.Default)
         .shareIn(ctx.scope, SharingStarted.WhileSubscribed(RECOMMEND_KEEP_MS), replay = 1)
 
     private val hourly: Flow<Unit> = flow { while (true) { emit(Unit); kotlinx.coroutines.delay(HOUR_MS) } }
 
     private val picks: Flow<HomePicks> = combine(recGames, hourly) { games, _ ->
-        val now = ctx.now()
-        Recommender.recommend(games, now) to Recommender.spotlight(games, now, offsetMs = ctx.services.utcOffsetMillis())
+        ctx.work.run(BackgroundWork.Job.SUGGESTIONS) {
+            val now = ctx.now()
+            Recommender.recommend(games, now) to Recommender.spotlight(games, now, offsetMs = ctx.services.utcOffsetMillis())
+        }
     }.distinctUntilChanged().flatMapLatest { (forYou, spot) ->
         val ids = forYou.map { it.key } + listOfNotNull(spot?.key)
         ctx.cards(data.games.observeSummariesInOrder(ids)).map { cards ->
@@ -362,7 +364,9 @@ internal class DefaultLibraryOps(
     }.flowOn(Dispatchers.Default)
 
     override fun spotlight(platform: PlatformId): Flow<io.github.matiyaaa.fuse.ui.shell.store.Suggestion?> = combine(recGames, hourly) { games, _ ->
-        Recommender.spotlight(games, ctx.now(), platform = platform.value, offsetMs = ctx.services.utcOffsetMillis())
+        ctx.work.run(BackgroundWork.Job.SUGGESTIONS) {
+            Recommender.spotlight(games, ctx.now(), platform = platform.value, offsetMs = ctx.services.utcOffsetMillis())
+        }
     }.distinctUntilChanged().flatMapLatest { pick ->
         if (pick == null) {
             flowOf(null)
@@ -424,7 +428,31 @@ internal class DefaultLibraryOps(
 
     // Lists and search ------------------------------------------------------------------------------
 
-    override fun games(query: GameQuery): Flow<List<GameCard>> {
+    /**
+     * Fuse Instant: lists of games are shared. A screen asking for games another is already showing
+     * (Home's shelf and the library, a system and its showcase) gets the list that one keeps current,
+     * and the library opened again within [LIST_KEEP_MS] of leaving it is there at once, not read
+     * again: ten thousand games and their art. A list nobody shows is let go after that.
+     */
+    private val sharedLists = LinkedHashMap<GameQuery, Flow<List<GameCard>>>()
+
+    init {
+        // A kept list may not have caught up with a write yet, so a write lets every one go: whoever
+        // asks next (a screen, or a one-off read straight after adding or removing a game) reads afresh.
+        // A screen already showing a list keeps it, and sees the change as before.
+        ctx.data.games.onListsChange { synchronized(sharedLists) { sharedLists.clear() } }
+    }
+
+    override fun games(query: GameQuery): Flow<List<GameCard>> = synchronized(sharedLists) {
+        sharedLists.remove(query)?.let { kept -> sharedLists[query] = kept; return kept }
+        // Few lists are open at once: past that the longest unasked-for one is forgotten (a screen
+        // still showing it keeps its own; only the sharing ends).
+        if (sharedLists.size >= MAX_SHARED_LISTS) sharedLists.remove(sharedLists.keys.first())
+        listFor(query).shareIn(ctx.scope, SharingStarted.WhileSubscribed(LIST_KEEP_MS, replayExpirationMillis = 0), replay = 1)
+            .also { sharedLists[query] = it }
+    }
+
+    private fun listFor(query: GameQuery): Flow<List<GameCard>> {
         val platform = query.platform ?: return ctx.cards(summaries(query))
         val cards = ctx.cards(summaries(query), inSystem = true)
         // In the system a port's game also shows in, it plays with the port; in its own, with its emulator.
@@ -532,6 +560,11 @@ internal class DefaultLibraryOps(
             apps = { q -> if (apps.supported) apps.search(q) else emptyList() },
             collectionsShown = { ctx.settings.value.library.collectionsEnabled },
         )
+    }
+
+    /** Makes the searcher now, so its index is built once the first screen settles, before the first search. */
+    internal fun warmSearch() {
+        searcher
     }
 
     override fun search(query: String): Flow<SearchResults> = flow { emit(searcher.search(query)) }.flowOn(Dispatchers.Default)
@@ -1979,6 +2012,12 @@ private const val RECOMMEND_SETTLE_MS = 2_000L
 
 /** How long suggestions' inputs are kept after the last screen using them goes (moving between pages). */
 private const val RECOMMEND_KEEP_MS = 30_000L
+
+/** How long a list of games is kept current after the last screen showing it goes. */
+private const val LIST_KEEP_MS = 30_000L
+
+/** Lists of games shared at most at once. */
+private const val MAX_SHARED_LISTS = 24
 
 /** Home's suggestions, the day's spotlight, and why each is there. */
 private data class HomePicks(

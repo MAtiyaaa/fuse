@@ -196,6 +196,7 @@ class AndroidFuseServices(
     override val apps: AppsProvider = AndroidAppsProvider(appContext, scope, activities, dualScreen, releaseInstaller::installLocal)
     override val locations: DeviceLocations = AndroidDeviceLocations(storageVolumes)
     override val volumes: VolumeMonitor = io.github.matiyaaa.fuse.storage.AndroidVolumes(appContext)
+    override val folderWatch: io.github.matiyaaa.fuse.ui.shell.store.FolderWatch = io.github.matiyaaa.fuse.storage.AndroidFolderWatch()
 
     override fun writeCacheFile(relativePath: String, content: String): String? =
         writeCacheBytes(relativePath, content.toByteArray(Charsets.UTF_8))

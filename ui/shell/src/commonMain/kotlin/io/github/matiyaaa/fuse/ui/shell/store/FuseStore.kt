@@ -83,6 +83,12 @@ interface FuseStore {
     /** Backups of what the user made in Fuse, and restoring them. */
     val backup: BackupOps get() = BackupOps.None
 
+    /** Fuse Performance Observatory: background work's cost, and how quickly the library answers. */
+    val observatory: ObservatoryOps get() = ObservatoryOps.None
+
+    /** How each game runs on this device, in the person's own words (compatibility reports). */
+    val compat: CompatOps get() = CompatOps.None
+
     /** The Store, where Fuse can install apps (Android); [AppStoreOps.None] elsewhere. */
     val appStore: AppStoreOps get() = AppStoreOps.None
 
@@ -175,6 +181,15 @@ interface HealthOps {
      * Nothing is saved or sent; the caller shows it first.
      */
     suspend fun diagnostics(device: List<String> = emptyList(), crash: String? = null): String = ""
+
+    /**
+     * Library Health: pictures whose files are gone go back to their web address, or are forgotten
+     * so a fill finds others; pictures the person chose are left as they are. Returns how many changed.
+     */
+    suspend fun repairPictures(): Int = 0
+
+    /** Library Health: forgets the pictures of games no longer in the library (their files stay). Returns how many. */
+    suspend fun tidyPictures(): Int = 0
 
     object None : HealthOps {
         override val report: StateFlow<HealthReport> = MutableStateFlow(HealthReport())

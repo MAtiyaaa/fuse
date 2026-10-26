@@ -71,7 +71,7 @@ internal class DefaultCollectionOps(private val ctx: StoreContext) : CollectionO
             combine(repo.observeGameChanges().debounce(1_500), settings) { _, s -> s }
                 .collectLatest { (enabled, auto, hidden) ->
                     if (!enabled) return@collectLatest
-                    runCatching { syncSeries(auto, hidden) }
+                    runCatching { ctx.work.run(BackgroundWork.Job.SERIES) { syncSeries(auto, hidden) } }
                 }
         }
     }

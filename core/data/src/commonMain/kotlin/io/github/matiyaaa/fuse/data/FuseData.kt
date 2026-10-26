@@ -46,4 +46,5 @@ class FuseData(
     val owned by lazy { OwnedChangesRepository(database, dispatcher, clock) }
     val profileState by lazy { ProfileStateRepository(database, dispatcher, clock) }
     val identity by lazy { IdentityRepository(database, dispatcher, clock) }
+    val libraryHealth by lazy { io.github.matiyaaa.fuse.data.health.LibraryHealthRepository(database, dispatcher) }
 }

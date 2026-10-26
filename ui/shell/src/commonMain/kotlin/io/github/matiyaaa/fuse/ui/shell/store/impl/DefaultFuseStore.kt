@@ -36,6 +36,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -144,6 +146,8 @@ internal class DefaultFuseStore private constructor(
     }
     override val library: DefaultLibraryOps
     override val health: DefaultHealthOps
+    override val compat: io.github.matiyaaa.fuse.ui.shell.store.CompatOps by lazy { DefaultCompatOps(ctx) }
+    override val observatory: io.github.matiyaaa.fuse.ui.shell.store.ObservatoryOps by lazy { DefaultObservatoryOps(ctx) { q -> library.search(q).first() } }
 
     /** Every transfer Fuse makes for the person, kept in Fuse's own data folder across restarts. */
     private val transferEngine = io.github.matiyaaa.fuse.transfer.newTransfers(
@@ -343,7 +347,7 @@ internal class DefaultFuseStore private constructor(
                     s.copy(appearance = s.appearance.copy(customThemes = all))
                 }
                 ctx.settings.value = settings
-                prefsState.value = prefsState.value.copy(customThemes = settings.appearance.customThemes.mapNotNull { it.spec() })
+                prefsState.update { it.copy(customThemes = settings.appearance.customThemes.mapNotNull { t -> t.spec() }) }
             }
             if (apply) updatePrefs { it.withTheme(it.customThemes.firstOrNull { t -> t.id == spec.id } ?: spec) }
         }
@@ -360,7 +364,7 @@ internal class DefaultFuseStore private constructor(
                     )
                 }
                 ctx.settings.value = settings
-                prefsState.value = prefsState.value.copy(customThemes = settings.appearance.customThemes.mapNotNull { it.spec() })
+                prefsState.update { it.copy(customThemes = settings.appearance.customThemes.mapNotNull { t -> t.spec() }) }
             }
         }
 
@@ -487,11 +491,14 @@ internal class DefaultFuseStore private constructor(
     }
 
     override fun updatePrefs(transform: (UiPrefs) -> UiPrefs) {
-        val before = prefsState.value
-        // Fuse Sync's settings change only through the sync store.
-        val after = transform(before).copy(sync = before.sync)
-        if (after == before) return
-        prefsState.value = after
+        // Changed in one step: Fuse Sync's settings arriving meanwhile (or another choice) are kept,
+        // never written over with what was there before.
+        var changed = false
+        val after = prefsState.updateAndGet { before ->
+            // Fuse Sync's settings change only through the sync store.
+            transform(before).copy(sync = before.sync).also { changed = it != before }
+        }
+        if (!changed) return
         ctx.systemOrder.value = after.systemOrder
         writes.trySend(after)
         ctx.userChanged()
@@ -598,6 +605,8 @@ internal class DefaultFuseStore private constructor(
         ctx.scope.launch { ctx.playing.collect { transfers.conditions(playing = it != null) } }
         // The achievements unlocked in the game being played, for the screens that show them.
         achievements.followPlay()
+        // Search answers its first question as fast as the rest: its index is ready beforehand.
+        library.warmSearch()
         // Fuse Engine's Performance Governor: decorative motion follows what Fuse is doing.
         ctx.governor.start()
         ctx.scope.launch {
@@ -735,7 +744,8 @@ internal class DefaultFuseStore private constructor(
                     // Each profile has its own RetroAchievements account (or the device's).
                     achievements.profileChanged()
                 } else if (prefsState.value.sync != c) {
-                    prefsState.value = prefsState.value.copy(sync = c)
+                    // In one step, so a choice made at the same moment stays.
+                    prefsState.update { it.copy(sync = c) }
                     writes.trySend(prefsState.value)
                 }
             }
@@ -781,9 +791,11 @@ internal class DefaultFuseStore private constructor(
         appStoreOps?.start()
         desktopStoreOps?.start()
         ctx.scope.launch {
-            for (next in writes) {
+            // Each send asks for a write; what is written is what Fuse shows then, the newest. (Writing
+            // the value sent could write an older one after a newer one's send was folded into it.)
+            for (asked in writes) {
                 // A failed write must not stop later ones; retry once, then keep the in-memory value.
-                val ok = runCatching { persist(next) }.isSuccess
+                val ok = runCatching { persist(prefsState.value) }.isSuccess
                 if (!ok) {
                     delay(250)
                     runCatching { persist(prefsState.value) }
@@ -815,7 +827,7 @@ internal class DefaultFuseStore private constructor(
             sync.queries = { id -> library.saveQueryFor(id) }
             ctx.onUserChange = { if (sync.config.value.enabled) svc.changed() }
         }
-        ctx.scope.launch { for (next in writes) runCatching { persist(next) } }
+        ctx.scope.launch { for (asked in writes) runCatching { persist(prefsState.value) } }
         ctx.scope.launch { library.recoverSession() }
     }
 
@@ -857,7 +869,7 @@ internal class DefaultFuseStore private constructor(
                 if (phase == ScanPhase.DONE) {
                     delay(AUTO_FILL_DELAY_MS)
                     mediaOps.autoFill()
-                    runCatching { library.identifyLibrary() }
+                    runCatching { ctx.work.run(BackgroundWork.Job.IDENTIFY) { library.identifyLibrary() } }
                 }
             }
         }

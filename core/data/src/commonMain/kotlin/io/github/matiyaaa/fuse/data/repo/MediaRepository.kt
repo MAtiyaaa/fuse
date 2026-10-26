@@ -48,9 +48,7 @@ class MediaRepository(
     }
 
     /** Media for many owners at once (chunked IN queries, not one query per owner). */
-    suspend fun mediaFor(owners: Collection<MediaOwner>): Map<MediaOwner, MediaSet> = withContext(dispatcher) {
-        batches(owners).flatMap { (type, keys) -> q.selectByOwners(type, keys).executeAsList() }.groupedByOwner(owners)
-    }
+    suspend fun mediaFor(owners: Collection<MediaOwner>): Map<MediaOwner, MediaSet> = withContext(dispatcher) { readAll(owners) }
 
     /**
      * Live version of [mediaFor], for a list of games. Fuseline 4.2: read whole once, then only the
@@ -89,8 +87,32 @@ class MediaRepository(
         }.flowOn(dispatcher)
     }
 
-    private fun readAll(owners: Collection<MediaOwner>): Map<MediaOwner, MediaSet> =
-        batches(owners).flatMap { (type, keys) -> q.selectByOwners(type, keys).executeAsList() }.groupedByOwner(owners)
+    /**
+     * Each owner's set, read in chunks of owners. Fuse 0.4.5: only the columns pictures need, and the
+     * rows (sorted by owner) cut into each owner's run as they come: ten thousand games' art is thirty
+     * thousand rows, and every column and every key made per row counted.
+     */
+    private fun readAll(owners: Collection<MediaOwner>): Map<MediaOwner, MediaSet> {
+        val out = HashMap<MediaOwner, MediaSet>(owners.size * 2)
+        for ((type, list) in owners.groupBy { it.type() }) {
+            val sets = HashMap<String, MediaSet>(list.size * 2)
+            for (keys in list.map { it.key() }.distinct().chunked(SQL_CHUNK)) {
+                val rows = q.artByOwners(type, keys) { owner, kind, source, local, remote, width, height, focusX, focusY, zoom ->
+                    ArtRow(owner, KINDS[kind], SOURCES[source] ?: MediaSource.GENERATED, local, remote, width, height, focusX, focusY, zoom)
+                }.executeAsList()
+                var start = 0
+                while (start < rows.size) {
+                    val owner = rows[start].owner
+                    var end = start + 1
+                    while (end < rows.size && rows[end].owner == owner) end++
+                    sets[owner] = setOf(rows, start, end)
+                    start = end
+                }
+            }
+            for (o in list) out[o] = sets[o.key()] ?: MediaSet.Empty
+        }
+        return out
+    }
 
     /** Forgets the change log older than the last [keep] changes (lists far behind read everything again). */
     suspend fun pruneChanges(keep: Long = 20_000) = withContext(dispatcher) {
@@ -260,15 +282,49 @@ class MediaRepository(
             kinds.associateWith { q.gamesLackingKind(platformId?.value, it.name).executeAsList().size }
         }
 
-    private fun batches(owners: Collection<MediaOwner>): List<Pair<String, List<String>>> =
-        owners.groupBy { it.type() }.flatMap { (type, list) ->
-            list.map { it.key() }.distinct().chunked(SQL_CHUNK).map { type to it }
-        }
+}
 
-    private fun List<Media>.groupedByOwner(owners: Collection<MediaOwner>): Map<MediaOwner, MediaSet> {
-        val rows = groupBy { it.owner_type to it.owner_id }
-        return owners.associateWith { toMediaSet(rows[it.type() to it.key()].orEmpty()) }
+/** One row of an owner's art as [MediaRepository.readAll] reads it; null [kind] for a kind this Fuse doesn't know. */
+private class ArtRow(
+    val owner: String,
+    val kind: MediaKind?,
+    val source: MediaSource,
+    val localPath: String?,
+    val remoteUrl: String?,
+    val width: Long?,
+    val height: Long?,
+    val focusX: Double,
+    val focusY: Double,
+    val zoom: Double,
+)
+
+private val KINDS = MediaKind.entries.associateBy { it.name }
+private val SOURCES = MediaSource.entries.associateBy { it.name }
+
+/** [rows] from [start] until [end] (one owner's, sorted as the query sorts them) as its set, the same as [toMediaSet] makes. */
+private fun setOf(rows: List<ArtRow>, start: Int, end: Int): MediaSet {
+    if (start == end) return MediaSet.Empty
+    val position = HashMap<MediaKind, Int>(8)
+    val items = ArrayList<MediaItem>(end - start)
+    for (i in start until end) {
+        val row = rows[i]
+        val kind = row.kind ?: continue
+        val order = position[kind] ?: 0
+        position[kind] = order + 1
+        items += MediaItem(
+            kind = kind,
+            source = row.source,
+            localPath = row.localPath,
+            remoteUrl = row.remoteUrl,
+            width = row.width?.toInt(),
+            height = row.height?.toInt(),
+            focusX = row.focusX.toFloat(),
+            focusY = row.focusY.toFloat(),
+            zoom = row.zoom.toFloat(),
+            order = order,
+        )
     }
+    return MediaSet(items)
 }
 
 /** Storage key of an owner: its type column value. */

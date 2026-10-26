@@ -47,6 +47,19 @@ class GameRepository(
 
     // Lists ---------------------------------------------------------------------------------------
 
+    /**
+     * Calls [changed] the moment a game, a collection or a collection's games change, on the thread
+     * that wrote it, before the write returns. Returns what stops it.
+     */
+    fun onListsChange(changed: () -> Unit): () -> Unit {
+        val listener = object : Query.Listener {
+            override fun queryResultsChanged() = changed()
+        }
+        val queries = listOf(q.summariesAll(false.toDb(), SortOrder.TITLE.code()), db.collectionQueries.memberIds(0), db.collectionQueries.byKind(""))
+        queries.forEach { it.addListener(listener) }
+        return { queries.forEach { it.removeListener(listener) } }
+    }
+
     /** One platform's games in [sort] order. */
     fun observeByPlatform(
         platformId: PlatformId,

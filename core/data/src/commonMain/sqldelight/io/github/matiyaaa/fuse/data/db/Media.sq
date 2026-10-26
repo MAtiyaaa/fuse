@@ -68,6 +68,12 @@ selectByOwners:
 SELECT * FROM media WHERE owner_type = ? AND owner_id IN ?
 ORDER BY owner_id, kind, CASE WHEN source = 'USER' THEN 0 ELSE 1 END, sort_order, id;
 
+-- What a list of games reads of each one's art: only what its pictures need, in each owner's order.
+artByOwners:
+SELECT owner_id, kind, source, local_path, remote_url, width, height, focus_x, focus_y, zoom FROM media
+WHERE owner_type = ? AND owner_id IN ?
+ORDER BY owner_id, kind, CASE WHEN source = 'USER' THEN 0 ELSE 1 END, sort_order, id;
+
 selectKind:
 SELECT * FROM media WHERE owner_type = ? AND owner_id = ? AND kind = ?
 ORDER BY CASE WHEN source = 'USER' THEN 0 ELSE 1 END, sort_order, id;
@@ -108,7 +114,7 @@ UPDATE media SET focus_x = :focusX, focus_y = :focusY, zoom = :zoom WHERE id = :
 -- Visible (present, not removed) games with no media of :kind, optionally for one platform.
 gamesLackingKind:
 SELECT g.id FROM game g
-WHERE g.missing = 0 AND g.removed_at IS NULL
+WHERE +g.missing = 0 AND g.removed_at IS NULL
     AND (:platformId IS NULL OR g.platform_id = :platformId)
     AND NOT EXISTS (
         SELECT 1 FROM media m
