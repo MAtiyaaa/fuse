@@ -147,6 +147,9 @@ interface FuseServices {
     /** The drives mounted now, and word when one comes or goes. */
     val volumes: VolumeMonitor get() = VolumeMonitor.None
 
+    /** Library folders followed as they change, where the system tells. */
+    val folderWatch: FolderWatch get() = FolderWatch.None
+
     /**
      * Writes a small text file below [cacheDir] (for example `playlists/42/Game.m3u`) and returns
      * its absolute path, or null when it could not be written. [relativePath] never leaves the cache.
@@ -217,6 +220,38 @@ interface FuseServices {
 
     /** Offset of local time from UTC right now, for "today" and "this week" playtime buckets. */
     fun utcOffsetMillis(): Long
+}
+
+/**
+ * Tells when what is in library folders changes (a game copied in, renamed or deleted), where the
+ * system can say, so the library follows at once instead of at the next start. The scans on start
+ * and on resume still cover whatever it can't see.
+ */
+interface FolderWatch {
+    /**
+     * Calls [onChange] (on any thread, once a burst of changes has been quiet for [QUIET_MS]) when
+     * anything directly in one of [folders] changes; null when the system can't tell.
+     */
+    fun watch(folders: List<String>, onChange: () -> Unit): AutoCloseable?
+
+    object None : FolderWatch {
+        override fun watch(folders: List<String>, onChange: () -> Unit): AutoCloseable? = null
+    }
+
+    companion object {
+        const val QUIET_MS = 2_000L
+
+        private val notGames = Regex(
+            """(?i).*\.(srm|sav|sa\d|state\d*|auto|rtc|eep|fla|mpk|sra|mcd|mcr|ps2|tmp|temp|part|crdownload|download|lock)$|^\..*|.*~$""",
+        )
+
+        /**
+         * Whether a change to [name] can be a game's: an emulator writing a save or a state beside
+         * the games, a download still being written or a hidden file is not, so a game being played
+         * never sets off scan after scan.
+         */
+        fun counts(name: String): Boolean = !notGames.matches(name)
+    }
 }
 
 /**

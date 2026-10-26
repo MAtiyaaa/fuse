@@ -428,7 +428,24 @@ internal class DefaultLibraryOps(
 
     // Lists and search ------------------------------------------------------------------------------
 
-    override fun games(query: GameQuery): Flow<List<GameCard>> {
+    /**
+     * Fuse Instant: lists of games are shared. A screen asking for games another is already showing
+     * (Home's shelf and the library, a system and its showcase) gets the list that one keeps current,
+     * and the library opened again within [LIST_KEEP_MS] of leaving it is there at once, not read
+     * again: ten thousand games and their art. A list nobody shows is let go after that.
+     */
+    private val sharedLists = LinkedHashMap<GameQuery, Flow<List<GameCard>>>()
+
+    override fun games(query: GameQuery): Flow<List<GameCard>> = synchronized(sharedLists) {
+        sharedLists.remove(query)?.let { kept -> sharedLists[query] = kept; return kept }
+        // Few lists are open at once: past that the longest unasked-for one is forgotten (a screen
+        // still showing it keeps its own; only the sharing ends).
+        if (sharedLists.size >= MAX_SHARED_LISTS) sharedLists.remove(sharedLists.keys.first())
+        listFor(query).shareIn(ctx.scope, SharingStarted.WhileSubscribed(LIST_KEEP_MS, replayExpirationMillis = 0), replay = 1)
+            .also { sharedLists[query] = it }
+    }
+
+    private fun listFor(query: GameQuery): Flow<List<GameCard>> {
         val platform = query.platform ?: return ctx.cards(summaries(query))
         val cards = ctx.cards(summaries(query), inSystem = true)
         // In the system a port's game also shows in, it plays with the port; in its own, with its emulator.
@@ -1988,6 +2005,12 @@ private const val RECOMMEND_SETTLE_MS = 2_000L
 
 /** How long suggestions' inputs are kept after the last screen using them goes (moving between pages). */
 private const val RECOMMEND_KEEP_MS = 30_000L
+
+/** How long a list of games is kept current after the last screen showing it goes. */
+private const val LIST_KEEP_MS = 30_000L
+
+/** Lists of games shared at most at once. */
+private const val MAX_SHARED_LISTS = 24
 
 /** Home's suggestions, the day's spotlight, and why each is there. */
 private data class HomePicks(

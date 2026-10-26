@@ -70,6 +70,22 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
     override val volumes: StateFlow<List<StorageVolume>> get() = drives.volumes
     private var driveWatch: AutoCloseable? = null
     private val driveChanges = Channel<Unit>(Channel.CONFLATED)
+    private var folderWatch: AutoCloseable? = null
+    private var followed: List<String> = emptyList()
+    private val folderChanges = Channel<Unit>(Channel.CONFLATED)
+
+    /** Follows the library folders and the system folders a scan [found] in them, when they changed. */
+    private suspend fun followFolders(found: Map<PlatformId, List<String>>) {
+        val roots = data.sources.all().filter { it.enabled }.map { s ->
+            // A Steam library changes in its steamapps folder, where each install leaves its manifest.
+            if (s.kind == LibrarySourceKind.STEAM_LIBRARY) FsPath.join(FsPath.normalize(s.path), "steamapps") else FsPath.normalize(s.path)
+        }
+        val folders = (roots + found.values.flatten().map(FsPath::normalize)).distinct().take(MAX_FOLLOWED)
+        if (folders == followed) return
+        folderWatch?.close()
+        followed = folders
+        folderWatch = if (folders.isEmpty()) null else ctx.services.folderWatch.watch(folders) { folderChanges.trySend(Unit) }
+    }
 
     override fun refreshDrives() {
         driveChanges.trySend(Unit)
@@ -241,6 +257,25 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         ctx.scope.launch {
             ctx.settings.map { it.library.steamGames }.distinctUntilChanged().drop(1).collect {
                 runCatching { placeSteam(steamWanted()) }
+                rescan(ScanScope.QUICK)
+            }
+        }
+        // Fuse Instant: a game copied into, renamed in or deleted from a library folder is in the
+        // library a few seconds later, not at the next start. What the last scan found is what's
+        // followed: each library folder and every system folder in it. While a game is running the
+        // look waits for it to end.
+        ctx.scope.launch {
+            try {
+                platformFolders.collect { found -> runCatching { followFolders(found) } }
+            } finally {
+                folderWatch?.close()
+            }
+        }
+        ctx.scope.launch {
+            for (change in folderChanges) {
+                delay(FOLDER_SETTLE_MS)
+                while (folderChanges.tryReceive().isSuccess) Unit
+                ctx.governor.await { it.background }
                 rescan(ScanScope.QUICK)
             }
         }
@@ -439,6 +474,12 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
     private companion object {
         /** Wait after a drive event before looking, so a card that is still mounting reads whole. */
         const val DRIVE_SETTLE_MS = 1_200L
+
+        /** Wait after a folder's changes go quiet before looking (on top of the platform's own quiet). */
+        const val FOLDER_SETTLE_MS = 500L
+
+        /** Folders followed at most: a library of many systems on several drives stays well inside it. */
+        const val MAX_FOLLOWED = 512
     }
 }
 

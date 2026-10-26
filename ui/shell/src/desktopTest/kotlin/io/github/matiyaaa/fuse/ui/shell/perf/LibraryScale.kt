@@ -28,7 +28,6 @@ import kotlin.time.TimeSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -43,8 +42,8 @@ import org.junit.Assume.assumeTrue
  *
  * - **scan**: the library found from nothing (cold);
  * - **start**: a new store over that database, as Fuse opening again: Home with every system and
- *   its rows, from the moment the store is made, and the whole library listed (every game with its
- *   art) from the same moment;
+ *   its rows, from the moment the store is made, then (as when the library is opened from Home) the
+ *   whole library listed, every game with its art, from the moment it is asked for;
  * - **list**: the library listed again with the store warm, once and then 20 times (p50, p95), as
  *   opening the library again does;
  * - **home**: Home opened again with the store warm, 20 times (p50, p95);
@@ -143,17 +142,16 @@ class LibraryScale {
         val startMark = TimeSource.Monotonic.markNow()
         val store: FuseStore = createFuseStore(FakeServices(FuseData(DesktopDatabase.open(db)), cache), scope)
         val systems = SYSTEMS.size.coerceAtMost(games)
-        val home = scope.async {
+        val homeMs = withTimeout(START_LIMIT_MS) {
             store.library.home.first { it.systems.size >= systems && it.continuePlaying.isNotEmpty() && it.favorites.isNotEmpty() }
             startMark.elapsedNow().inWholeMilliseconds
         }
-        val library = scope.async {
+        val libraryMark = TimeSource.Monotonic.markNow()
+        val startListMs = withTimeout(START_LIMIT_MS) {
             val all = store.library.games(GameQuery()).first { it.size >= games }
             check(all.count { it.art.boxart != null } >= games) { "every game should have its cover" }
-            startMark.elapsedNow().inWholeMilliseconds
+            libraryMark.elapsedNow().inWholeMilliseconds
         }
-        val homeMs = withTimeout(START_LIMIT_MS) { home.await() }
-        val startListMs = withTimeout(START_LIMIT_MS) { library.await() }
 
         // The library again, warm, and searches: the first builds the index.
         phase("list", games)
@@ -187,7 +185,7 @@ class LibraryScale {
         store.library.search("island quest").first()
         val settledSearchMs = settledMark.elapsedNow().inWholeMicroseconds / 1000.0
         phase("end", games)
-        val heldMb = heapMb() - before
+        val heldMb = (heapMb() - before).coerceAtLeast(0)
         scope.cancel()
         root.deleteRecursively()
         cache.deleteRecursively()

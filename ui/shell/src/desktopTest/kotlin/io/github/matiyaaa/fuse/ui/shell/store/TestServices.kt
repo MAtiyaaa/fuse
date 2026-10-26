@@ -55,6 +55,9 @@ internal class FakeServices(
     var frameGeneration = false
     override fun frameGenerationReady() = frameGeneration
 
+    /** How library folders are followed; a test that follows them puts its own here. */
+    override var folderWatch: FolderWatch = FolderWatch.None
+
     override val appVersion = "0.0.1"
     val javaFs = JavaFileSystem()
     override val fs: FuseFileSystem = javaFs

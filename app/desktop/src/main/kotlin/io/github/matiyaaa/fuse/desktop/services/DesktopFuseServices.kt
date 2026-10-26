@@ -112,6 +112,17 @@ class DesktopFuseServices private constructor(
     override val apps: AppsProvider? = null
     override val locations: DeviceLocations = DesktopLocations(folders)
     override val volumes: VolumeMonitor = io.github.matiyaaa.fuse.desktop.platform.DesktopVolumes(os)
+
+    /** Library folders followed with the system's file change notices (inotify, FSEvents, Windows' own). */
+    override val folderWatch: io.github.matiyaaa.fuse.ui.shell.store.FolderWatch = object : io.github.matiyaaa.fuse.ui.shell.store.FolderWatch {
+        override fun watch(folders: List<String>, onChange: () -> Unit): AutoCloseable =
+            io.github.matiyaaa.fuse.desktop.system.DirectoryWatcher(
+                "fuse-library-watch",
+                debounceMs = io.github.matiyaaa.fuse.ui.shell.store.FolderWatch.QUIET_MS,
+                fileFilter = io.github.matiyaaa.fuse.ui.shell.store.FolderWatch::counts,
+                onChange = onChange,
+            ).also { it.watch(folders) }
+    }
     override val emulatorFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles =
         DesktopEmulatorFiles(os, backups = java.io.File(dirs.data, "emulator-backups"))
 
