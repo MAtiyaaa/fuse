@@ -179,6 +179,15 @@ interface HealthOps {
      */
     suspend fun diagnostics(device: List<String> = emptyList(), crash: String? = null): String = ""
 
+    /**
+     * Library Health: pictures whose files are gone go back to their web address, or are forgotten
+     * so a fill finds others; pictures the person chose are left as they are. Returns how many changed.
+     */
+    suspend fun repairPictures(): Int = 0
+
+    /** Library Health: forgets the pictures of games no longer in the library (their files stay). Returns how many. */
+    suspend fun tidyPictures(): Int = 0
+
     object None : HealthOps {
         override val report: StateFlow<HealthReport> = MutableStateFlow(HealthReport())
         override fun check() = Unit

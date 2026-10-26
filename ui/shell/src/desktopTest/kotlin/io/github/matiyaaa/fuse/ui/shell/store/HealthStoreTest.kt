@@ -87,6 +87,36 @@ class HealthStoreTest {
     }
 
     @Test
+    fun libraryHealthFindsPicturesWhoseFilesAreGoneAndPutsThemRight(): Unit = runBlocking {
+        val data = FuseData(DesktopDatabase.open(File(cache, "fuse3.db").absolutePath))
+        val store = createFuseStore(FakeServices(data, cache), scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val games = withTimeout(20_000) { store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first { it.size == 3 } }
+        val kept = File(cache, "kept.png").apply { writeBytes(ByteArray(8)) }
+        val (a, b, c) = games.sortedBy { it.title }.map { io.github.matiyaaa.fuse.model.MediaOwner.OfGame(it.id) }
+        // A downloaded cover whose file went, one that is still there, and the person's own, gone too.
+        data.media.putScraped(a, listOf(io.github.matiyaaa.fuse.model.MediaItem(io.github.matiyaaa.fuse.model.MediaKind.BOXART, io.github.matiyaaa.fuse.model.MediaSource.STEAMGRIDDB, localPath = File(cache, "gone.png").absolutePath, remoteUrl = "https://example.org/a.png")), io.github.matiyaaa.fuse.model.MediaFillMode.FILL_MISSING)
+        data.media.putScraped(b, listOf(io.github.matiyaaa.fuse.model.MediaItem(io.github.matiyaaa.fuse.model.MediaKind.BOXART, io.github.matiyaaa.fuse.model.MediaSource.STEAMGRIDDB, localPath = kept.absolutePath)), io.github.matiyaaa.fuse.model.MediaFillMode.FILL_MISSING)
+        data.media.setCustom(c, io.github.matiyaaa.fuse.model.MediaKind.BOXART, File(cache, "mine.png").absolutePath)
+        store.health.check()
+
+        // A check the scan started may have looked before all three were written: wait for one that saw them.
+        val gone = report(store) { r -> r.issues.any { it.id == "library.pictures.gone" && it.problem.title.startsWith("2 ") } }.issues.first { it.id == "library.pictures.gone" }
+        assertEquals("2 pictures' files are gone", gone.problem.title)
+        assertTrue("1 will be downloaded again" in gone.problem.reassurance.orEmpty(), gone.problem.reassurance)
+        assertTrue("1 you chose yourself stay" in gone.problem.reassurance.orEmpty(), gone.problem.reassurance)
+        assertTrue(gone.problem.actions.any { it is ProblemAction.RepairPictures })
+
+        assertEquals(1, store.health.repairPictures())
+        assertEquals(null, data.media.get(a).boxart?.localPath)
+        assertEquals(kept.absolutePath, data.media.get(b).boxart?.localPath)
+        assertEquals(File(cache, "mine.png").absolutePath, data.media.get(c).boxart?.localPath)
+        // Only the person's own is left, and it stays reported, never changed.
+        val after = report(store) { r -> r.issues.firstOrNull { it.id == "library.pictures.gone" }?.problem?.title == "A picture's file is gone" }
+        assertTrue(after.issues.any { it.id == "library.pictures.gone" })
+    }
+
+    @Test
     fun aDriveThatIsOutIsANoteAndItsGamesAreNotMissing(): Unit = runBlocking {
         val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse2.db").absolutePath)), cache)
         val card = StorageVolume("uuid:CARD", "SD card", listOf(root.absolutePath), VolumeKind.SD_CARD, removable = true)

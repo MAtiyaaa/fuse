@@ -437,6 +437,15 @@ sealed interface ProblemAction {
     data class PutSteamRight(override val label: String = "Put Them Right") : ProblemAction
     data class OpenHealth(override val label: String = "System health") : ProblemAction
 
+    /** Library Health: pictures whose files are gone, put right (asks first, and says what changes). */
+    data class RepairPictures(override val label: String = "Put them right") : ProblemAction
+
+    /** Library Health: forgets pictures kept for games no longer in the library (asks first). */
+    data class TidyPictures(override val label: String = "Tidy up") : ProblemAction
+
+    /** Looks for the art games lack, as Art and details does. */
+    data class FindArt(override val label: String = "Find art now") : ProblemAction
+
     /** Back to Fuse's own theme with standard motion and no glass or CRT, saved. */
     data class ResetAppearance(override val label: String = "Reset appearance") : ProblemAction
 }

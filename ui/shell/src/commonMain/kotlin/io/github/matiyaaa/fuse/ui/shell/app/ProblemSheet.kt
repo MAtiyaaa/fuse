@@ -172,6 +172,33 @@ fun AppState.runProblemAction(action: ProblemAction, spec: ProblemSpec?) {
             navigator.replace(Route.Root(io.github.matiyaaa.fuse.model.Destination.LIBRARY))
         }
         is ProblemAction.OpenHealth -> go(Route.Settings("health"))
+        is ProblemAction.RepairPictures -> confirm = ConfirmSpec(
+            title = "Put these pictures right?",
+            message = (spec?.problem?.reassurance ?: "Pictures you chose yourself stay as they are.") +
+                " Fuse changes only its own record of the pictures.",
+            confirmLabel = "Put right",
+            onConfirm = {
+                scope.launch {
+                    val n = store.health.repairPictures()
+                    toasts.show(if (n == 1) "Put 1 picture right" else "Put $n pictures right", ToastKind.SUCCESS)
+                }
+            },
+        )
+        is ProblemAction.TidyPictures -> confirm = ConfirmSpec(
+            title = "Tidy up?",
+            message = "Fuse forgets the pictures it kept for games no longer in your library. The picture files stay where they are, and games in your library keep all of their art.",
+            confirmLabel = "Tidy up",
+            onConfirm = {
+                scope.launch {
+                    val n = store.health.tidyPictures()
+                    toasts.show(if (n == 1) "Forgot 1 picture" else "Forgot $n pictures", ToastKind.SUCCESS)
+                }
+            },
+        )
+        is ProblemAction.FindArt -> {
+            store.media.fill(io.github.matiyaaa.fuse.model.MediaFillMode.FILL_MISSING, io.github.matiyaaa.fuse.model.MediaKind.Fillable)
+            toasts.show("Looking for the art your games lack", ToastKind.INFO, icon = FuseIcons.Images)
+        }
         is ProblemAction.LeaveSafeMode -> {
             safeMode = null
             store.resumeAutomaticWork()
@@ -327,5 +354,8 @@ private fun ProblemAction.icon(): ImageVector = when (this) {
     is ProblemAction.ShowMissing -> FuseIcons.FileSearch
     is ProblemAction.PutSteamRight -> FuseIcons.Gamepad
     is ProblemAction.OpenHealth -> FuseIcons.HeartPulse
+    is ProblemAction.RepairPictures -> FuseIcons.Wrench
+    is ProblemAction.TidyPictures -> FuseIcons.Eraser
+    is ProblemAction.FindArt -> FuseIcons.Images
     is ProblemAction.ResetAppearance -> FuseIcons.Paintbrush
 }

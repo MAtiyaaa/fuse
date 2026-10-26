@@ -395,7 +395,7 @@ internal class DefaultHealthOps(
                     )
                     if (found.size >= GAME_ISSUES_MAX) break
                 }
-                files = found
+                files = found + runCatching { ctx.work.run(BackgroundWork.Job.LIBRARY_HEALTH) { libraryHealth() } }.getOrDefault(emptyList())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -406,6 +406,98 @@ internal class DefaultHealthOps(
             }
         }
     }
+
+    // ------------------------------------------------------------------------- library health
+
+    /** Pictures found gone by the last look, for [repairPictures]. */
+    @Volatile private var gonePictures: List<io.github.matiyaaa.fuse.data.health.LibraryHealthRepository.LocalPicture> = emptyList()
+
+    /**
+     * Fuse 0.4.5, Library Health: pictures whose files are gone, pictures kept for games no longer in
+     * the library, games without a cover, and the same file found twice. Each says what a repair would
+     * change before it does; nothing is merged, and no game's own file is ever touched.
+     */
+    private suspend fun libraryHealth(): List<HealthIssue> = buildList {
+        val health = ctx.data.libraryHealth
+        val gone = kotlinx.coroutines.withContext(Dispatchers.IO) { health.localPictures().filterNot { java.io.File(it.path).exists() } }
+        gonePictures = gone
+        if (gone.isNotEmpty()) {
+            val (web, forgotten, chosen) = health.plan(gone)
+            val n = gone.size
+            add(HealthIssue(
+                "library.pictures.gone",
+                Problem(
+                    title = if (n == 1) "A picture's file is gone" else "$n pictures' files are gone",
+                    message = "Fuse kept ${if (n == 1) "this picture" else "these pictures"} as files that aren't there any more (a cache cleared, a folder moved), so ${if (n == 1) "it shows" else "they show"} as blank.",
+                    kind = ProblemKind.FILE,
+                    severity = Severity.ATTENTION,
+                    reassurance = buildList {
+                        if (web > 0) add("$web will be downloaded again when shown")
+                        if (forgotten > 0) add("$forgotten will be forgotten, so the next art fill can find others")
+                        if (chosen > 0) add("$chosen you chose yourself stay as they are")
+                    }.joinToString(". ") + ". No game's files are touched.",
+                    actions = listOf(ProblemAction.RepairPictures()),
+                    details = gone.take(20).joinToString("\n") { it.path } + if (n > 20) "\n..." else "",
+                ),
+            ))
+        }
+        val orphans = health.orphanPictures()
+        if (orphans > 0) {
+            add(HealthIssue(
+                "library.pictures.orphan",
+                Problem(
+                    title = if (orphans == 1) "A picture belongs to no game" else "$orphans pictures belong to no game",
+                    message = "They were kept for games that are no longer in your library at all. Tidying up forgets them; the picture files stay where they are.",
+                    kind = ProblemKind.DATA,
+                    severity = Severity.INFO,
+                    reassurance = "Games in your library, missing or not, keep all of their art.",
+                    actions = listOf(ProblemAction.TidyPictures()),
+                ),
+            ))
+        }
+        val noCover = runCatching { ctx.data.media.missingCounts(setOf(io.github.matiyaaa.fuse.model.MediaKind.BOXART))[io.github.matiyaaa.fuse.model.MediaKind.BOXART] ?: 0 }.getOrDefault(0)
+        if (noCover > 0) {
+            add(HealthIssue(
+                "library.covers",
+                Problem(
+                    title = if (noCover == 1) "1 game has no cover" else "$noCover games have no cover",
+                    message = "Art and details can look for ${if (noCover == 1) "it" else "them"}: by name on the sources you use, and on RomM or Fuse One where you have them.",
+                    kind = ProblemKind.FILE,
+                    severity = Severity.INFO,
+                    reassurance = null,
+                    actions = listOf(ProblemAction.FindArt(), ProblemAction.OpenSettings("media", "Art and details")),
+                ),
+            ))
+        }
+        val twice = health.sameFileTwice()
+        if (twice.isNotEmpty()) {
+            val titles = ctx.data.games.observeAll(includeHidden = true).first().associateBy { it.id }
+            val n = twice.sumOf { it.size }
+            add(HealthIssue(
+                "library.twice",
+                Problem(
+                    title = if (twice.size == 1) "A game is in your library twice" else "${twice.size} games are in your library twice",
+                    message = "The same file (same name, same size, same system) is in two places, so it shows twice. Fuse never merges games by itself: if the copies aren't wanted, remove one from its folder.",
+                    kind = ProblemKind.FILE,
+                    severity = Severity.INFO,
+                    reassurance = "Nothing was changed.",
+                    actions = listOf(ProblemAction.OpenGame(twice.first().first(), "Open the first")),
+                    details = twice.take(20).joinToString("\n") { group -> group.joinToString("  |  ") { id -> titles[id]?.let { "${it.displayTitle} (${it.folderPath})" } ?: "#${id.value}" } } +
+                        if (twice.size > 20) "\n... $n copies in all" else "",
+                ),
+            ))
+        }
+    }
+
+    override suspend fun repairPictures(): Int {
+        // Looked at again first: a file back since the last look is left as it is.
+        val gone = kotlinx.coroutines.withContext(Dispatchers.IO) { gonePictures.filterNot { java.io.File(it.path).exists() } }
+        val changed = ctx.data.libraryHealth.repairGone(gone)
+        check()
+        return changed
+    }
+
+    override suspend fun tidyPictures(): Int = ctx.data.libraryHealth.removeOrphanPictures().also { check() }
 
     // ----------------------------------------------------------------------------- diagnostics
 

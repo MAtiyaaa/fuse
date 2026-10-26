@@ -32,6 +32,7 @@ internal class BackgroundWork(
         SUGGESTIONS("Working out suggestions", holdsForGames = true, thinks = true),
         IDENTIFY("Reading discs to identify games", holdsForGames = true, thinks = false),
         SEARCH_INDEX("Building the search index", holdsForGames = false, thinks = false),
+        LIBRARY_HEALTH("Checking the library's pictures and files", holdsForGames = true, thinks = false),
     }
 
     /** How often a job has run and what it cost. */
