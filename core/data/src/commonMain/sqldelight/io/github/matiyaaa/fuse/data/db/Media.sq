@@ -108,7 +108,7 @@ UPDATE media SET focus_x = :focusX, focus_y = :focusY, zoom = :zoom WHERE id = :
 -- Visible (present, not removed) games with no media of :kind, optionally for one platform.
 gamesLackingKind:
 SELECT g.id FROM game g
-WHERE g.missing = 0 AND g.removed_at IS NULL
+WHERE +g.missing = 0 AND g.removed_at IS NULL
     AND (:platformId IS NULL OR g.platform_id = :platformId)
     AND NOT EXISTS (
         SELECT 1 FROM media m

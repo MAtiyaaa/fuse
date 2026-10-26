@@ -59,7 +59,7 @@ DELETE FROM game_genre WHERE game_id = ?;
 genreCounts:
 SELECT MIN(gg.genre COLLATE BINARY) AS genre, COUNT(*) AS game_count
 FROM game_genre gg JOIN game g ON g.id = gg.game_id
-WHERE g.missing = 0 AND g.removed_at IS NULL AND g.hidden = 0
+WHERE +g.missing = 0 AND g.removed_at IS NULL AND g.hidden = 0
 GROUP BY gg.genre
 ORDER BY gg.genre;
 

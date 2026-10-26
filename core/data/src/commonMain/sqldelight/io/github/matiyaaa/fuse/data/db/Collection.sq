@@ -21,7 +21,7 @@ CREATE INDEX collection_game_game ON collection_game(game_id);
 selectAllWithCount:
 SELECT c.id, c.name, c.kind, c.sort_order, c.created_at,
     (SELECT COUNT(*) FROM collection_game cg JOIN game g ON g.id = cg.game_id
-     WHERE cg.collection_id = c.id AND g.missing = 0 AND g.removed_at IS NULL AND g.hidden = 0) AS game_count
+     WHERE cg.collection_id = c.id AND +g.missing = 0 AND g.removed_at IS NULL AND g.hidden = 0) AS game_count
 FROM game_collection c
 ORDER BY c.sort_order, c.id;
 
@@ -29,7 +29,7 @@ ORDER BY c.sort_order, c.id;
 seriesLeads:
 SELECT c.id AS collection_id,
     (SELECT g.id FROM collection_game cg JOIN game g ON g.id = cg.game_id
-     WHERE cg.collection_id = c.id AND g.missing = 0 AND g.removed_at IS NULL AND g.hidden = 0
+     WHERE cg.collection_id = c.id AND +g.missing = 0 AND g.removed_at IS NULL AND g.hidden = 0
      ORDER BY g.release_year IS NULL, g.release_year, g.id LIMIT 1) AS game_id
 FROM game_collection c
 WHERE c.kind = 'SERIES';
@@ -67,7 +67,7 @@ SELECT collection_id FROM collection_game WHERE game_id = ?;
 gamesIn:
 SELECT game_summary.* FROM game_summary
 JOIN collection_game cg ON cg.game_id = game_summary.id
-WHERE cg.collection_id = ? AND game_summary.missing = 0 AND game_summary.removed_at IS NULL
+WHERE cg.collection_id = ? AND +game_summary.missing = 0 AND game_summary.removed_at IS NULL
     AND game_summary.hidden = 0
 ORDER BY cg.sort_order, game_summary.sort_title;
 

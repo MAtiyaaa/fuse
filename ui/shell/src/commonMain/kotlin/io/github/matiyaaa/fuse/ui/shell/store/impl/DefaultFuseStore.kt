@@ -144,6 +144,7 @@ internal class DefaultFuseStore private constructor(
     }
     override val library: DefaultLibraryOps
     override val health: DefaultHealthOps
+    override val observatory: io.github.matiyaaa.fuse.ui.shell.store.ObservatoryOps by lazy { DefaultObservatoryOps(ctx) { q -> library.search(q).first() } }
 
     /** Every transfer Fuse makes for the person, kept in Fuse's own data folder across restarts. */
     private val transferEngine = io.github.matiyaaa.fuse.transfer.newTransfers(

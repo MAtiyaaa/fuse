@@ -83,6 +83,9 @@ interface FuseStore {
     /** Backups of what the user made in Fuse, and restoring them. */
     val backup: BackupOps get() = BackupOps.None
 
+    /** Fuse Performance Observatory: background work's cost, and how quickly the library answers. */
+    val observatory: ObservatoryOps get() = ObservatoryOps.None
+
     /** The Store, where Fuse can install apps (Android); [AppStoreOps.None] elsewhere. */
     val appStore: AppStoreOps get() = AppStoreOps.None
 

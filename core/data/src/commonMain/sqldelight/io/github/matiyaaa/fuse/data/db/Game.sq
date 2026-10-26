@@ -64,6 +64,11 @@ CREATE INDEX game_last_played ON game(last_played_at);
 CREATE INDEX game_added ON game(added_at);
 CREATE INDEX game_search ON game(search_title COLLATE NOCASE);
 CREATE INDEX game_sort ON game(sort_title);
+-- For the few games whose files are gone (missing = 1). Every read of the games that are there writes
+-- "+missing = 0": nearly every game is, so this index can't narrow that read, but without statistics
+-- SQLite takes it as narrowing and picks it over the index that would (a system's games in order, the
+-- latest played first), and a series' first game read every game once per series. The "+" leaves
+-- the condition as it is and keeps it off this index.
 CREATE INDEX game_missing ON game(missing);
 CREATE INDEX game_ra ON game(ra_game_id);
 
@@ -106,7 +111,7 @@ SELECT id, platform_id, title_original, title_cleaned, title_custom, title_metad
 
 seriesInputs:
 SELECT id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned, metadata_json FROM game
-WHERE missing = 0 AND removed_at IS NULL;
+WHERE +missing = 0 AND removed_at IS NULL;
 
 -- What suggestions read: each game in the collection with its details and what was done with it.
 -- Hidden, missing and removed games, and apps played as games, are never suggested.
@@ -114,7 +119,7 @@ recommendationInputs:
 SELECT id, platform_id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned, favorite,
     last_played_at, tracked_seconds, imported_seconds, session_count, added_at, release_year, metadata_json
 FROM game
-WHERE missing = 0 AND removed_at IS NULL AND hidden = 0 AND folder_path <> 'app:';
+WHERE +missing = 0 AND removed_at IS NULL AND hidden = 0 AND folder_path <> 'app:';
 
 selectMetadata:
 SELECT metadata_json, title_metadata, title_custom, title_cleaned, title_original, use_cleaned FROM game WHERE id = ?;
@@ -151,14 +156,14 @@ UPDATE game SET platform_id = COALESCE(platform_override, :platformId), platform
 WHERE id = :id;
 
 markMissing:
-UPDATE game SET missing = 1, missing_since = :now, updated_at = :now WHERE id = :id AND missing = 0;
+UPDATE game SET missing = 1, missing_since = :now, updated_at = :now WHERE id = :id AND +missing = 0;
 
 markPresent:
 UPDATE game SET missing = 0, missing_since = NULL, updated_at = :now WHERE id = :id;
 
 markSourceMissing:
 UPDATE game SET missing = 1, missing_since = :now, updated_at = :now
-WHERE source_id = :sourceId AND missing = 0;
+WHERE source_id = :sourceId AND +missing = 0;
 
 -- User mutations ----------------------------------------------------------------------------------
 
@@ -252,7 +257,7 @@ FROM game WHERE id NOT IN (SELECT child_id FROM game_absorption);
 
 summariesByPlatform:
 SELECT * FROM game_summary
-WHERE platform_id = :platformId AND missing = 0 AND removed_at IS NULL
+WHERE platform_id = :platformId AND +missing = 0 AND removed_at IS NULL
     AND (hidden = 0 OR :includeHidden = 1)
 ORDER BY
     CASE WHEN :sort = 1 THEN last_played_at END DESC,
@@ -263,7 +268,7 @@ ORDER BY
 
 summariesAll:
 SELECT * FROM game_summary
-WHERE missing = 0 AND removed_at IS NULL AND (hidden = 0 OR :includeHidden = 1)
+WHERE +missing = 0 AND removed_at IS NULL AND (hidden = 0 OR :includeHidden = 1)
 ORDER BY
     CASE WHEN :sort = 1 THEN last_played_at END DESC,
     CASE WHEN :sort = 2 THEN added_at END DESC,
@@ -273,7 +278,7 @@ ORDER BY
 
 summariesByIds:
 SELECT * FROM game_summary
-WHERE id IN ? AND missing = 0 AND removed_at IS NULL AND hidden = 0
+WHERE id IN ? AND +missing = 0 AND removed_at IS NULL AND hidden = 0
 ORDER BY sort_title, id;
 
 summaryById:
@@ -281,49 +286,49 @@ SELECT * FROM game_summary WHERE id = ?;
 
 recentlyPlayed:
 SELECT * FROM game_summary
-WHERE last_played_at > 0 AND missing = 0 AND removed_at IS NULL AND hidden = 0
+WHERE last_played_at > 0 AND +missing = 0 AND removed_at IS NULL AND hidden = 0
 ORDER BY last_played_at DESC, id
 LIMIT :limit;
 
 playedSince:
 SELECT * FROM game_summary
-WHERE last_played_at >= :since AND missing = 0 AND removed_at IS NULL AND hidden = 0
+WHERE last_played_at >= :since AND +missing = 0 AND removed_at IS NULL AND hidden = 0
 ORDER BY last_played_at DESC, id
 LIMIT :limit;
 
 recentlyAdded:
 SELECT * FROM game_summary
-WHERE missing = 0 AND removed_at IS NULL AND hidden = 0
+WHERE +missing = 0 AND removed_at IS NULL AND hidden = 0
 ORDER BY added_at DESC, id DESC
 LIMIT :limit;
 
 favorites:
 SELECT * FROM game_summary
-WHERE favorite = 1 AND missing = 0 AND removed_at IS NULL AND hidden = 0
+WHERE favorite = 1 AND +missing = 0 AND removed_at IS NULL AND hidden = 0
 ORDER BY sort_title, id;
 
 pinned:
 SELECT * FROM game_summary
-WHERE pinned = 1 AND missing = 0 AND removed_at IS NULL AND hidden = 0
+WHERE pinned = 1 AND +missing = 0 AND removed_at IS NULL AND hidden = 0
 ORDER BY sort_title, id;
 
 mostPlayed:
 SELECT * FROM game_summary
-WHERE tracked_seconds + imported_seconds > 0 AND missing = 0 AND removed_at IS NULL AND hidden = 0
+WHERE tracked_seconds + imported_seconds > 0 AND +missing = 0 AND removed_at IS NULL AND hidden = 0
 ORDER BY tracked_seconds + imported_seconds DESC, id
 LIMIT :limit;
 
 unplayed:
 SELECT * FROM game_summary
 WHERE last_played_at IS NULL AND tracked_seconds = 0 AND imported_seconds = 0
-    AND missing = 0 AND removed_at IS NULL AND hidden = 0
+    AND +missing = 0 AND removed_at IS NULL AND hidden = 0
 ORDER BY sort_title, id
 LIMIT :limit;
 
 byGenre:
 SELECT * FROM game_summary
 WHERE id IN (SELECT game_id FROM game_genre WHERE genre = :genre)
-    AND missing = 0 AND removed_at IS NULL AND hidden = 0
+    AND +missing = 0 AND removed_at IS NULL AND hidden = 0
 ORDER BY sort_title, id;
 
 -- Installed apps played as games ('app:') come and go with the app, so they aren't listed.
@@ -331,7 +336,7 @@ missingGames:
 SELECT * FROM game_summary WHERE missing = 1 AND folder_path <> 'app:' ORDER BY sort_title, id;
 
 hiddenGames:
-SELECT * FROM game_summary WHERE hidden = 1 AND removed_at IS NULL AND missing = 0 ORDER BY sort_title, id;
+SELECT * FROM game_summary WHERE hidden = 1 AND removed_at IS NULL AND +missing = 0 ORDER BY sort_title, id;
 
 -- What the person removed, never what is now part of another game (an update or DLC with its game).
 removedGames:
@@ -342,7 +347,7 @@ ORDER BY sort_title, id;
 -- :contains = '%q%', :prefix = 'q%', :wordPrefix = '% q%'. Prefix matches rank first.
 search:
 SELECT * FROM game_summary
-WHERE search_title LIKE :contains AND missing = 0 AND removed_at IS NULL AND hidden = 0
+WHERE search_title LIKE :contains AND +missing = 0 AND removed_at IS NULL AND hidden = 0
 ORDER BY
     CASE WHEN search_title LIKE :prefix THEN 0 WHEN search_title LIKE :wordPrefix THEN 1 ELSE 2 END,
     sort_title, id
@@ -350,7 +355,7 @@ LIMIT :limit;
 
 platformCounts:
 SELECT platform_id, COUNT(*) AS game_count FROM game
-WHERE missing = 0 AND removed_at IS NULL AND hidden = 0
+WHERE +missing = 0 AND removed_at IS NULL AND hidden = 0
 GROUP BY platform_id;
 
 visibleCounts:
@@ -360,10 +365,10 @@ SELECT
     COALESCE(SUM(CASE WHEN last_played_at >= :playingSince THEN 1 ELSE 0 END), 0) AS playing,
     COALESCE(SUM(CASE WHEN last_played_at IS NULL AND tracked_seconds = 0 AND imported_seconds = 0 THEN 1 ELSE 0 END), 0) AS unplayed
 FROM game
-WHERE missing = 0 AND removed_at IS NULL AND hidden = 0;
+WHERE +missing = 0 AND removed_at IS NULL AND hidden = 0;
 
 countVisibleIn:
-SELECT COUNT(*) FROM game WHERE id IN ? AND missing = 0 AND removed_at IS NULL AND hidden = 0;
+SELECT COUNT(*) FROM game WHERE id IN ? AND +missing = 0 AND removed_at IS NULL AND hidden = 0;
 
 -- Relinking a library folder whose drive moved (0.2.0) ------------------------------------------
 -- :old and :new never end with '/'; a path is inside :old when it equals it or starts with :old/.
@@ -395,12 +400,12 @@ WHERE id = :id;
 
 selectEmulatorOverrides:
 SELECT id, emulator_override FROM game
-WHERE emulator_override IS NOT NULL AND removed_at IS NULL AND missing = 0;
+WHERE emulator_override IS NOT NULL AND removed_at IS NULL AND +missing = 0;
 
 -- Games whose files tie together through a playlist or sheet, for checking every part is there.
 selectPlaylistGames:
 SELECT id, launch_path FROM game
-WHERE removed_at IS NULL AND missing = 0 AND (disc_count > 1
+WHERE removed_at IS NULL AND +missing = 0 AND (disc_count > 1
     OR lower(launch_path) LIKE '%.cue' OR lower(launch_path) LIKE '%.m3u' OR lower(launch_path) LIKE '%.gdi')
 ORDER BY id
 LIMIT :limit;

@@ -42,7 +42,8 @@ import org.junit.Assume.assumeTrue
  *
  * - **scan**: the library found from nothing (cold);
  * - **start**: a new store over that database, as Fuse opening again: Home with every system and
- *   its rows, from the moment the store is made, then (as when the library is opened from Home) the
+ *   its rows, from the moment the store is made (with the work Home doesn't need held back until
+ *   then, as the apps hold it), then (as when the library is opened from Home) the
  *   whole library listed, every game with its art, from the moment it is asked for;
  * - **list**: the library listed again with the store warm, once and then 20 times (p50, p95), as
  *   opening the library again does;
@@ -139,6 +140,8 @@ class LibraryScale {
         val before = heapMb()
         val scope = newScope()
         phase("start", games)
+        // As the apps do: work the first screen doesn't need waits until Home is up (StartupGate).
+        io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.hold()
         val startMark = TimeSource.Monotonic.markNow()
         val store: FuseStore = createFuseStore(FakeServices(FuseData(DesktopDatabase.open(db)), cache), scope)
         val systems = SYSTEMS.size.coerceAtMost(games)
@@ -146,6 +149,7 @@ class LibraryScale {
             store.library.home.first { it.systems.size >= systems && it.continuePlaying.isNotEmpty() && it.favorites.isNotEmpty() }
             startMark.elapsedNow().inWholeMilliseconds
         }
+        io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.open()
         val libraryMark = TimeSource.Monotonic.markNow()
         val startListMs = withTimeout(START_LIMIT_MS) {
             val all = store.library.games(GameQuery()).first { it.size >= games }
@@ -185,6 +189,12 @@ class LibraryScale {
         store.library.search("island quest").first()
         val settledSearchMs = settledMark.elapsedNow().inWholeMicroseconds / 1000.0
         phase("end", games)
+        // What the background work cost while all that ran, from the Performance Observatory.
+        store.observatory.jobs.first { it.isNotEmpty() }.forEach { j ->
+            println("SCALE-JOB $games ${j.label}: ${j.runs} runs, last ${j.lastMs} ms, longest ${j.longestMs} ms, total ${j.totalMs} ms, held ${j.held}")
+        }
+        val probe = store.observatory.probe()
+        println("SCALE-PROBE $games $probe")
         val heldMb = (heapMb() - before).coerceAtLeast(0)
         scope.cancel()
         root.deleteRecursively()
