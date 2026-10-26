@@ -195,6 +195,20 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   computer you choose. A game or a whole system can stream from a computer instead of playing here,
   and Moonlight can stand on the Systems page as a system of its own (Settings, Addons, Streaming).
 - **Series** on Home and in Search wear their first game's art and logo.
+- **Fast at any size**: with 10,000 games, each with a cover, a logo and a background, Home is up in
+  well under a fifth of a second after Fuse starts, the library opens again at once, and a search answers in a
+  few hundredths of a second, its index kept ready in the background. Background work (series,
+  suggestions, the index, checks) runs two jobs at a time at most and waits while a game runs.
+- **New games appear by themselves**: library folders are followed as they change, so a game copied
+  in, renamed or deleted shows in the library seconds later, without a scan.
+- **Performance Observatory** (Settings, Display, and System health): Fuse's own frames, how quickly
+  the library answers, the picture caches, each background job's cost and the device's readings,
+  measured now, with a report to copy or save.
+- **Library Health** in System health: pictures whose files are gone, put right in one press (your
+  own pictures are never changed), pictures kept for games no longer in the library, games without
+  a cover, and the same file in two places, listed and never merged.
+- **How It Runs Here**: say in a game's options how it plays on this device (well, with problems, or
+  not at all); Fuse never calls a game playable because it started, and a report lists them all.
 - **Touch everywhere**: every screen answers a finger, and on computers' touch screens a swipe in
   from either edge goes back. On Linux and Windows a finger reaches Fuse as the mouse (Compose
   Desktop is never told a finger made it), so there a held drag scrolls lists, shelves, grids, boards
