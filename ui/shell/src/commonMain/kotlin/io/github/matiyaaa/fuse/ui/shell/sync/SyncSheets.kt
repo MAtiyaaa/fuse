@@ -240,13 +240,19 @@ internal fun SaveHistoryScreen(app: AppState, game: GameId, title: String) {
             when {
                 query == null && versions == null -> Center { Spinner(size = 24.dp, color = c.textMuted) }
                 versions == null -> Center { Spinner(size = 24.dp, color = c.textMuted) }
-                versions.isNullOrEmpty() && shareRow != null -> Column {
-                    MenuList(rows, page.sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT)
-                    EmptyState(
-                        FuseIcons.History,
-                        if (page.kind == SaveKind.SAVE) "No saves yet" else "No save states yet",
-                        message = "Play it with Fuse One on, and each time it closes its save is kept here, from every device.",
-                    )
+                // The game's own rows, only as tall as they are, and under them, in the room left,
+                // that there is nothing yet (it gives up its parts on a short screen rather than
+                // spilling over the panel's edge).
+                versions.isNullOrEmpty() && shareRow != null -> Column(Modifier.fillMaxSize()) {
+                    MenuList(rows, page.sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT, fill = false)
+                    Box(Modifier.weight(1f).fillMaxWidth().padding(Space.m), contentAlignment = Alignment.Center) {
+                        EmptyState(
+                            FuseIcons.History,
+                            if (page.kind == SaveKind.SAVE) "No saves yet" else "No save states yet",
+                            message = "Play it with Fuse One on, and each time it closes its save is kept here, from every device.",
+                            compact = true,
+                        )
+                    }
                 }
                 rows.isEmpty() -> EmptyState(
                     FuseIcons.History,

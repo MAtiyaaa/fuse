@@ -398,13 +398,16 @@ internal fun AuditDriver.syncScreens() {
         waitFor("Save History")
         settle(1_000)
         shoot("a game's saves through time, from every device")
-        tap(PadButton.DPAD_DOWN)
+        // Past the game's own rows (one save together, save sync, find where it saves) to its first version.
+        tap(PadButton.DPAD_DOWN, 4)
         tap(PadButton.A)
         waitFor("Use This Save")
         shoot("a version's options")
         tap(PadButton.B)
         tap(PadButton.R1)
-        settle(600)
+        settle(1_200)
+        // The game's rows, and under them in the room left that there are none (whole, or only its
+        // words on a short screen: never a disc cut off at the panel's foot).
         shoot("no save states yet")
     }
 

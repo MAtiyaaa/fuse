@@ -1,6 +1,6 @@
 # Fuse 0.4.4.1 - The Tune-Up Update
 
-A Fuse One host whose folder another program took over says so, and starts by itself once it is given back.
+A Fuse One host whose folder another program took over says so, and starts by itself once it is given back; and no more half circles under short lists.
 
 ## New
 
@@ -23,5 +23,8 @@ A Fuse One host whose folder another program took over says so, and starts by it
   until someone looked: it now waits and explains instead.
 - While a host could no longer write to its folder, devices saw "Something other than the host
   answered (500)". They now see what is wrong with the host's folder and how to fix it.
+- Under a short list, such as a game's Save History before anything is kept there, an empty
+  page's picture came out as a dark half circle cut off at the bottom of the panel. An empty page
+  now shows only what fits in its room: the picture first gives way, then the words.
 - The host's log named the downloaded file after an update ("installed Fuse-0.4.4-x86_64.AppImage
   to ..."), not the file it replaced. It now names the file Fuse runs from.
