@@ -59,6 +59,9 @@ keeps your own word on how each game runs.
   read every game once per series. (25,000 games: 2.5 s, now 0.22 s.)
 - Pausing a transfer and resuming it straight away could race the download still closing its
   partial file. A pause now waits for the transfer to stop, and keeps count of what arrived.
+- A setting changed at the very moment Fuse One saved its own settings (as it does when Fuse
+  starts) could go back to what it was. Both now change the settings in one step, and the newest
+  choice is always the one saved.
 
 ## Performance
 
