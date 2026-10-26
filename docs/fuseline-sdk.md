@@ -6,10 +6,10 @@ This page is how to use it in your own app. How it works inside is [docs/fuselin
 
 ## Version
 
-**Fuseline 4.1.0**, released with Fuse 0.4.2. Fuseline has its own version (`fuseline.version` in
+**Fuseline 4.4.0**, released with Fuse 0.4.4.2. Fuseline has its own version (`fuseline.version` in
 `gradle.properties`), separate from Fuse's, and follows semantic versioning:
 
-- a patch release (4.1.x) fixes behaviour and never changes an API;
+- a patch release (4.4.x) fixes behaviour and never changes an API;
 - a minor release (4.x) adds APIs and may deprecate some, never removing them;
 - a major release (5) may remove what was deprecated, with the migration written here.
 
@@ -48,7 +48,7 @@ dependencyResolutionManagement {
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.matiyaaa.fuseline:fuseline:4.1.0")
+            implementation("io.github.matiyaaa.fuseline:fuseline:4.4.0")
         }
     }
 }

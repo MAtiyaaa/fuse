@@ -62,5 +62,5 @@ tasks.withType<Test>().configureEach {
     // The benchmark keeps thousands of values per engine alive at once.
     maxHeapSize = "2g"
     outputs.upToDateWhen { false }
-    providers.gradleProperty("fuse.jfr").orNull?.let { jvmArgs("-XX:StartFlightRecording=filename=$it,settings=profile") }
+    providers.gradleProperty("fuse.jfr").orNull?.let { jvmArgs("-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:StartFlightRecording=filename=$it,settings=profile") }
 }

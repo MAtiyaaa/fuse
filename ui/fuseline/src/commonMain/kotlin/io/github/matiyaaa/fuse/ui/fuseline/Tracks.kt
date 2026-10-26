@@ -182,14 +182,16 @@ internal class TweenTrack(tween: Tween, start: Float, target: Float, velocity: F
     /** Works out the curve's height and slope at [playNanos] (only where the formula needs them). */
     fun shape(playNanos: Long) {
         if (playNanos < delay || playNanos >= duration || length == 0L) return
-        val f = fraction(playNanos)
         val c = curve
         if (c is CubicCurve) {
-            // The same rounding as valueAt and velocityAt, so sampling is exactly the same function of time.
-            val t = c.solveShared(f.toDouble())
-            shapeY = c.y(t).toFloat()
-            shapeD = c.slope(t).toFloat()
+            // Fuseline 4.4: the curve keeps its whole answer for the moment (share of time, height
+            // and slope), so every tween on it at that moment reads all three: one division, one
+            // solve and one slope a frame for all of them, the same numbers each would work out.
+            val s = c.shapeAt(playNanos - delay, length)
+            shapeY = s.y
+            shapeD = s.slope
         } else {
+            val f = fraction(playNanos)
             shapeY = c.transform(f)
             shapeD = c.derivative(f)
         }
@@ -327,7 +329,9 @@ internal class SpringTrack(
         val ax = abs(x0)
         val th = threshold.toDouble()
         restBound = if (kn.a > 0.0 && ax > th * (1.0 + 1e-6)) {
-            val seconds = min(ln(ax / th) / kn.a, MAX_SPRING_SECONDS)
+            // Fuseline 4.4: a bound on the logarithm from below, within 0.06 of it (lnBelow): the
+            // bound only has to be early, and a spring retargeted every frame then pays no logarithm.
+            val seconds = min(lnBelow(ax / th) / kn.a, MAX_SPRING_SECONDS)
             ((seconds * (1.0 - 1e-6)) * NANOS_PER_SECOND).toLong() - 1_000L
         } else 0L
     }
@@ -335,25 +339,27 @@ internal class SpringTrack(
     /** Fills [ec] and [es] for [playNanos]: shared with the spring's other users, stepped on, or solved. */
     private fun solveAt(playNanos: Long) {
         if (playNanos == lastPlay) return
-        val t = playNanos / NANOS_PER_SECOND
         val kn = kernel
-        if (kn.hasMemo(t)) {
+        if (kn.hasMemo(playNanos)) {
             if (Kernels.counting) Kernels.reused++
             ec = kn.memoEc
             es = kn.memoEs
             steps = 0
-        } else if (lastPlay >= 0L && playNanos > lastPlay && steps < RESOLVE && freqAngle(kn, t) >= SERIES) {
-            kn.step(ec, es, t, playNanos - lastPlay)
-            if (Kernels.counting) Kernels.stepped++
-            ec = kn.stepEc
-            es = kn.stepEs
-            steps++
-            kn.remember(t, ec, es)
         } else {
-            kn.solve(t)
-            ec = kn.memoEc
-            es = kn.memoEs
-            steps = 0
+            val t = playNanos / NANOS_PER_SECOND
+            if (lastPlay >= 0L && playNanos > lastPlay && steps < RESOLVE && freqAngle(kn, t) >= SERIES) {
+                kn.step(ec, es, t, playNanos - lastPlay)
+                if (Kernels.counting) Kernels.stepped++
+                ec = kn.stepEc
+                es = kn.stepEs
+                steps++
+                kn.remember(playNanos, ec, es)
+            } else {
+                kn.solve(playNanos)
+                ec = kn.memoEc
+                es = kn.memoEs
+                steps = 0
+            }
         }
         lastPlay = playNanos
     }
@@ -512,6 +518,20 @@ internal class SpringTrack(
 }
 
 /**
+ * The natural logarithm of [y] (1 or more, finite) from below, within 0.06 of it, without computing
+ * one: y = m·2^e with m in [1, 2), and ln m ≥ (m − 1)·ln 2 because the logarithm is concave (it lies
+ * above its chord from 1 to 2). The gap is largest at m = 1/ln 2, where it is 0.0597.
+ */
+internal fun lnBelow(y: Double): Double {
+    val bits = y.toRawBits()
+    val exponent = ((bits ushr 52) and 0x7ffL).toInt() - 1023
+    val mantissa = Double.fromBits((bits and 0x000fffffffffffffL) or 0x3ff0000000000000L)
+    return (exponent + (mantissa - 1.0)) * LN_2
+}
+
+private const val LN_2 = 0.6931471805599453
+
+/**
  * [playNanos] plus [seconds], a little early (never late) and never past the end of time: how a
  * bound in seconds becomes the play time before which nothing can happen.
  */
@@ -534,14 +554,27 @@ internal class DecayTrack(friction: Float, start: Float, velocity: Float, thresh
 
     override val durationNanos: Long = (decaySeconds(velocity, friction, threshold) * NANOS_PER_SECOND).toLong()
 
+    /**
+     * Fuseline 4.4: e^(−kt) belongs to the friction and the moment, not the value: every decay on the
+     * same friction at the same moment (a list's items flung together) reads one exponential, and a
+     * track asking again for the moment it last sampled (its event horizon) reads its own.
+     */
+    private fun fade(playNanos: Long): Double {
+        val m = DecayMoment.last
+        if (m.play == playNanos && m.k == k) return m.e
+        val e = exp(-k * playNanos / NANOS_PER_SECOND)
+        DecayMoment.last = DecayMoment(k, playNanos, e)
+        return e
+    }
+
     override fun valueAt(playNanos: Long): Float {
         if (playNanos >= durationNanos) return target
-        return (start + reach * (1.0 - exp(-k * playNanos / NANOS_PER_SECOND))).toFloat()
+        return (start + reach * (1.0 - fade(playNanos))).toFloat()
     }
 
     override fun velocityAt(playNanos: Long): Float {
         if (playNanos > durationNanos) return 0f
-        return (v0 * exp(-k * playNanos / NANOS_PER_SECOND)).toFloat()
+        return (v0 * fade(playNanos)).toFloat()
     }
 
     override fun sample(playNanos: Long) {
@@ -550,7 +583,7 @@ internal class DecayTrack(friction: Float, start: Float, velocity: Float, thresh
             sampledVelocity = if (playNanos == durationNanos) velocityAt(playNanos) else 0f
             return
         }
-        val e = exp(-k * playNanos / NANOS_PER_SECOND)
+        val e = fade(playNanos)
         sampledValue = (start + reach * (1.0 - e)).toFloat()
         sampledVelocity = (v0 * e).toFloat()
     }
@@ -559,11 +592,21 @@ internal class DecayTrack(friction: Float, start: Float, velocity: Float, thresh
     override fun calmUntil(playNanos: Long, budget: Double): Long {
         if (budget < 0.0) return playNanos
         if (playNanos >= durationNanos) return Long.MAX_VALUE
-        val speed = abs(v0) * exp(-k * playNanos / NANOS_PER_SECOND)
+        val speed = abs(v0) * fade(playNanos)
         if (speed == 0.0) return Long.MAX_VALUE
         val share = budget * k / speed
         if (share >= 1.0) return Long.MAX_VALUE
         return later(playNanos, -ln(1.0 - share) / k)
+    }
+}
+
+/**
+ * The last e^(−kt) worked out, for friction k at a play time: one object, replaced whole, so a read
+ * on another thread sees a moment and its answer together or not at all.
+ */
+internal class DecayMoment(val k: Double, val play: Long, val e: Double) {
+    companion object {
+        var last = DecayMoment(Double.NaN, Long.MIN_VALUE, 0.0)
     }
 }
 

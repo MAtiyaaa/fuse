@@ -196,7 +196,7 @@
     const bright = list.map(isBright);
     const counts = { all: list.length, dark: bright.filter((b) => !b).length, bright: bright.filter(Boolean).length };
     const total = $("[data-theme-count]");
-    if (total) total.textContent = String(list.length);
+    if (total) countTo(total, list.length);
     cards.forEach((c, i) => { c.dataset.tone = bright[i] ? "bright" : "dark"; });
     if (!seg) return;
     for (const [k, v] of Object.entries(counts)) { const b = $(`[data-count="${k}"]`, seg); if (b) b.textContent = String(v); }
@@ -612,6 +612,32 @@
     });
   }
 
+  /**
+   * Shows [n] in [el], ticking up from nought on the entrance curve the first time it comes into
+   * view (motion-anything's count-up recipe, Apache-2.0, https://github.com/nexu-io/motion-anything):
+   * at once under reduced motion, without an observer, or once it has counted.
+   */
+  const COUNT_MS = 700;
+  function countTo(el, n) {
+    const end = String(n);
+    if (reduced || !("IntersectionObserver" in window) || el.dataset.counted) { el.textContent = end; return; }
+    el.dataset.counted = "1";
+    el.textContent = "0";
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      io.disconnect();
+      let start = null;
+      const step = (t) => {
+        if (start === null) start = t;
+        const p = Math.min((t - start) / COUNT_MS, 1);
+        el.textContent = p < 1 ? String(Math.round(n * (1 - Math.pow(1 - p, 3)))) : end;
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }, { threshold: 0.5 });
+    io.observe(el);
+  }
+
   function revealShelves() {
     if (!("IntersectionObserver" in window)) return;
     const io = new IntersectionObserver((entries) => {
@@ -661,7 +687,7 @@
     const off = $("[data-viewer-off]");
     if (off) off.hidden = true;
     const total = $("[data-update-count]");
-    if (total) total.textContent = String(releaseNotes.length);
+    if (total) countTo(total, releaseNotes.length);
 
     const rail = $("[data-rail]");
     releaseNotes.forEach((rel, i) => {

@@ -5,8 +5,9 @@ logo that carries the spark. Every animation in Fuse runs on it, from a focus li
 opening sequence.
 
 It lives in `ui/fuseline` (package `io.github.matiyaaa.fuse.ui.fuseline`). Fuse 0.3.7 brought
-**Fuseline 3**, Fuse 0.3.7.5 **Fuseline 3.1** ([what 3.1 adds](#fuseline-31)), and Fuse 0.4.0
-brings **Fuseline 4** ([what 4 changes](#fuseline-4)). All are built around two rules:
+**Fuseline 3**, Fuse 0.3.7.5 **Fuseline 3.1** ([what 3.1 adds](#fuseline-31)), Fuse 0.4.0
+**Fuseline 4** ([what 4 changes](#fuseline-4)), and Fuse 0.4.4.2 brings **Fuseline 4.4** ([what
+4.4 takes away](#fuseline-44)). All are built around two rules:
 
 - **Motion never breaks continuity.** Whatever happens to a moving thing (a new target, a finger
   catching it, a reversal, a seek, a new motion, the window changing size), it carries on from the
@@ -296,6 +297,46 @@ frame, and a thousand snapshot observers for Compose to look up.
   a position, an eighth of a pixel), never more; positions, velocities, targets and finishes agree
   as they did.
 
+## Fuseline 4.4
+
+Fuseline 4.4 keeps every motion of Fuseline 4.2, to the frame, and takes away work nobody sees:
+writes that tell no reader anything, frames that only find a value still unread, and arithmetic
+that many values share.
+
+- **Retargeted while nobody reads it, it stays at rest.** A value resting unread (Fuseline 4's
+  parking) that is given a new target used to be brought into the next frame, out of the frame
+  driver's heap and back in, only for that frame to find it still unread. Now it stays at rest,
+  and only has to come up no later than its new motion could end (`FrameDriver.Move.retime`). A
+  list of values following the selection while it is scrolled away costs its retargets and
+  nothing more.
+- **No write for nobody.** A value nobody has ever read, or one whose readers were told by a
+  write that is always applied (made outside any snapshot of its own) and haven't read it since,
+  isn't written again: dragged, snapped, landing or moved again while nobody draws it, only its
+  reading moves on, and its next reader catches up with it as a parked value's does. A new value
+  starts that way, so one moved before anything draws it rests until its first read.
+- **Who moves it, without a write.** `owner` is kept in a plain field that Fuseline's own checks
+  read (every retarget and every drag event asks), and its readers watch a state that is only
+  written once something has read it: a value nobody asks who moves it (most of them) makes no
+  write when a move starts or ends. A new value's target is the same: nothing is written for it
+  until something reads it.
+- **Shared answers.** A moving colour's 8-bit channels come from a table of where each code
+  begins instead of sRGB's transfer curve (three powers for every colour read), the very same
+  colour to the bit (`SrgbCodes`, checked at every code and over a million values). A cubic curve
+  keeps its whole answer for a moment (the share of time, the height and the slope), so the
+  tweens on it at that moment do one division and one solve between them. Decays on the same
+  friction at the same moment share one exponential. A spring kernel's shared solution is kept by
+  play time, so a value reading another's skips a division, and the earliest moment a spring
+  could be at rest is bounded without a logarithm (`lnBelow`: always early, by at most 0.06 of
+  the logarithm).
+- **A cancelled move doesn't solve its end.** A move cancelled from outside asks whether it had
+  finished; short of its cheap lower bound it can't have, so the Newton solve for its exact end
+  is never made for it.
+- **Exactly the same motion.** Fuseline 4.2 is kept in the tests exactly as it shipped (package
+  `v42`). `Fuseline4EquivalenceTest` runs 4.4 against 3.1 as before (20,000 random histories pass):
+  a value that rested unread or had a write left out gets the room a woken value always had (a
+  reader within a quarter of a threshold of what 3.1 would show), and positions, velocities,
+  targets, owners, progress and finishes agree as they did.
+
 ## Debugging
 
 - `MotionTrace.enabled = true` records starts, retargets, seeks, gesture takeovers, releases,
@@ -316,11 +357,12 @@ own tracks. It is the only file in Fuse allowed to import `androidx.compose.anim
 ## Speed
 
 Every Fuseline is measured against every Fuseline before it and against Compose, in time and in
-memory. Fuseline 3.1, 3, 2 and 1 are kept in the tests exactly as they shipped (packages
-`...fuseline.v31`, `...fuseline.v3`, `...fuseline.v2` and `...fuseline.v1`). `MotionBenchmark`
-(values, scale, retargeting, gestures, decay, transitions, timelines, scheduling, refresh rates and
-irregular frames, sustained work) and `UiMotionBenchmark` (whole interface paths, composition,
-layout and drawing included) measure all six engines on the same work.
+memory. Fuseline 4.2, 4, 3.1, 3, 2 and 1 are kept in the tests exactly as they shipped (packages
+`...fuseline.v42`, `...fuseline.v4`, `...fuseline.v31`, `...fuseline.v3`, `...fuseline.v2` and
+`...fuseline.v1`). `MotionBenchmark` (values, scale, retargeting, gestures, decay, transitions,
+timelines, scheduling, refresh rates and irregular frames, sustained work) measures all eight
+engines on the same work, and `UiMotionBenchmark` (whole interface paths, composition, layout and
+drawing included) every one that has the parts a path needs.
 
 Every workload is measured three ways, because what Fuseline 4 saves depends on who is looking:
 
@@ -862,7 +904,8 @@ checked by `FuselineAndroidTest` in `app/android`:
   at every damping ratio, velocity handoffs between every pair of motions (`CurveMathTest`,
   `SpringSolverTest`, `HandoffTest`, `MotionMathTest`).
 - **Values**: every operation, ownership, gestures, decay, seek, retarget, fuzzed sequences of all
-  of them never jumping (`FuselineValueTest`, `RetargetTest`, `ConverterTest`).
+  of them never jumping (`FuselineValueTest`, `RetargetTest`, `ConverterTest`), and colours read
+  through Fuseline 4.4's table the same to the bit as through sRGB's curve (`SrgbCodesTest`).
 - **Driver**: 1 to 1,000 values, true idle, no per-value allocation, refresh rates from 30 to 240 Hz
   (`FrameDriverTest`).
 - **Decoration** (3.1): a paced loop makes every update it needs with about one wake each, and holds

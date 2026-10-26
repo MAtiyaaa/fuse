@@ -236,6 +236,57 @@ function btn(label, opts = {}) {
   return b;
 }
 
+// ---- Touch motion, adapted from motion-anything's ripple-press and like-burst recipes
+// (Apache-2.0, https://github.com/nexu-io/motion-anything): transform and opacity only, nothing
+// under reduced motion, and the one celebratory moment is a favourite being added, never on load.
+
+/** What a press ripples, and where: a tile ripples on its cover; everything else on itself. */
+const RIPPLES = '.btn, .tile, button.row, .menu-item, .cap-tile, .cand, .art-row, .playing';
+
+// A soft wave from where the finger came down, clipped by a layer of its own (the pressed element
+// keeps its overflow, shadow and focus ring as they are), gone when it has spread.
+document.addEventListener('pointerdown', (e) => {
+  if (reducedMotion.matches || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  const el = e.target.closest && e.target.closest(RIPPLES);
+  if (!el || el.disabled) return;
+  const on = el.classList.contains('tile') ? el.querySelector('.tile-art > .art') || el : el;
+  const r = on.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  if (getComputedStyle(on).position === 'static') on.style.position = 'relative';
+  const host = h('span.ripple-host', { 'aria-hidden': 'true' });
+  const size = Math.hypot(r.width, r.height) * 2;
+  const wave = h('span.ripple-wave');
+  wave.style.width = wave.style.height = size + 'px';
+  wave.style.left = (e.clientX - r.left - size / 2) + 'px';
+  wave.style.top = (e.clientY - r.top - size / 2) + 'px';
+  host.appendChild(wave);
+  on.appendChild(host);
+  wave.addEventListener('animationend', () => host.remove(), { once: true });
+}, { passive: true });
+
+/** A small burst of accent dots from [x], [y] (page coordinates): a favourite added. */
+function burst(x, y) {
+  if (reducedMotion.matches) return;
+  const layer = h('span.burst', { 'aria-hidden': 'true' });
+  layer.style.left = x + 'px';
+  layer.style.top = y + 'px';
+  const DOTS = 10;
+  for (let i = 0; i < DOTS; i++) {
+    const a = (i / DOTS) * Math.PI * 2 + Math.random() * 0.35;
+    const reach = 26 + Math.random() * 18;
+    const dot = h('span.burst-dot');
+    dot.style.setProperty('--bx', Math.cos(a) * reach + 'px');
+    dot.style.setProperty('--by', Math.sin(a) * reach + 'px');
+    if (i % 3 === 0) dot.classList.add('is-soft');
+    layer.appendChild(dot);
+  }
+  document.body.appendChild(layer);
+  setTimeout(() => layer.remove(), 760);
+}
+
+/** The heart of the favourite just added pops once, on its next drawing. */
+let favPop = false;
+
 function setBusy(b, busy) {
   if (!b) return;
   if (busy) {
@@ -2740,13 +2791,23 @@ function gameSections(d) {
         if (r && r.error) throw new Error(r.error);
         d.favorite = !d.favorite;
         toast(d.favorite ? 'Added to favourites' : 'Taken out of favourites', 'success');
+        // Added (never taken out): the heart pops as it is drawn again, and a burst leaves it,
+        // measured on the button just drawn (the one pressed is gone by then).
+        if (d.favorite) favPop = true;
         renderGame();
+        const heart = d.favorite && document.querySelector('.btn.fav-pop .i');
+        if (heart) {
+          const at = heart.getBoundingClientRect();
+          burst(at.left + at.width / 2 + window.scrollX, at.top + at.height / 2 + window.scrollY);
+        }
       } catch (e) {
         toast(e.message || "Couldn't reach the device", 'error');
         setBusy(b, false);
       }
     },
   });
+  if (favPop && d.favorite) fav.classList.add('fav-pop');
+  favPop = false;
   out.push(h('div.game-actions', show, fav));
 
   const chips = [];

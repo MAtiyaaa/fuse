@@ -185,22 +185,26 @@ class CubicCurve(val x1: Float, val y1: Float, val x2: Float, val y2: Float) : C
         return y(solve(fraction.toDouble())).toFloat()
     }
 
-    // Fuseline 4: the last time solved, shared by every tween on this curve that asks for the same
-    // moment in the same frame (tiles revealed together, a page's values moving as one). Used only by
-    // the frame driver's own tracks, on the main thread.
-    private var memoX = Double.NaN
-    private var memoT = 0.0
+    // Fuseline 4: the last moment solved, shared by every tween on this curve that asks for it in the
+    // same frame (tiles revealed together, a page's values moving as one). Fuseline 4.4 keeps the
+    // whole answer, the share of time it came from and the curve's height and slope there, in one
+    // object replaced whole (a read on another thread sees all of one moment or none of it).
+    private var memo = CurveMoment(-1L, 0L, 0f, 0f)
 
-    /** [solve], answered from the curve's last solve when it was for the same [x]. */
-    internal fun solveShared(x: Double): Double {
-        if (x == memoX) {
+    /**
+     * The curve's height and slope after [elapsed] of a tween's [length] (both in nanoseconds, the
+     * tween under way and past its delay), rounded exactly as a tween's own share of time is: from
+     * the curve's last answer when it was for the same moment.
+     */
+    internal fun shapeAt(elapsed: Long, length: Long): CurveMoment {
+        val m = memo
+        if (m.elapsed == elapsed && m.length == length) {
             if (Kernels.counting) Kernels.curveReused++
-            return memoT
+            return m
         }
-        val t = solve(x)
-        memoX = x
-        memoT = t
-        return t
+        val f = (elapsed.toDouble() / length).coerceIn(0.0, 1.0).toFloat()
+        val t = solve(f.toDouble())
+        return CurveMoment(elapsed, length, y(t).toFloat(), slope(t).toFloat()).also { memo = it }
     }
 
     /**
@@ -310,6 +314,9 @@ class CubicCurve(val x1: Float, val y1: Float, val x2: Float, val y2: Float) : C
         const val MAX_SLOPE = 1e4
     }
 }
+
+/** One moment of a cubic curve as a tween reads it: how far into which length, and the height and slope there. */
+internal class CurveMoment(val elapsed: Long, val length: Long, val y: Float, val slope: Float)
 
 /** Fuse's curves. Every movement in Fuse uses one of these. */
 object Curves {

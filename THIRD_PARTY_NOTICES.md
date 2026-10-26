@@ -88,6 +88,12 @@ Tux, in `site/assets/platforms/`), released under CC0 1.0. The marks belong to t
 label which download is for which system; the Windows mark there is four plain squares drawn for
 Fuse.
 
+The website's counts that tick up (`countTo` in [`site/assets/site.js`](site/assets/site.js)) and
+Phone Link's touch motion (the ripple and favourite burst in `ui/link/src/web/app.js` and
+`app.css`) are adapted from [motion-anything](https://github.com/nexu-io/motion-anything)'s
+count-up, ripple-press and like-burst recipes, released under Apache-2.0; each adapted piece says
+so where its code begins.
+
 Everything else visible or audible in Fuse (the Fuse mark, controller and status glyphs, theme
 backgrounds, generated placeholder art and interface sounds) is original work drawn or synthesised in
 code and is part of Fuse under GPL-3.0-or-later. The menu music is the one exception: it is
@@ -150,7 +156,7 @@ library.
 
 | Licence | Where | Conclusion |
 |---|---|---|
-| Apache-2.0 | aircompressor, Apache Commons Compress (with Commons IO, Lang and Codec), SnakeYAML Engine, Kotlin, kotlinx, Compose Multiplatform, JetBrains Lifecycle, SQLDelight, Coil, Ktor, Typesafe Config, OkHttp, Okio, AndroidX, Media3, JavaCPP, SQLite JDBC, Skiko, libGDX Jamepad and gdx-jnigen-loader (Windows and macOS), Gradle | Compatible. The Free Software Foundation lists Apache-2.0 as compatible with GPL version 3, so Apache-2.0 code can be combined into a work distributed under GPL-3.0-or-later. Apache-2.0 asks redistributors to pass on its licence text and any NOTICE files |
+| Apache-2.0 | motion-anything (adapted website and Phone Link motion), aircompressor, Apache Commons Compress (with Commons IO, Lang and Codec), SnakeYAML Engine, Kotlin, kotlinx, Compose Multiplatform, JetBrains Lifecycle, SQLDelight, Coil, Ktor, Typesafe Config, OkHttp, Okio, AndroidX, Media3, JavaCPP, SQLite JDBC, Skiko, libGDX Jamepad and gdx-jnigen-loader (Windows and macOS), Gradle | Compatible. The Free Software Foundation lists Apache-2.0 as compatible with GPL version 3, so Apache-2.0 code can be combined into a work distributed under GPL-3.0-or-later. Apache-2.0 asks redistributors to pass on its licence text and any NOTICE files |
 | MIT | QR Code generator library, SLF4J API, Feather-derived Lucide icons, ES-DE (facts), rcheevos (reimplemented rules), Cartridge (approach) | Compatible. Permissive; the notices are kept in `files/licenses/LICENSE-qrcodegen.txt`, `files/licenses/LICENSE-slf4j.txt`, `files/licenses/LICENSE-lucide.txt` and `files/licenses/LICENSE-cartridge.txt` and credited above |
 | ISC | Lucide icons | Compatible. Permissive; the copyright and permission notice is kept in `files/licenses/LICENSE-lucide.txt` |
 | BSD-3-Clause | Skia inside Skiko (desktop), Concentus (desktop) | Compatible. Permissive; Concentus's notice is kept in `files/licenses/LICENSE-concentus.txt` |

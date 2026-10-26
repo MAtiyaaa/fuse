@@ -113,10 +113,58 @@ object ColorConverter : Converter<Color> {
         val l3 = l * l * l
         val m3 = m * m * m
         val s3 = s * s * s
-        val red = Oklab.encoded((4.0767416621f * l3 - 3.3077115913f * m3 + 0.2309699292f * s3).coerceIn(0f, 1f))
-        val green = Oklab.encoded((-1.2684380046f * l3 + 2.6097574011f * m3 - 0.3413193965f * s3).coerceIn(0f, 1f))
-        val blue = Oklab.encoded((-0.0041960863f * l3 - 0.7034186147f * m3 + 1.7076147010f * s3).coerceIn(0f, 1f))
-        return Color(red.coerceIn(0f, 1f), green.coerceIn(0f, 1f), blue.coerceIn(0f, 1f), values[3].coerceIn(0f, 1f))
+        // Fuseline 4.4: each channel's 8-bit sRGB code straight from its linear value, without the
+        // transfer curve's power, packed as Compose packs an sRGB colour: the very colour the curve
+        // and Compose's own packing make, to the bit (SrgbCodes).
+        val red = SrgbCodes.code((4.0767416621f * l3 - 3.3077115913f * m3 + 0.2309699292f * s3).coerceIn(0f, 1f))
+        val green = SrgbCodes.code((-1.2684380046f * l3 + 2.6097574011f * m3 - 0.3413193965f * s3).coerceIn(0f, 1f))
+        val blue = SrgbCodes.code((-0.0041960863f * l3 - 0.7034186147f * m3 + 1.7076147010f * s3).coerceIn(0f, 1f))
+        val alpha = (values[3].coerceIn(0f, 1f) * 255f + 0.5f).toInt()
+        return Color((alpha shl 24) or (red shl 16) or (green shl 8) or blue)
+    }
+}
+
+/**
+ * The 8-bit sRGB code a linear channel becomes in a colour: what encoding it with sRGB's transfer
+ * curve (a power of 1/2.4) and packing it into a Compose [Color] makes, without the power. The 255
+ * linear values where the code steps up are found once, by searching floats with that very
+ * computation, so the code is the same to the bit; a linear value is then placed among them from a
+ * 4096-step index and a step or two. Reading a moving colour costs no power at all.
+ */
+internal object SrgbCodes {
+    private const val BUCKETS = 4096
+
+    /** The smallest linear value whose code is k, for k from 1 to 255 (step[0] is 0). */
+    @kotlin.jvm.JvmField
+    val step = FloatArray(256)
+
+    /** The code at the start of each of [BUCKETS] equal stretches of linear values, and at 1. */
+    @kotlin.jvm.JvmField
+    val start = IntArray(BUCKETS + 1)
+
+    /** The code [c] (0 to 1) becomes, the slow way: the transfer curve, then Compose's packing. */
+    internal fun exact(c: Float): Int =
+        ((Color(Oklab.encoded(c).coerceIn(0f, 1f), 0f, 0f, 1f).value shr 48).toInt() and 0xFF)
+
+    init {
+        for (k in 1..255) {
+            // Non-negative floats order as their bits do: the first float in [0, 1] whose code is k.
+            var lo = 0
+            var hi = 1f.toRawBits()
+            while (lo < hi) {
+                val mid = (lo + hi) ushr 1
+                if (exact(Float.fromBits(mid)) >= k) hi = mid else lo = mid + 1
+            }
+            step[k] = Float.fromBits(lo)
+        }
+        for (i in 0..BUCKETS) start[i] = exact(i.toFloat() / BUCKETS)
+    }
+
+    /** The code of linear [c], already within 0 to 1. */
+    fun code(c: Float): Int {
+        var k = start[(c * BUCKETS).toInt()]
+        while (k < 255 && c >= step[k + 1]) k++
+        return k
     }
 }
 
