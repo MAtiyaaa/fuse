@@ -66,6 +66,47 @@ object HeadlessHost {
         }
     }
 
+    /**
+     * Returns once the host can use [hostDir] ([HostDataCheck]), at once when nothing is wrong.
+     * Until then it says what is wrong ([log]: at first, when it changes, and every [remindMs]),
+     * answers the household's devices with it on [port], and looks again every [pauseMs]: a folder
+     * another program took over is waited on, not failed on at every start a few seconds apart, and
+     * the host starts by itself once the folder is given back.
+     */
+    fun waitForData(
+        hostDir: File,
+        port: Int,
+        log: (String) -> Unit,
+        check: (File) -> String? = HostDataCheck::problem,
+        pauseMs: Long = DATA_RECHECK_MS,
+        remindMs: Long = DATA_REMIND_MS,
+        clock: () -> Long = System::currentTimeMillis,
+    ) {
+        var problem = check(hostDir) ?: return
+        log(problem)
+        var saidAt = clock()
+        val shown = java.util.concurrent.atomic.AtomicReference(problem)
+        val notice = HostDataCheck.answer(port) { shown.get() }
+        try {
+            while (true) {
+                Thread.sleep(pauseMs)
+                val now = check(hostDir)
+                if (now == null) {
+                    log("The host can use its data folder again: starting")
+                    return
+                }
+                shown.set(now)
+                if (now != problem || clock() - saidAt >= remindMs) {
+                    log(now)
+                    problem = now
+                    saidAt = clock()
+                }
+            }
+        } finally {
+            notice?.close()
+        }
+    }
+
     /** A host serving on its own, until closed. */
     class Served internal constructor(private val store: HostStore, private val version: String, private val server: SyncHost, private val stop: () -> Unit) : AutoCloseable {
         /** What the host does when a device asks it to update ([SyncHost.onUpdateAsked]). */
@@ -153,4 +194,8 @@ object HeadlessHost {
 
     /** How often a host looks whether the household's backup is due. */
     const val BACKUP_CHECK_MS = 60 * 60_000L
+
+    /** How often a host waiting on its data folder looks again, and says again what is wrong. */
+    const val DATA_RECHECK_MS = 30_000L
+    const val DATA_REMIND_MS = 30 * 60_000L
 }

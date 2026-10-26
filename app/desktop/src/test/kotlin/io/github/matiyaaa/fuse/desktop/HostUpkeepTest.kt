@@ -24,6 +24,19 @@ class HostUpkeepTest {
     }
 
     @Test
+    fun aStartHeldBackIsAskedForAgainButSaidOnce() = runBlocking {
+        val program = File(dir, "Fuse3.AppImage").apply { writeText("0.4.4") }
+        val logs = mutableListOf<String>()
+        val upkeep = HostUpkeep(program, newerFuse = { null }, update = null, log = { logs += it })
+        val next = File(dir, ".Fuse3.AppImage.part").apply { writeText("0.4.4.1, a little longer") }
+        Files.move(next.toPath(), program.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        assertFalse(upkeep.check())
+        // The host holds its start while it can't use its data folder, and asks again each minute.
+        repeat(3) { assertTrue(upkeep.check()) }
+        assertEquals(1, logs.count { "starts again" in it }, logs.joinToString())
+    }
+
+    @Test
     fun aHostBehindItsDevicesUpdatesItselfAndNotOverAndOver() = runBlocking {
         val program = File(dir, "Fuse2.AppImage").apply { writeText("old") }
         var clock = 0L

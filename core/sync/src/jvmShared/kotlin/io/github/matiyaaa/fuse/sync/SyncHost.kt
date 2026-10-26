@@ -336,6 +336,18 @@ class SyncHost(
 
     fun start(): SyncHost {
         server = embeddedServer(CIO, port = port, host = bind) {
+            // A call that fails on the host's own folder (another program took it over) answers with
+            // what is wrong and how to put it right, as the host's own error that each device shows,
+            // rather than an empty 500 that reads as something other than the host answering.
+            intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
+                try {
+                    proceed()
+                } catch (e: java.io.IOException) {
+                    val problem = HostDataCheck.problem(store.dir)
+                    if (problem == null || context.response.isCommitted) throw e
+                    context.respondText(json.encodeToString(ApiError.serializer(), ApiError(problem, HostDataCheck.CODE)), ContentType.Application.Json, HttpStatusCode.ServiceUnavailable)
+                }
+            }
             routing { api() }
         }.also { it.start(wait = false) }
         return this
