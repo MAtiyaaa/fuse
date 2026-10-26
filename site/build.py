@@ -91,6 +91,9 @@ def inline(text: str) -> str:
     return out
 
 
+NOTHING = re.compile(r"^Nothing (new|changed|fixed) in this release\.?$")
+
+
 def release_notes(path: Path):
     """A release's notes (docs/releases/<version>.md) as the update viewer reads them."""
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -134,6 +137,8 @@ def release_notes(path: Path):
             item = None
             para.append(line.strip())
     for sec in sections:
+        # "Nothing new in this release." keeps a section's place in the notes; it isn't a note.
+        sec["items"] = [it for it in sec["items"] if it["title"] or it["sub"] or not NOTHING.match(it["text"])]
         for it in sec["items"]:
             it["text"] = inline(it["text"])
             it["sub"] = [inline(x) for x in it["sub"]]

@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.4.1 is the <b>Tune-Up Update</b>: a rebuilt Library, faster RomM, recomps that start from your own ROM, and fixes from a whole-app audit</sub><br>
+<sub>0.4.4.2 is the <b>Tune-Up Update</b>: a rebuilt Library, faster RomM, recomps that start from your own ROM, and Fuseline 4.3</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -166,12 +166,12 @@ second-screen companion, Storage, backups and System health: everything is in
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.4.1 "The Tune-Up Update"**: the Library's All view rebuilt around what you can do with
+> **Fuse 0.4.4.2 "The Tune-Up Update"**: the Library's All view rebuilt around what you can do with
 > each game, Settings set out in cards with nothing in two places, RomM downloads several files at
 > once and checks them as they arrive, recomps for the NES, SNES and Mega Drive start straight from
-> your own ROM, and play time leaves out the time a device slept; 0.4.4.1 keeps a Fuse One host
-> whose folder another program took over waiting and saying why, not failing at every start. See
-> [the release notes](docs/releases/0.4.4.1.md); every earlier release is in
+> your own ROM, and play time leaves out the time a device slept; 0.4.4.2 brings Fuseline 4.3, which
+> stops doing animation work nobody sees, and Phone Link that answers every press. See
+> [the release notes](docs/releases/0.4.4.2.md); every earlier release is in
 > [CHANGELOG.md](CHANGELOG.md).
 
 Fuse runs on Android handhelds and phones, Linux (SteamOS and its Game Mode too), Windows and macOS,

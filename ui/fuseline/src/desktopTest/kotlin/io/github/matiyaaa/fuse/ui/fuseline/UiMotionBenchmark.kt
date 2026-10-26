@@ -31,6 +31,8 @@ import java.lang.management.ManagementFactory
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import io.github.matiyaaa.fuse.ui.fuseline.v3.motionBounds as v3MotionBounds
+import io.github.matiyaaa.fuse.ui.fuseline.v42.motionBounds as v42MotionBounds
+import io.github.matiyaaa.fuse.ui.fuseline.v42.sharedMotion as v42SharedMotion
 import io.github.matiyaaa.fuse.ui.fuseline.v31.motionBounds as v31MotionBounds
 import io.github.matiyaaa.fuse.ui.fuseline.v31.sharedMotion as v31SharedMotion
 import io.github.matiyaaa.fuse.ui.fuseline.v3.sharedMotion as v3SharedMotion
@@ -44,7 +46,7 @@ import androidx.compose.animation.slideOutHorizontally as cSlideOut
  * Whole interface paths, composition, layout and drawing included: tiles reflowing as their window
  * changes width (layout motion), an element shared between two screens whose destination keeps
  * moving, rapid tab switching, pages of tiles with following values, and a decorative room. Fuseline
- * 4, and Fuseline 3.1, 3, 2 and 1 (frozen in these tests) where each has the capability, and Compose
+ * 4.3, and Fuseline 4.2, 3.1, 3, 2 and 1 (frozen in these tests) where each has the capability, and Compose
  * (animateBounds in a LookaheadScope, SharedTransitionLayout, AnimatedContent, animate*AsState).
  * The whole run of frames is timed, and the bytes allocated counted, after a warm-up; rounds rotate
  * between engines and the median counts. Runs only with -Pfuse.bench=true.
@@ -76,7 +78,7 @@ class UiMotionBenchmark {
         return result
     }
 
-    /** [f4] is the engine in use (Fuseline 4); [v31], [v3] and [v1] the frozen Fuseline 3.1, 3 and 1. */
+    /** [f4] is the engine in use (Fuseline 4.3); [v42], [v31], [v3] and [v1] the frozen Fuseline 4.2, 3.1, 3 and 1. */
     private class Row(val case: String, val results: List<Measured?>)
 
     private class Measured(val nanos: Double, val bytes: Double, val low: Double, val high: Double)
@@ -84,9 +86,9 @@ class UiMotionBenchmark {
     private val rows = ArrayList<Row>()
     private val rounds = System.getProperty("fuse.bench.rounds")?.toIntOrNull() ?: 9
 
-    private fun compare(case: String, f4: () -> Result, f2: (() -> Result)?, compose: (() -> Result)?, v3: (() -> Result)? = null, v1: (() -> Result)? = null, v31: (() -> Result)? = null) {
-        // Columns: Fuseline 4, 3.1, 3, 2, 1, Compose.
-        val columns = listOf(f4, v31, v3, f2, v1, compose)
+    private fun compare(case: String, f4: () -> Result, f2: (() -> Result)?, compose: (() -> Result)?, v3: (() -> Result)? = null, v1: (() -> Result)? = null, v31: (() -> Result)? = null, v42: (() -> Result)? = null) {
+        // Columns: Fuseline 4.3, 4.2, 3.1, 3, 2, 1, Compose.
+        val columns = listOf(f4, v42, v31, v3, f2, v1, compose)
         val engines = columns.filterNotNull()
         repeat(3) { for (e in engines) e() }
         val results = HashMap<() -> Result, MutableList<Result>>()
@@ -150,6 +152,12 @@ class UiMotionBenchmark {
                     FlowRow(Modifier.width(w.dp)) { repeat(50) { Box(Modifier.v31MotionBounds(io.github.matiyaaa.fuse.ui.fuseline.v31.Spring(1f, 400f)).size(60.dp)) } }
                 }
             },
+            v42 = {
+                var w by mutableIntStateOf(700)
+                run(80, { f -> w = widthAt(f) }) {
+                    FlowRow(Modifier.width(w.dp)) { repeat(50) { Box(Modifier.v42MotionBounds(io.github.matiyaaa.fuse.ui.fuseline.v42.Spring(1f, 400f)).size(60.dp)) } }
+                }
+            },
         )
     }
 
@@ -202,6 +210,17 @@ class UiMotionBenchmark {
                     io.github.matiyaaa.fuse.ui.fuseline.v31.Swap(s, transitionSpec = { io.github.matiyaaa.fuse.ui.fuseline.v31.SwapTransform(io.github.matiyaaa.fuse.ui.fuseline.v31.fadeIn(io.github.matiyaaa.fuse.ui.fuseline.v31.tween(200)), io.github.matiyaaa.fuse.ui.fuseline.v31.fadeOut(io.github.matiyaaa.fuse.ui.fuseline.v31.tween(200)), null) }) { which ->
                         if (which == 0) Box(Modifier.offset(20.dp, 20.dp).v31SharedMotion(shared, "g").size(60.dp))
                         else Box(Modifier.offset { IntOffset(300 + drift, 200) }.v31SharedMotion(shared, "g").size(300.dp))
+                    }
+                }
+            },
+            v42 = {
+                var s by mutableIntStateOf(0)
+                var drift by mutableIntStateOf(0)
+                val shared = io.github.matiyaaa.fuse.ui.fuseline.v42.SharedMotion(io.github.matiyaaa.fuse.ui.fuseline.v42.Spring(1f, 400f))
+                run(90, { f -> s = stateAt(f); drift = f * 3 }) {
+                    io.github.matiyaaa.fuse.ui.fuseline.v42.Swap(s, transitionSpec = { io.github.matiyaaa.fuse.ui.fuseline.v42.SwapTransform(io.github.matiyaaa.fuse.ui.fuseline.v42.fadeIn(io.github.matiyaaa.fuse.ui.fuseline.v42.tween(200)), io.github.matiyaaa.fuse.ui.fuseline.v42.fadeOut(io.github.matiyaaa.fuse.ui.fuseline.v42.tween(200))) }) { which ->
+                        if (which == 0) Box(Modifier.offset(20.dp, 20.dp).v42SharedMotion(shared, "g").size(60.dp))
+                        else Box(Modifier.offset { IntOffset(300 + drift, 200) }.v42SharedMotion(shared, "g").size(300.dp))
                     }
                 }
             },
@@ -271,6 +290,13 @@ class UiMotionBenchmark {
                     io.github.matiyaaa.fuse.ui.fuseline.v31.MotionTransitionLayout(t, distance = 24.dp) { Page(it) }
                 }
             },
+            v42 = {
+                var tab by mutableIntStateOf(0)
+                run(60, { f -> tab = tabAt(f) }) {
+                    val t = io.github.matiyaaa.fuse.ui.fuseline.v42.rememberMotionTransition(tab, io.github.matiyaaa.fuse.ui.fuseline.v42.Spring(1f, 900f), order = { it })
+                    io.github.matiyaaa.fuse.ui.fuseline.v42.MotionTransitionLayout(t, distance = 24.dp) { Page(it) }
+                }
+            },
             v1 = {
                 var tab by mutableIntStateOf(0)
                 run(60, { f -> tab = tabAt(f) }) {
@@ -310,6 +336,14 @@ class UiMotionBenchmark {
     }
 
     @Composable
+    private fun FollowTile42(selected: Boolean) {
+        val lift by io.github.matiyaaa.fuse.ui.fuseline.v42.fuselineFloat(if (selected) 1f else 0f, io.github.matiyaaa.fuse.ui.fuseline.v42.Spring(1f, 700f))
+        val tint by io.github.matiyaaa.fuse.ui.fuseline.v42.fuselineColor(if (selected) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Gray, io.github.matiyaaa.fuse.ui.fuseline.v42.Spring(1f, 700f))
+        val edge by io.github.matiyaaa.fuse.ui.fuseline.v42.fuselineDp(if (selected) 4.dp else 0.dp, io.github.matiyaaa.fuse.ui.fuseline.v42.Spring(1f, 700f))
+        Box(Modifier.size(40.dp).drawBehind { drawRect(tint, alpha = 0.5f + lift / 2, size = this.size.copy(width = this.size.width - edge.toPx())) })
+    }
+
+    @Composable
     private fun FollowTile31(selected: Boolean) {
         val lift by io.github.matiyaaa.fuse.ui.fuseline.v31.fuselineFloat(if (selected) 1f else 0f, io.github.matiyaaa.fuse.ui.fuseline.v31.Spring(1f, 700f))
         val tint by io.github.matiyaaa.fuse.ui.fuseline.v31.fuselineColor(if (selected) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Gray, io.github.matiyaaa.fuse.ui.fuseline.v31.Spring(1f, 700f))
@@ -334,7 +368,7 @@ class UiMotionBenchmark {
                 androidx.compose.runtime.key(page) { FlowRow { repeat(120) { i -> tile(i == page % 120) } } }
             }
         }
-        compare("a page of 120 tiles, 3 values each, composed", pages { FollowTile4(it) }, null, pages { FollowTileCompose(it) }, v3 = pages { FollowTile3(it) }, v31 = pages { FollowTile31(it) })
+        compare("a page of 120 tiles, 3 values each, composed", pages { FollowTile4(it) }, null, pages { FollowTileCompose(it) }, v3 = pages { FollowTile3(it) }, v31 = pages { FollowTile31(it) }, v42 = pages { FollowTile42(it) })
         // The selection moving along 120 tiles every three frames: each move retargets two tiles.
         fun moving(tile: @Composable (Boolean) -> Unit): () -> Result = {
             var sel by mutableIntStateOf(0)
@@ -342,7 +376,7 @@ class UiMotionBenchmark {
                 FlowRow { repeat(120) { i -> tile(i == sel) } }
             }
         }
-        compare("selection moving across 120 tiles", moving { FollowTile4(it) }, null, moving { FollowTileCompose(it) }, v3 = moving { FollowTile3(it) }, v31 = moving { FollowTile31(it) })
+        compare("selection moving across 120 tiles", moving { FollowTile4(it) }, null, moving { FollowTileCompose(it) }, v3 = moving { FollowTile3(it) }, v31 = moving { FollowTile31(it) }, v42 = moving { FollowTile42(it) })
     }
 
     /** What a decorative room asks of the device each second: frame callbacks woken, and redraws. */
@@ -360,6 +394,11 @@ class UiMotionBenchmark {
         fun room4(): @Composable () -> Unit = {
             var t by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
             androidx.compose.runtime.LaunchedEffect(Unit) { decorationFrames(30, infinite = false) { t = it / 1e9f } }
+            Box(fill.graphicsLayerAlpha { 0.5f + kotlin.math.sin(t) / 2 })
+        }
+        fun room42(): @Composable () -> Unit = {
+            var t by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+            androidx.compose.runtime.LaunchedEffect(Unit) { io.github.matiyaaa.fuse.ui.fuseline.v42.decorationFrames(30, infinite = false) { t = it / 1e9f } }
             Box(fill.graphicsLayerAlpha { 0.5f + kotlin.math.sin(t) / 2 })
         }
         fun room31(): @Composable () -> Unit = {
@@ -383,10 +422,11 @@ class UiMotionBenchmark {
         }
         fun count(input: Boolean, room: @Composable () -> Unit): Work {
             FramePacing.reset()
+            io.github.matiyaaa.fuse.ui.fuseline.v42.FramePacing.reset()
             io.github.matiyaaa.fuse.ui.fuseline.v31.FramePacing.reset()
             wakes = 0
             draws = 0
-            run(240, { f -> if (input && f % 6 == 0) { FramePacing.input(); io.github.matiyaaa.fuse.ui.fuseline.v31.FramePacing.input() } }, frameMs = 8L) { room() }
+            run(240, { f -> if (input && f % 6 == 0) { FramePacing.input(); io.github.matiyaaa.fuse.ui.fuseline.v42.FramePacing.input(); io.github.matiyaaa.fuse.ui.fuseline.v31.FramePacing.input() } }, frameMs = 8L) { room() }
             val w = wakes.toDouble()
             // 240 frames 8 ms apart: 1.92 seconds.
             return Work(w / 1.92, draws / 1.92)
@@ -396,6 +436,7 @@ class UiMotionBenchmark {
         for (input in listOf(true)) {
             decorationRows += (if (input) "while buttons are pressed" else "at rest") to listOf(
                 count(input, room4()),
+                count(input, room42()),
                 count(input, room31()),
                 count(input, room3()),
                 // Compose's loop wakes on every frame of the display.
@@ -409,22 +450,22 @@ class UiMotionBenchmark {
 
     private fun report() {
         val losses = ArrayList<String>()
-        val names = listOf("Fuseline 4.2", "Fuseline 3.1", "Fuseline 3", "Fuseline 2", "Fuseline 1", "Compose")
+        val names = listOf("Fuseline 4.3", "Fuseline 4.2", "Fuseline 3.1", "Fuseline 3", "Fuseline 2", "Fuseline 1", "Compose")
         fun us(x: Measured?) = x?.let { "%.0f µs".format(it.nanos / 1000) } ?: "n/a"
         fun kb(x: Measured?) = x?.let { "%.1f KB".format(it.bytes / 1024) } ?: "n/a"
         val table = buildString {
-            appendLine("| Interface path | ${names.joinToString(" | ")} | Reduction vs 3.1 | Speedup vs 3.1 | Winner |")
+            appendLine("| Interface path | ${names.joinToString(" | ")} | Reduction vs 4.2 | Speedup vs 4.2 | Winner |")
             appendLine("|---|${names.joinToString("") { "---|" }}---|---|---|")
             for (r in rows) {
                 val ms = r.results.withIndex().filter { it.value != null }
                 val best = ms.minBy { it.value!!.nanos }
                 val clear = ms.filter { it.index != best.index }.all { best.value!!.high < it.value!!.low }
                 val winner = if (clear) names[best.index] else "unresolved (${names[best.index]} ahead, intervals overlap)"
-                if (winner != "Fuseline 4.2") losses += "${r.case}: $winner"
-                val v4 = r.results[0]!!
-                val v31 = r.results[1]
-                val reduction = v31?.let { "%.1f%%".format(100 * (1 - v4.nanos / it.nanos)) } ?: "n/a"
-                val speedup = v31?.let { "%.2f×".format(it.nanos / v4.nanos) } ?: "n/a"
+                if (winner != "Fuseline 4.3") losses += "${r.case}: $winner"
+                val v43 = r.results[0]!!
+                val v42 = r.results[1]
+                val reduction = v42?.let { "%.1f%%".format(100 * (1 - v43.nanos / it.nanos)) } ?: "n/a"
+                val speedup = v42?.let { "%.2f×".format(it.nanos / v43.nanos) } ?: "n/a"
                 appendLine("| ${r.case} | ${r.results.joinToString(" | ") { us(it) }} | $reduction | $speedup | $winner |")
             }
             appendLine()
@@ -436,11 +477,11 @@ class UiMotionBenchmark {
             appendLine()
             appendLine("A room needing 30 updates a second on a 120 Hz screen, redrawn per second:")
             appendLine()
-            appendLine("| Room | Fuseline 4 | Fuseline 3.1 | Fuseline 3 | Compose |")
-            appendLine("|---|---|---|---|---|")
+            appendLine("| Room | Fuseline 4.3 | Fuseline 4.2 | Fuseline 3.1 | Fuseline 3 | Compose |")
+            appendLine("|---|---|---|---|---|---|")
             for ((name, w) in decorationRows) {
                 fun n(x: Work?) = x?.let { "%.0f".format(it.redraws) } ?: "n/a"
-                appendLine("| $name | ${n(w[0])} | ${n(w[1])} | ${n(w[2])} | ${n(w[3])} |")
+                appendLine("| $name | ${n(w[0])} | ${n(w[1])} | ${n(w[2])} | ${n(w[3])} | ${n(w[4])} |")
                 val f4 = w[0]!!
                 if (w.drop(1).any { o -> o != null && f4.redraws > o.redraws }) losses += "room $name"
             }
@@ -449,7 +490,7 @@ class UiMotionBenchmark {
         val report = "$table\n$method\n$decorationTable"
         println(report)
         File("build/ui-motion-bench.md").apply { parentFile.mkdirs() }.writeText(report)
-        assertTrue(losses.isEmpty() || System.getProperty("fuse.bench.lenient").toBoolean(), "Fuseline 4 is not clearly first in: $losses")
+        assertTrue(losses.isEmpty() || System.getProperty("fuse.bench.lenient").toBoolean(), "Fuseline 4.3 is not clearly first in: $losses")
     }
 
 }

@@ -34,20 +34,22 @@ internal class SpringKernel private constructor(val dampingRatio: Float, val sti
     val under = q < 0.0
     val over = q > 0.0
 
-    // The last moment solved, shared by everyone on this spring.
-    private var memoT = Double.NaN
+    // The last moment solved, shared by everyone on this spring. Fuseline 4.3: kept by its play time
+    // in nanoseconds, so a value reading another's solution doesn't first turn its time into seconds.
+    private var memoPlay = Long.MIN_VALUE
     var memoEc = 0.0
         private set
     var memoEs = 0.0
         private set
 
-    /** Fills [memoEc] and [memoEs] for [t] seconds: from the last solution when it was for [t], else solved. */
-    fun solve(t: Double) {
-        if (t == memoT) {
+    /** Fills [memoEc] and [memoEs] for [playNanos]: from the last solution when it was for that moment, else solved. */
+    fun solve(playNanos: Long) {
+        if (playNanos == memoPlay) {
             if (Kernels.counting) Kernels.reused++
             return
         }
         if (Kernels.counting) Kernels.solved++
+        val t = playNanos / NANOS_PER_SECOND
         var ec: Double
         var es: Double
         when {
@@ -76,19 +78,19 @@ internal class SpringKernel private constructor(val dampingRatio: Float, val sti
                 es = e * t
             }
         }
-        memoT = t
+        memoPlay = playNanos
         memoEc = ec
         memoEs = es
     }
 
     /** Records a solution worked out elsewhere (a step from the last frame) as this moment's. */
-    fun remember(t: Double, ec: Double, es: Double) {
-        memoT = t
+    fun remember(playNanos: Long, ec: Double, es: Double) {
+        memoPlay = playNanos
         memoEc = ec
         memoEs = es
     }
 
-    fun hasMemo(t: Double) = t == memoT
+    fun hasMemo(playNanos: Long) = playNanos == memoPlay
 
     // The step across one interval of time: for [stepNanos], the decay over it and the turn of the ringing.
     private var stepNanos = -1L

@@ -57,6 +57,12 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
 
         /** True while nobody has read the value since it last changed what readers would show. */
         val unread: Boolean
+
+        /**
+         * Fuseline 4.3: given a new motion while it rests unread, it stays at rest; what a frame would
+         * have done for it (found it unread, and what its readers last saw out of date) is done here.
+         */
+        fun restsUnread()
     }
 
     open inner class Move(
@@ -131,6 +137,21 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
                 bound = driven!!.boundNanos()
             }
             if (start != Long.MIN_VALUE) start = lastFrame
+            // Fuseline 4.3: resting unread, it stays at rest. Brought up on the next frame it would
+            // only be found unread and put back (out of the heap and into it again, for every value
+            // retargeted every frame that nobody draws): it needs nothing until a read brings it back
+            // or its new motion could end, so it is only made to come up no later than that.
+            val d = driven
+            if (parked && !passing && !gone && !joining && d != null && d.unread) {
+                d.restsUnread()
+                val end = frameAt(this, bound)
+                if (listed) {
+                    if (wake > end) wake = end
+                } else if (heapIndex < 0 || wake > end) {
+                    schedule(this, end)
+                }
+                return
+            }
             due()
         }
 

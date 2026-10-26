@@ -100,7 +100,7 @@ interface Engine {
 }
 
 /** The engines, newest first: the order of the table's columns. */
-val ENGINES: List<Engine> = listOf(Fuseline4, Fuseline40, Fuseline31, Fuseline3, Fuseline2, Fuseline1, ComposeEngine)
+val ENGINES: List<Engine> = listOf(Fuseline4, Fuseline42, Fuseline40, Fuseline31, Fuseline3, Fuseline2, Fuseline1, ComposeEngine)
 
 /** The five-tab emulation for engines without a transition of their own: ten values, each engine's own way. */
 private class ValueTabs(private val e: Engine, private val scope: CoroutineScope, private val m: Any) : Tabs {
@@ -124,10 +124,10 @@ private class ValueTabs(private val e: Engine, private val scope: CoroutineScope
     }
 }
 
-// ------------------------------------------------------------------------------------- Fuseline 4.1
+// ------------------------------------------------------------------------------------- Fuseline 4.3
 
 object Fuseline4 : Engine {
-    override val name = "Fuseline 4.2"
+    override val name = "Fuseline 4.3"
     private val standard = io.github.matiyaaa.fuse.ui.fuseline.CubicCurve(0.2f, 0f, 0f, 1f)
     private val enter = io.github.matiyaaa.fuse.ui.fuseline.CubicCurve(0.05f, 0.7f, 0.1f, 1f)
 
@@ -190,6 +190,85 @@ object Fuseline4 : Engine {
     override fun player(names: List<String>): Player {
         val tl = io.github.matiyaaa.fuse.ui.fuseline.Timeline(4000) { for (n in names) track(n) { at(0, 0f); at(1500, 1f, enter); at(4000, 0.5f, standard) } }
         val p = io.github.matiyaaa.fuse.ui.fuseline.TimelinePlayer(tl)
+        return object : Player {
+            override fun tick(frameNanos: Long) { p.tick(frameNanos, 1f) }
+            override fun seek(ms: Int) = p.seek(ms)
+            override fun reverse() = p.reverse()
+            override fun read(): Float {
+                var s = 0f
+                for (n in names) s += p[n]
+                return s
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------------- Fuseline 4.2 (frozen as it shipped in 0.4.4.1)
+
+object Fuseline42 : Engine {
+    override val name = "Fuseline 4.2"
+    private val standard = io.github.matiyaaa.fuse.ui.fuseline.v42.CubicCurve(0.2f, 0f, 0f, 1f)
+    private val enter = io.github.matiyaaa.fuse.ui.fuseline.v42.CubicCurve(0.05f, 0.7f, 0.1f, 1f)
+
+    override fun float(initial: Float): Any = io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue(initial)
+    override fun offset(x: Float, y: Float): Any = io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue(Offset(x, y))
+    override fun color(c: Color): Any = io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue(c)
+    override fun motion(spec: Spec): Any = when (spec) {
+        is Spec.Spring -> io.github.matiyaaa.fuse.ui.fuseline.v42.Spring(spec.dampingRatio, spec.stiffness)
+        is Spec.Tween -> io.github.matiyaaa.fuse.ui.fuseline.v42.Tween(spec.durationMs, curve = if (spec.curve == CurveId.STANDARD) standard else io.github.matiyaaa.fuse.ui.fuseline.v42.Curves.Linear)
+    }
+
+    override fun animate(scope: CoroutineScope, v: Any, target: Float, m: Any) {
+        scope.launch { (v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Float>).animateTo(target, m as io.github.matiyaaa.fuse.ui.fuseline.v42.Motion) }
+    }
+    override fun animateOffset(scope: CoroutineScope, v: Any, x: Float, y: Float, m: Any) {
+        scope.launch { (v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Offset>).animateTo(Offset(x, y), m as io.github.matiyaaa.fuse.ui.fuseline.v42.Motion) }
+    }
+    override fun animateColor(scope: CoroutineScope, v: Any, c: Color, m: Any) {
+        scope.launch { (v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Color>).animateTo(c, m as io.github.matiyaaa.fuse.ui.fuseline.v42.Motion) }
+    }
+    override fun retarget(scope: CoroutineScope, v: Any, target: Float, m: Any) {
+        val fv = v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Float>
+        if (!fv.retargetFloat(target, m as io.github.matiyaaa.fuse.ui.fuseline.v42.Motion)) scope.launch { fv.animateTo(target, m) }
+    }
+    override fun retargetXY(scope: CoroutineScope, v: Any, x: Float, y: Float, m: Any) {
+        val fv = v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Offset>
+        if (!fv.retargetXY(x, y, m as io.github.matiyaaa.fuse.ui.fuseline.v42.Motion)) scope.launch { fv.animateTo(Offset(x, y), m) }
+    }
+    override fun snap(scope: CoroutineScope, v: Any, x: Float) {
+        scope.launch { (v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Float>).snapTo(x) }
+    }
+    override fun read(v: Any): Float = (v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Float>).floatValue
+    override fun readOffset(v: Any): Float = (v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Offset>).let { it.component(0) + it.component(1) }
+    override fun readColor(v: Any): Float = (v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Color>).value.red
+
+    override val decays = true
+    override fun decay(scope: CoroutineScope, v: Any, velocity: Float, friction: Float, threshold: Float) {
+        scope.launch { (v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Float>).animateDecay(velocity, io.github.matiyaaa.fuse.ui.fuseline.v42.Decay(friction, threshold)) }
+    }
+    override val drags = true
+    override fun dragBy(scope: CoroutineScope, v: Any, delta: Float, timeNanos: Long) = (v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Float>).dragBy(delta, timeNanos)
+    override fun releaseVelocity(v: Any, timeNanos: Long): Float = (v as io.github.matiyaaa.fuse.ui.fuseline.v42.FuselineValue<Float>).releaseVelocity(timeNanos)
+
+    override fun tweenVelocity(durationMs: Int, distance: Float): VelocityAt {
+        val t = io.github.matiyaaa.fuse.ui.fuseline.v42.TweenTrack(io.github.matiyaaa.fuse.ui.fuseline.v42.Tween(durationMs, curve = standard), 0f, distance, 0f)
+        return VelocityAt { t.velocityAt(it) }
+    }
+
+    override fun tabs(scope: CoroutineScope): Tabs = object : Tabs {
+        val t = io.github.matiyaaa.fuse.ui.fuseline.v42.MotionTransition(0, order = { it })
+        val m = io.github.matiyaaa.fuse.ui.fuseline.v42.Spring(1f, 900f)
+        override fun go(to: Int) = t.go(to, scope, m)
+        override fun read(): Float {
+            var s = 0f
+            for (p in t.parts) s += p.presenceValue + p.position
+            return s
+        }
+    }
+
+    override fun player(names: List<String>): Player {
+        val tl = io.github.matiyaaa.fuse.ui.fuseline.v42.Timeline(4000) { for (n in names) track(n) { at(0, 0f); at(1500, 1f, enter); at(4000, 0.5f, standard) } }
+        val p = io.github.matiyaaa.fuse.ui.fuseline.v42.TimelinePlayer(tl)
         return object : Player {
             override fun tick(frameNanos: Long) { p.tick(frameNanos, 1f) }
             override fun seek(ms: Int) = p.seek(ms)

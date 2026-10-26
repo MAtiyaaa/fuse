@@ -3,10 +3,8 @@ package io.github.matiyaaa.fuse.ui.fuseline
 import androidx.compose.runtime.FloatState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
@@ -152,6 +150,10 @@ class FuselineValue<T>(
 
         override val unread: Boolean get() = unreadSinceShown
 
+        override fun restsUnread() {
+            shownStale = true
+        }
+
         val eager: Boolean get() = block != null
     }
 
@@ -190,8 +192,13 @@ class FuselineValue<T>(
      * Nobody has read the value since it was last bumped: every reader it had has been told already,
      * so another bump would tell nobody anything, and the frame driver can let it rest ([park]).
      */
-    private var unreadSinceShown = false
-    private var targetUnread = false
+    // Fuseline 4.3: a new value has had no reader, so it starts as one nobody has read since it was
+    // shown: moved before anything draws it, it rests until the first read, as any unread value does.
+    private var unreadSinceShown = true
+
+    // Fuseline 4.3: a new value's target has had no reader to tell: its first aim writes nothing,
+    // and its first read builds the target from the floats as any first read does.
+    private var targetUnread = true
 
     /** While a gesture holds it, the target is wherever the value is (read from it, never built per event). */
     private var targetFollowsValue = false
@@ -237,6 +244,7 @@ class FuselineValue<T>(
         }
         if (!unreadSinceShown) return
         unreadSinceShown = false
+        everRead = true
         if (shownStale) {
             // Readers see it from here: the next change they'd see is measured from this.
             shownStale = false
@@ -393,8 +401,28 @@ class FuselineValue<T>(
     }
 
     /** Who moves it now. */
-    var owner: MotionOwner by mutableStateOf(MotionOwner.IDLE)
-        private set
+    var owner: MotionOwner
+        get() {
+            ownerWatched = true
+            ownerChanges.intValue
+            return held
+        }
+        private set(value) {
+            if (held == value) return
+            held = value
+            if (ownerWatched) ownerChanges.intValue = ++ownerChangeCount
+        }
+
+    /**
+     * Fuseline 4.3: [owner] itself, a plain field: Fuseline's own checks (every retarget and every
+     * drag event asks) read it without a snapshot read or a subscription. Readers of [owner] watch
+     * [ownerChanges], written on each change once anything has read it: a value nobody asks who
+     * moves it (most of them) makes no write when a move starts or ends.
+     */
+    private var held = MotionOwner.IDLE
+    private var ownerWatched = false
+    private val ownerChanges = mutableIntStateOf(0)
+    private var ownerChangeCount = 0
 
     /** True while a motion moves it. */
     val isRunning: Boolean get() = owner == MotionOwner.ANIMATION
@@ -456,12 +484,28 @@ class FuselineValue<T>(
             // Readers watch the pulse: told through it, they read again and watch the value's own state.
             pulsing = null
             p.pulse(always = true)
+        } else if (unreadSinceShown && (toldGlobally || !everRead)) {
+            // Fuseline 4.3: never read at all, or told already by a write outside any snapshot of its
+            // own (so one that is always applied) and not read since: every reader it had is
+            // redrawing or about to, and will read this. Another write would tell nobody anything (a
+            // value dragged, snapped or landing while nobody draws it), so only the reading is moved
+            // on. It rests unread as a parked value does: the next read catches what was shown up.
+            published++
+            shownStale = true
+            return
         }
         // Written from a counter of its own: bumping the state itself would read it first, a
         // snapshot lookup for nothing. Any new number does, so the value and its target share it.
         version.intValue = ++published
+        toldGlobally = !Snapshot.isInSnapshot
         unreadSinceShown = true
     }
+
+    /** The last write of [version] was made outside any snapshot of its own: it is applied whatever happens. */
+    private var toldGlobally = false
+
+    /** Something has read the value, subscribing, at least once: until then it has no reader to tell. */
+    private var everRead = false
 
     /**
      * Tells readers a frame moved the value visibly. The first frame of a run writes the value's own
@@ -482,6 +526,8 @@ class FuselineValue<T>(
         bump()
         if (driver != null && run >= 2) {
             pulsing = driver
+            // Told through the pulse from here: the next write of its own state is always made.
+            toldGlobally = false
             pulsedRuns++
         }
         steppedBumps = run
@@ -593,7 +639,7 @@ class FuselineValue<T>(
             if (initialVelocity != null) converter.write(initialVelocity, speed)
             val r = Ride(animationSpec)
             r.block = block
-            val fromGesture = owner == MotionOwner.GESTURE
+            val fromGesture = held == MotionOwner.GESTURE
             build(r, animationSpec)
             aimed(animationSpec)
             ride = r
@@ -625,7 +671,9 @@ class FuselineValue<T>(
                     nowAt = Long.MIN_VALUE
                     // Cancelled from outside (not taken over): it rests where it got to, which is now
                     // its target. Its velocity is kept, so the next move carries on from it.
-                    if (job === currentCoroutineContext().job && r.playNanos < r.durationNanos()) {
+                    // Fuseline 4.3: short of the motion's cheap lower bound it can't have finished, so
+                    // its exact end (a spring's Newton solve) is only worked out when it might have.
+                    if (job === currentCoroutineContext().job && (r.playNanos < r.boundNanos() || r.playNanos < r.durationNanos())) {
                         now.copyInto(goal)
                         targetFollowsValue = false
                         aimChanged()
@@ -794,7 +842,7 @@ class FuselineValue<T>(
         converter.write(targetValue, goal)
         dragSpeed()
         val r = Ride(animationSpec)
-        val fromGesture = owner == MotionOwner.GESTURE
+        val fromGesture = held == MotionOwner.GESTURE
         build(r, animationSpec)
         aimed(animationSpec)
         val scale = context[MotionDurationScale]?.scaleFactor ?: 1f
@@ -808,7 +856,7 @@ class FuselineValue<T>(
             return
         }
         ride = r
-        if (owner != MotionOwner.ANIMATION) owner = MotionOwner.ANIMATION
+        if (held != MotionOwner.ANIMATION) owner = MotionOwner.ANIMATION
         if (MotionTrace.enabled) trace(if (fromGesture) MotionTrace.Kind.RELEASE else MotionTrace.Kind.START, MotionInspector.describe(animationSpec))
         if (MotionInspector.enabled) MotionInspector.watch(this)
         if (scale == 0f || r.empty) {
@@ -834,7 +882,7 @@ class FuselineValue<T>(
         moved()
         if (MotionTrace.enabled) trace(MotionTrace.Kind.SETTLE)
         ride = null
-        if (owner == MotionOwner.ANIMATION) owner = MotionOwner.IDLE
+        if (held == MotionOwner.ANIMATION) owner = MotionOwner.IDLE
     }
 
     /** Ends whatever moves it, leaving it where it is: for a value no longer shown. */
@@ -848,7 +896,7 @@ class FuselineValue<T>(
         current()
         ride = null
         nowAt = Long.MIN_VALUE
-        if (owner == MotionOwner.ANIMATION) owner = MotionOwner.IDLE
+        if (held == MotionOwner.ANIMATION) owner = MotionOwner.IDLE
     }
 
     /**
@@ -861,7 +909,7 @@ class FuselineValue<T>(
     fun retarget(targetValue: T, animationSpec: Motion? = null): Boolean {
         val r = ride ?: return false
         val retimer = r.retimer ?: return false
-        if (owner != MotionOwner.ANIMATION) return false
+        if (held != MotionOwner.ANIMATION) return false
         converter.write(targetValue, goal)
         return rebuild(r, retimer, animationSpec)
     }
@@ -870,7 +918,7 @@ class FuselineValue<T>(
     fun retargetFloat(target: Float, animationSpec: Motion? = null): Boolean {
         val r = ride ?: return false
         val retimer = r.retimer ?: return false
-        if (owner != MotionOwner.ANIMATION) return false
+        if (held != MotionOwner.ANIMATION) return false
         goal[0] = target
         return rebuild(r, retimer, animationSpec)
     }
@@ -879,7 +927,7 @@ class FuselineValue<T>(
     fun retargetXY(x: Float, y: Float, animationSpec: Motion? = null): Boolean {
         val r = ride ?: return false
         val retimer = r.retimer ?: return false
-        if (owner != MotionOwner.ANIMATION) return false
+        if (held != MotionOwner.ANIMATION) return false
         goal[0] = x
         goal[1] = y
         return rebuild(r, retimer, animationSpec)
@@ -936,7 +984,7 @@ class FuselineValue<T>(
         dropNative()
         ride = null
         nowAt = Long.MIN_VALUE
-        if (owner != MotionOwner.IDLE) owner = MotionOwner.IDLE
+        if (held != MotionOwner.IDLE) owner = MotionOwner.IDLE
         converter.write(target, now)
         converter.write(target, goal)
         speed.fill(0f)
@@ -999,7 +1047,7 @@ class FuselineValue<T>(
 
     /** Moves the value by [delta] under a gesture (taking it from any move under way), at [timeNanos]. */
     fun dragBy(delta: T, timeNanos: Long = monotonicNanos()) {
-        if (owner != MotionOwner.GESTURE) grab(timeNanos)
+        if (held != MotionOwner.GESTURE) grab(timeNanos)
         converter.write(delta, scratch)
         for (i in 0 until dims) now[i] += scratch[i]
         dragged(timeNanos)
@@ -1007,7 +1055,7 @@ class FuselineValue<T>(
 
     /** Puts the value at [position] under a gesture (taking it from any move under way), at [timeNanos]. */
     fun dragTo(position: T, timeNanos: Long = monotonicNanos()) {
-        if (owner != MotionOwner.GESTURE) grab(timeNanos)
+        if (held != MotionOwner.GESTURE) grab(timeNanos)
         converter.write(position, now)
         dragged(timeNanos)
     }
@@ -1022,7 +1070,7 @@ class FuselineValue<T>(
 
     /** Lets go where it is: the gesture ends without a motion, and the value rests. */
     fun cancelDrag() {
-        if (owner != MotionOwner.GESTURE) return
+        if (held != MotionOwner.GESTURE) return
         owner = MotionOwner.IDLE
         speed.fill(0f)
         speedFromDrag = false
@@ -1077,7 +1125,7 @@ class FuselineValue<T>(
         } finally {
             if (job === me) {
                 job = null
-                if (owner == MotionOwner.ANIMATION) owner = MotionOwner.IDLE
+                if (held == MotionOwner.ANIMATION) owner = MotionOwner.IDLE
             }
         }
     }
