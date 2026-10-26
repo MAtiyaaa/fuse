@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.data.db.DesktopDatabase
 import io.github.matiyaaa.fuse.data.db.FuseDatabase
 import io.github.matiyaaa.fuse.data.settings.SettingsStore
 import io.github.matiyaaa.fuse.sync.HeadlessHost
+import io.github.matiyaaa.fuse.sync.HostDataCheck
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import io.github.matiyaaa.fuse.integrations.getOrNull
@@ -30,7 +31,8 @@ object SyncHostMain {
                 driver.close()
             }
         }.getOrElse {
-            Log.info("Fuse One host: couldn't read the settings")
+            Log.info("Fuse One host: couldn't read the settings: ${it.message ?: it::class.simpleName}")
+            Thread.sleep(START_RETRY_MS)
             return 2
         }
         if (sync.role != "HOST") {
@@ -40,7 +42,17 @@ object SyncHostMain {
         val name = sync.hostName.ifBlank { runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrDefault("Fuse") }
         val folder = sync.hostDataDir.ifBlank { null }?.let(::File) ?: File(dirs.data, "sync/host")
         val backups = sync.householdBackupDir.ifBlank { null }?.let(::File) ?: File(dirs.data, "sync/household-backups")
-        val host = HeadlessHost.serve(folder, sync.hostPort, name, BuildInfo.VERSION, backupsDir = backups)
+        // A data folder the host can't use (another program changed its owner) is said plainly and
+        // waited on, instead of a failed start every few seconds; the host starts once it is given back.
+        HeadlessHost.waitForData(folder, sync.hostPort, log = { Log.info("Fuse One host: $it") })
+        val host = try {
+            HeadlessHost.serve(folder, sync.hostPort, name, BuildInfo.VERSION, backupsDir = backups)
+        } catch (e: Exception) {
+            // Anything else that stops it: said, and tried again a minute on rather than every few seconds.
+            Log.info("Fuse One host couldn't start: ${e.message ?: e::class.simpleName}")
+            Thread.sleep(START_RETRY_MS)
+            return FAILED
+        }
         if (host == null) {
             Log.info("Fuse One host: port ${sync.hostPort} is in use (Fuse is hosting); trying again later")
             return 4
@@ -58,12 +70,22 @@ object SyncHostMain {
         val work = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
         host.onUpdateAsked { remoteUpdate(dirs, inPlace, work) { updated.trySend(Unit) } }
         runBlocking {
+            var heldSaidAt = Long.MIN_VALUE / 2
             while (true) {
-                if (kotlinx.coroutines.withTimeoutOrNull(HostUpkeep.EVERY_MS) { updated.receive() } != null) {
-                    Log.info("Fuse One host: updated as a device asked; starting again on the new Fuse")
+                val asked = kotlinx.coroutines.withTimeoutOrNull(HostUpkeep.EVERY_MS) { updated.receive() } != null
+                if (!asked && !runCatching { upkeep.check() }.getOrDefault(false)) continue
+                // The new Fuse opens the same folder from scratch: it starts only once that works. This
+                // host read its files when it started and carries on, so a folder another program took
+                // over since never turns an update into the host not starting.
+                val problem = HostDataCheck.problem(folder)
+                if (problem == null) {
+                    if (asked) Log.info("Fuse One host: updated as a device asked; starting again on the new Fuse")
                     break
                 }
-                if (runCatching { upkeep.check() }.getOrDefault(false)) break
+                if (System.currentTimeMillis() - heldSaidAt >= HELD_REMIND_MS) {
+                    Log.info("Fuse One host: Fuse was updated, but the host keeps running Fuse ${BuildInfo.VERSION} until it can use its data folder again. $problem")
+                    heldSaidAt = System.currentTimeMillis()
+                }
             }
         }
         // Stopped on purpose: the service starts the host again, on the Fuse that is there now.
@@ -72,6 +94,15 @@ object SyncHostMain {
 
     /** Exit code when the host stops to start again on a newer Fuse. */
     const val UPDATED = 75
+
+    /** Exit code when the host couldn't start for a reason it can't name; the service tries again. */
+    private const val FAILED = 1
+
+    /** How long a host that couldn't start waits before the service tries again (it restarts 5 s after an exit). */
+    private const val START_RETRY_MS = 60_000L
+
+    /** How often a host held on an older Fuse says again why. */
+    private const val HELD_REMIND_MS = 60 * 60_000L
 
     /**
      * A device asked the host to update: answers at once whether it will, and when it will, fetches

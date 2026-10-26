@@ -58,10 +58,10 @@ fun main(args: Array<String>) {
 
 private fun serve(config: HostConfig): Int {
     val dir = config.dataDir.apply { mkdirs() }
-    if (!dir.isDirectory || !dir.canWrite()) {
-        System.err.println("Fuse One Host can't write to ${dir.path}. Give the host's user that folder, then start it again.")
-        return 73
-    }
+    // A folder the host can't use (its owner changed, a volume mounted from another user) is said
+    // plainly, to the log and to every device, and waited on: the host starts once it is given back,
+    // rather than the container restarting into the same failure.
+    HeadlessHost.waitForData(dir, config.port, log = { System.err.println("Fuse One Host: $it") })
     val host = HeadlessHost.serve(dir, config.port, config.name, HostConfig.version(), backupsDir = config.backupsDir)
     if (host == null) {
         System.err.println("Port ${config.port} is already in use. Stop whatever uses it (another Fuse One Host, or Fuse hosting on this computer), or choose another port with FUSE_ONE_PORT.")

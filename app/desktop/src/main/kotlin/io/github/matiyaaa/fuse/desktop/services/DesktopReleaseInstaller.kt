@@ -134,7 +134,9 @@ internal class DesktopReleaseInstaller(
             val target = if (fuse) replaceFuse(part, VERSION_IN_NAME.find(name)?.groupValues?.get(1)) else place(part, name, sha256)
             ResumableDownload.finished(part)
             if (fuse) UpdateHandoff.installedFuseAppImage = target.path
-            Log.info("installed $name to ${target.parent}")
+            // Fuse takes the place of the file it runs from, under that file's name, so what starts it
+            // (a shortcut, the host's service) keeps working: the log names that file.
+            Log.info(if (fuse) "installed $name as ${target.path}" else "installed $name to ${target.parent}")
             onProgress(1f)
             Result.success(Unit)
         } catch (e: kotlinx.coroutines.CancellationException) {

@@ -23,6 +23,8 @@ class SyncHostServiceTest {
         assertTrue("Restart=always" in unit)
         // However often it stops (a power cut mid-start, the network not up yet), it is started again.
         assertTrue("StartLimitIntervalSec=0" in unit)
+        // One that keeps stopping waits longer each time, never more than two minutes.
+        assertTrue("RestartSteps=5" in unit && "RestartMaxDelaySec=120" in unit, unit)
         // But a computer that isn't the host any more isn't started again and again.
         assertTrue("RestartPreventExitStatus=3" in unit)
         assertTrue("WantedBy=default.target" in unit)

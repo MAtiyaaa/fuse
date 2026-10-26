@@ -27,6 +27,7 @@ internal class HostUpkeep(
 ) {
     private val startedAs: String? = program?.let(::signature)
     private var seenChanged: String? = null
+    private var announced: String? = null
     private var lastTry = Long.MIN_VALUE / 2
 
     /** One look; true when the host should stop so the system starts it again on the new Fuse. */
@@ -35,7 +36,9 @@ internal class HostUpkeep(
         if (startedAs != null && sig != null && sig != startedAs) {
             // Only once the file holds still: an update may still be writing it.
             if (sig == seenChanged) {
-                log("Fuse was updated on this computer: the host starts again on the new version")
+                // Said once: the host may hold the start a while (its data folder unusable), asking again each minute.
+                if (announced != sig) log("Fuse was updated on this computer: the host starts again on the new version")
+                announced = sig
                 return true
             }
             seenChanged = sig

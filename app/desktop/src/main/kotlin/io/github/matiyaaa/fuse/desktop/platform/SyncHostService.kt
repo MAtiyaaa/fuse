@@ -156,6 +156,10 @@ class SyncHostService(private val dirs: FuseDirs, private val port: () -> Int, p
             |ExecStart=${Autostart.quoteExec(exec)} $ARGUMENT
             |Restart=always
             |RestartSec=5
+            |# A host that keeps stopping waits longer each time, up to two minutes (systemd 254 and
+            |# later; older systemd skips these lines and keeps to five seconds).
+            |RestartSteps=5
+            |RestartMaxDelaySec=120
             |# Not the host here any more (3: another computer hosts, or none):
             |# nothing to start again, instead of a new start every few seconds for good.
             |RestartPreventExitStatus=3

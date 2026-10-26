@@ -321,6 +321,9 @@ class JvmSyncService(
     /** One start of the host at a time: setting up a host and Fuse's own start-up can both ask at once. */
     private val hostStart = Mutex()
 
+    /** What last stopped the host using its data folder, said once in the activity log. */
+    @Volatile private var hostDataSaid: String? = null
+
     private suspend fun startHostServer(c: SyncSettings) = hostStart.withLock { startHostServerOnce(c) }
 
     private suspend fun startHostServerOnce(c: SyncSettings) {
@@ -368,6 +371,15 @@ class JvmSyncService(
                 return
             }
         }
+        // A data folder the host can't use (another program changed its owner) is said once, with the
+        // fix, rather than failing deep inside the host's files.
+        HostDataCheck.problem(hostDir)?.let { problem ->
+            if (problem != hostDataSaid) log(problem, kind = SyncActivity.HOST)
+            hostDataSaid = problem
+            refreshHostView()
+            return
+        }
+        hostDataSaid = null
         val store = HostStore(hostDir, clock, hostName = c.hostName.ifBlank { defaultDeviceName })
         val server = runCatching { SyncHost(store, c.hostPort, fuseVersion, clock).start() }.getOrNull()
         if (server != null) {
