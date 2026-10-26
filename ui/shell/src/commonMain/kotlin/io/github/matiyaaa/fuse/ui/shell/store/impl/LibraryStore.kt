@@ -436,6 +436,13 @@ internal class DefaultLibraryOps(
      */
     private val sharedLists = LinkedHashMap<GameQuery, Flow<List<GameCard>>>()
 
+    init {
+        // A kept list may not have caught up with a write yet, so a write lets every one go: whoever
+        // asks next (a screen, or a one-off read straight after adding or removing a game) reads afresh.
+        // A screen already showing a list keeps it, and sees the change as before.
+        ctx.data.games.onListsChange { synchronized(sharedLists) { sharedLists.clear() } }
+    }
+
     override fun games(query: GameQuery): Flow<List<GameCard>> = synchronized(sharedLists) {
         sharedLists.remove(query)?.let { kept -> sharedLists[query] = kept; return kept }
         // Few lists are open at once: past that the longest unasked-for one is forgotten (a screen

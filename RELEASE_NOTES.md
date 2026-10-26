@@ -46,7 +46,8 @@ keeps your own word on how each game runs.
   order.
 - **The library opens again at once.** Lists of games are shared: a screen asking for games
   another is showing gets the list that one keeps current, and the library opened again within half
-  a minute of leaving it is there at once. Its pictures are read with only what they need.
+  a minute of leaving it is there at once, unless a game or a collection changed meanwhile, when it
+  is read again. Its pictures are read with only what they need.
 - **Background work, coordinated.** Finding series, working out suggestions, reading discs to
   identify games, building the search index and checking the library run at most two at once on
   threads of their own, wait while a game runs or the device sleeps, and keep what they cost for
