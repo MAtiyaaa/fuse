@@ -112,6 +112,9 @@ internal class StoreContext(
             ?.let { io.github.matiyaaa.fuse.ui.fuseline.monotonicNanos() - it }
     }
 
+    /** Fuse's Background Task Scheduler: the work nobody is waiting on, bounded and held during games. */
+    val work = BackgroundWork(governor)
+
     fun recordProblem(problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) {
         recentProblems.update { (it + (now() to problem)).takeLast(10) }
     }

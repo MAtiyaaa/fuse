@@ -34,6 +34,8 @@ data class EnginePolicy(
     val artwork: Boolean,
     /** Looking for emulators and apps, and learning about them. */
     val detection: Boolean,
+    /** Background jobs that are only nice to have: finding series, suggestions, identifying games ([io.github.matiyaaa.fuse.ui.shell.store.impl.BackgroundWork]). */
+    val background: Boolean = artwork,
 ) {
     companion object {
         fun of(state: EngineState): EnginePolicy = when (state) {

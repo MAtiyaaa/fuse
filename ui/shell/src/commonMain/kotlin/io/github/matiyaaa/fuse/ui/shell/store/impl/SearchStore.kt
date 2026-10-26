@@ -19,17 +19,28 @@ import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.SearchChip
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import io.github.matiyaaa.fuse.ui.shell.store.SearchSuggestion
-import kotlinx.coroutines.flow.SharingStarted
+import io.github.matiyaaa.fuse.data.ioDispatcher
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Search over the library: the name ranked with [io.github.matiyaaa.fuse.data.search.SearchRank],
  * filters from [SearchSyntax], chips that say each filter in words, and suggestions (filters to
  * add while nothing is typed, then values for the filter being typed). Everything stays on the
- * device. The index follows the library while search is in use and is let go a minute after.
+ * device.
+ *
+ * The index is kept ready: once the first screen settles it is built, and after the library changes
+ * it is built again in the background once the changes stop for a moment (a scan writes thousands
+ * of times; the index is built once after). A search that comes while the library has changed since
+ * the last build builds it then, so it never answers from an old library.
  */
 internal class LibrarySearcher(
     private val ctx: StoreContext,
@@ -39,12 +50,36 @@ internal class LibrarySearcher(
     private val apps: (String) -> List<AppCard>,
     private val collectionsShown: () -> Boolean,
 ) {
-    private val entries: StateFlow<List<SearchEntry>?> =
-        ctx.data.search.observeEntries().stateIn(ctx.scope, SharingStarted.WhileSubscribed(60_000), null)
+    /** Goes up the moment the library changes, on the writing thread, before the write returns. */
+    private val changes = MutableStateFlow(0L)
+    private val indexLock = Mutex()
+    private var index: List<SearchEntry>? = null
+    private var indexedAt = -1L
+
+    init {
+        ctx.data.search.onChange { changes.update { it + 1 } }
+        ctx.scope.launch {
+            io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.settled()
+            changes.collectLatest {
+                delay(REINDEX_SETTLE_MS)
+                runCatching { ctx.work.run(BackgroundWork.Job.SEARCH_INDEX) { entries() } }
+            }
+        }
+    }
+
+    /** The index, built again first if the library changed since it last was. */
+    private suspend fun entries(): List<SearchEntry> = indexLock.withLock {
+        val want = changes.value
+        index?.takeIf { indexedAt == want }?.let { return it }
+        val fresh = ctx.work.timed(BackgroundWork.Job.SEARCH_INDEX) { withContext(ioDispatcher) { ctx.data.search.readEntries() } }
+        index = fresh
+        indexedAt = want
+        fresh
+    }
 
     suspend fun search(text: String): SearchResults {
         val query = SearchSyntax.parse(text)
-        val all = entries.filterNotNull().first()
+        val all = entries()
         val chips = query.filters.map { SearchChip(it.token, keyOf(it), describe(it)) } +
             query.invalid.map { SearchChip(it, null, it, valid = false) }
         val suggestions = suggest(text, query, all)
@@ -219,4 +254,9 @@ internal class LibrarySearcher(
     }
 
     private fun games(n: Int) = if (n == 1) "1 game" else "$n games"
+
+    private companion object {
+        /** How long the library stays unchanged before the index is built again by itself. */
+        const val REINDEX_SETTLE_MS = 1_500L
+    }
 }

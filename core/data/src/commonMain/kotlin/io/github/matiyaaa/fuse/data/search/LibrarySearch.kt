@@ -1,7 +1,7 @@
 package io.github.matiyaaa.fuse.data.search
 
+import app.cash.sqldelight.Query
 import app.cash.sqldelight.coroutines.asFlow
-import app.cash.sqldelight.coroutines.mapToList
 import io.github.matiyaaa.fuse.data.TitleText
 import io.github.matiyaaa.fuse.data.db.FuseDatabase
 import io.github.matiyaaa.fuse.data.decodeOrNull
@@ -20,25 +20,50 @@ class SearchEntry(
     /** Display and original title, normalised ([TitleText.normalize]). */
     val name: String,
     val genres: List<String>,
-    private val details: String?,
+    /** The game's details as stored, read only when a search asks who made it. */
+    private val details: () -> String?,
 ) {
+    /** [name] taken apart for ranking, once, when the library is read. */
+    val ranked = SearchRank.Name(name)
+
     /** Developer and publisher, normalised; decoded only for a `developer:` search. */
     val makers: String by lazy {
-        val m = decodeOrNull(GameMetadata.serializer(), details) ?: return@lazy ""
+        val m = decodeOrNull(GameMetadata.serializer(), details()) ?: return@lazy ""
         TitleText.normalize(listOfNotNull(m.developer, m.publisher).joinToString(" "))
     }
 }
 
-/** Every game search can find, kept current as the library changes. */
+/** Every game search can find. */
 class SearchRepository(
     private val db: FuseDatabase,
     private val dispatcher: CoroutineDispatcher = ioDispatcher,
 ) {
-    fun observeEntries(): Flow<List<SearchEntry>> = db.searchQueries.searchRows().asFlow().mapToList(dispatcher).map { rows ->
+    /**
+     * Every game search can find, as the library holds it now. Each game's stored details (long:
+     * descriptions and all) are read only once a search asks who made a game, so an index of ten
+     * thousand games is built from names and genres alone.
+     */
+    fun readEntries(): List<SearchEntry> {
+        val rows = db.searchQueries.searchRows().executeAsList()
         val genres = db.searchQueries.searchGenres().executeAsList().groupBy({ it.game_id }, { it.genre })
-        val details = db.searchQueries.searchDetails().executeAsList().associate { it.id to it.metadata_json }
-        rows.map { r -> SearchEntry(r.toSummary(), r.search_title, genres[r.id].orEmpty(), details[r.id]) }
-    }.flowOn(dispatcher)
+        val details = lazy { db.searchQueries.searchDetails().executeAsList().associate { it.id to it.metadata_json } }
+        return rows.map { r -> SearchEntry(r.toSummary(), r.search_title, genres[r.id].orEmpty()) { details.value[r.id] } }
+    }
+
+    fun observeEntries(): Flow<List<SearchEntry>> = db.searchQueries.searchRows().asFlow().map { readEntries() }.flowOn(dispatcher)
+
+    /**
+     * Calls [changed] the moment anything search finds changes (a game's name, flags or genres),
+     * on the thread that wrote it, before the write returns. Returns what stops it.
+     */
+    fun onChange(changed: () -> Unit): () -> Unit {
+        val listener = object : Query.Listener {
+            override fun queryResultsChanged() = changed()
+        }
+        val queries = listOf(db.searchQueries.searchRows(), db.searchQueries.searchGenres())
+        queries.forEach { it.addListener(listener) }
+        return { queries.forEach { it.removeListener(listener) } }
+    }
 }
 
 /** A game found, and how well it matched (higher first). */
@@ -61,7 +86,7 @@ object LibrarySearch {
         outside: (SearchEntry, SearchFilter) -> Boolean = { _, _ -> true },
     ): List<SearchMatch> {
         if (query.isEmpty) return emptyList()
-        val needle = query.needle
+        val needle = SearchRank.Needle(query.needle)
         val wantsHidden = query.filters.any { it is SearchFilter.Hidden && it.yes }
         val wantsMissing = query.filters.any { it is SearchFilter.Missing && it.yes }
         val today = (now + utcOffsetMillis).floorDiv(DAY_MS) * DAY_MS - utcOffsetMillis
@@ -71,7 +96,7 @@ object LibrarySearch {
             if (s.hidden && !wantsHidden) continue
             if (s.missing && !wantsMissing) continue
             if (!query.filters.all { f -> keeps(e, f, now, today) && outside(e, f) }) continue
-            val score = SearchRank.score(e.name, needle) ?: continue
+            val score = SearchRank.score(e.ranked, needle) ?: continue
             out += SearchMatch(e, score)
         }
         // Equal matches: favourites, then the most recently played, then by name.

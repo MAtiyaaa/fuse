@@ -340,15 +340,17 @@ internal class DefaultLibraryOps(
             .shareIn(ctx.scope, SharingStarted.WhileSubscribed(RECOMMEND_KEEP_MS), replay = 1)
 
     private val recGames: Flow<List<RecGame<GameId>>> = recRows
-        .map { rows -> rows.map { it.toRecGame() } }
+        .map { rows -> ctx.work.run(BackgroundWork.Job.SUGGESTIONS) { rows.map { it.toRecGame() } } }
         .flowOn(Dispatchers.Default)
         .shareIn(ctx.scope, SharingStarted.WhileSubscribed(RECOMMEND_KEEP_MS), replay = 1)
 
     private val hourly: Flow<Unit> = flow { while (true) { emit(Unit); kotlinx.coroutines.delay(HOUR_MS) } }
 
     private val picks: Flow<HomePicks> = combine(recGames, hourly) { games, _ ->
-        val now = ctx.now()
-        Recommender.recommend(games, now) to Recommender.spotlight(games, now, offsetMs = ctx.services.utcOffsetMillis())
+        ctx.work.run(BackgroundWork.Job.SUGGESTIONS) {
+            val now = ctx.now()
+            Recommender.recommend(games, now) to Recommender.spotlight(games, now, offsetMs = ctx.services.utcOffsetMillis())
+        }
     }.distinctUntilChanged().flatMapLatest { (forYou, spot) ->
         val ids = forYou.map { it.key } + listOfNotNull(spot?.key)
         ctx.cards(data.games.observeSummariesInOrder(ids)).map { cards ->
@@ -362,7 +364,9 @@ internal class DefaultLibraryOps(
     }.flowOn(Dispatchers.Default)
 
     override fun spotlight(platform: PlatformId): Flow<io.github.matiyaaa.fuse.ui.shell.store.Suggestion?> = combine(recGames, hourly) { games, _ ->
-        Recommender.spotlight(games, ctx.now(), platform = platform.value, offsetMs = ctx.services.utcOffsetMillis())
+        ctx.work.run(BackgroundWork.Job.SUGGESTIONS) {
+            Recommender.spotlight(games, ctx.now(), platform = platform.value, offsetMs = ctx.services.utcOffsetMillis())
+        }
     }.distinctUntilChanged().flatMapLatest { pick ->
         if (pick == null) {
             flowOf(null)
@@ -532,6 +536,11 @@ internal class DefaultLibraryOps(
             apps = { q -> if (apps.supported) apps.search(q) else emptyList() },
             collectionsShown = { ctx.settings.value.library.collectionsEnabled },
         )
+    }
+
+    /** Makes the searcher now, so its index is built once the first screen settles, before the first search. */
+    internal fun warmSearch() {
+        searcher
     }
 
     override fun search(query: String): Flow<SearchResults> = flow { emit(searcher.search(query)) }.flowOn(Dispatchers.Default)

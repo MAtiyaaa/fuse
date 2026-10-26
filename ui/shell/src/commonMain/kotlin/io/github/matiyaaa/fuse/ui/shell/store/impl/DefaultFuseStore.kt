@@ -598,6 +598,8 @@ internal class DefaultFuseStore private constructor(
         ctx.scope.launch { ctx.playing.collect { transfers.conditions(playing = it != null) } }
         // The achievements unlocked in the game being played, for the screens that show them.
         achievements.followPlay()
+        // Search answers its first question as fast as the rest: its index is ready beforehand.
+        library.warmSearch()
         // Fuse Engine's Performance Governor: decorative motion follows what Fuse is doing.
         ctx.governor.start()
         ctx.scope.launch {
@@ -857,7 +859,7 @@ internal class DefaultFuseStore private constructor(
                 if (phase == ScanPhase.DONE) {
                     delay(AUTO_FILL_DELAY_MS)
                     mediaOps.autoFill()
-                    runCatching { library.identifyLibrary() }
+                    runCatching { ctx.work.run(BackgroundWork.Job.IDENTIFY) { library.identifyLibrary() } }
                 }
             }
         }

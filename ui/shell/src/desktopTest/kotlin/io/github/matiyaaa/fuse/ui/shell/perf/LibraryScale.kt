@@ -45,8 +45,11 @@ import org.junit.Assume.assumeTrue
  * - **start**: a new store over that database, as Fuse opening again: Home with every system and
  *   its rows, from the moment the store is made, and the whole library listed (every game with its
  *   art) from the same moment;
- * - **list**: the library listed again with the store warm;
- * - **search**: the first search (which builds the index) and 40 more (p50, p95);
+ * - **list**: the library listed again with the store warm, once and then 20 times (p50, p95), as
+ *   opening the library again does;
+ * - **home**: Home opened again with the store warm, 20 times (p50, p95);
+ * - **search**: the first search right after the start (which may have to build the index), 40
+ *   more (p50, p95), and a first search once Fuse has settled for a few seconds (its index ready);
  * - **heap**: what the store keeps once it settles.
  *
  * Results go to `scale.json` in -Pfuse.perf.dir. Not part of the normal test run:
@@ -157,6 +160,16 @@ class LibraryScale {
         val listMark = TimeSource.Monotonic.markNow()
         store.library.games(GameQuery()).first { it.size >= games }
         val listMs = listMark.elapsedNow().inWholeMilliseconds
+        val listTimes = (0 until 20).map {
+            val m = TimeSource.Monotonic.markNow()
+            store.library.games(GameQuery()).first { it.size >= games }
+            m.elapsedNow().inWholeMicroseconds / 1000.0
+        }.sorted()
+        val homeTimes = (0 until 20).map {
+            val m = TimeSource.Monotonic.markNow()
+            store.library.home.first { it.systems.size >= systems && it.continuePlaying.isNotEmpty() && it.favorites.isNotEmpty() }
+            m.elapsedNow().inWholeMicroseconds / 1000.0
+        }.sorted()
         val queries = listOf("kart", "legend rocket", "shadow knight 2", "quest", "puzzle island", "zz none", "racer", "star dungeon", "soccer 1", "knight")
         phase("search", games)
         val firstMark = TimeSource.Monotonic.markNow()
@@ -167,6 +180,12 @@ class LibraryScale {
             store.library.search(queries[k % queries.size]).first()
             m.elapsedNow().inWholeMicroseconds / 1000.0
         }.sorted()
+        // Fuse left alone for a moment, as before most searches, then a search nobody made yet.
+        phase("settle", games)
+        kotlinx.coroutines.delay(SETTLE_MS)
+        val settledMark = TimeSource.Monotonic.markNow()
+        store.library.search("island quest").first()
+        val settledSearchMs = settledMark.elapsedNow().inWholeMicroseconds / 1000.0
         phase("end", games)
         val heldMb = heapMb() - before
         scope.cancel()
@@ -174,11 +193,15 @@ class LibraryScale {
         cache.deleteRecursively()
         return linkedMapOf(
             "games" to games, "scanMs" to scanMs, "startHomeMs" to homeMs, "startLibraryMs" to startListMs,
-            "warmListMs" to listMs, "firstSearchMs" to firstSearchMs,
-            "searchP50Ms" to "%.2f".format(searchTimes[searchTimes.size / 2]), "searchP95Ms" to "%.2f".format(searchTimes[(searchTimes.size * 95) / 100]),
-            "heapHeldMb" to heldMb,
+            "warmListMs" to listMs, "warmListP50Ms" to p(listTimes, 50), "warmListP95Ms" to p(listTimes, 95),
+            "warmHomeP50Ms" to p(homeTimes, 50), "warmHomeP95Ms" to p(homeTimes, 95),
+            "firstSearchMs" to firstSearchMs, "searchP50Ms" to p(searchTimes, 50), "searchP95Ms" to p(searchTimes, 95),
+            "settledSearchMs" to "%.2f".format(settledSearchMs), "heapHeldMb" to heldMb,
         )
     }
+
+    /** The [pct]th percentile of sorted [times]. */
+    private fun p(times: List<Double>, pct: Int) = "%.2f".format(times[((times.size * pct) / 100).coerceAtMost(times.size - 1)])
 
     /** Marks where a measured stretch begins, so a profile of the run can be cut into them. */
     private fun phase(name: String, games: Int) = println("SCALE-PHASE $name $games ${System.currentTimeMillis()}")
@@ -238,5 +261,8 @@ class LibraryScale {
         val WORDS = listOf("Quest", "Legend", "Racer", "Star", "Dungeon", "Kart", "Soccer", "Puzzle", "Knight", "Island", "Rocket", "Shadow")
         const val SCAN_LIMIT_MS = 900_000L
         const val START_LIMIT_MS = 300_000L
+
+        /** How long Fuse is left alone before the settled search (the index is built again 1.5 s after the last change). */
+        const val SETTLE_MS = 4_000L
     }
 }
