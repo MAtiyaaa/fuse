@@ -34,7 +34,9 @@ import kotlinx.coroutines.launch
  * System health over the store's own state. The cheap checks (folders and drives, emulators,
  * firmware, provider keys, missing games, updates) follow that state as it changes; the game-file
  * checks (every disc a playlist names, every track a sheet lists) read small text files, so they run
- * after scans and when asked, in the background, and never more than one at a time.
+ * after scans and when asked, in the background, and never more than one at a time. Library Health
+ * (pictures whose files are gone, files nothing uses, covers) reads far more, so it runs only when
+ * asked: when System health is opened, or after a repair.
  */
 internal class DefaultHealthOps(
     private val ctx: StoreContext,
@@ -50,6 +52,9 @@ internal class DefaultHealthOps(
 
     private var setup: List<HealthIssue> = emptyList()
     private var files: List<HealthIssue> = emptyList()
+
+    /** Library Health's findings, from the last time System health was opened or a check asked for. */
+    private var libraryFound: List<HealthIssue> = emptyList()
     private val found = java.util.concurrent.ConcurrentHashMap<String, List<HealthIssue>>()
     private val recheck = Channel<Unit>(Channel.CONFLATED)
     private var filesJob: Job? = null
@@ -83,13 +88,15 @@ internal class DefaultHealthOps(
             ).collect { recheck.trySend(Unit) }
         }
         ctx.scope.launch {
-            engine.scan.map { it.phase }.distinctUntilChanged().collect { if (it == ScanPhase.DONE) checkFiles() }
+            // Library Health isn't part of this: it reads every picture's file and the whole library, so it
+            // runs when System health is opened or asks, never on the scan every start makes.
+            engine.scan.map { it.phase }.distinctUntilChanged().collect { if (it == ScanPhase.DONE) checkFiles(library = false) }
         }
     }
 
     override fun check() {
         recheck.trySend(Unit)
-        checkFiles()
+        checkFiles(library = true)
     }
 
     override fun setFound(key: String, issues: List<HealthIssue>) {
@@ -98,7 +105,7 @@ internal class DefaultHealthOps(
     }
 
     private fun publish() {
-        val all = (setup + files + found.values.flatten()).sortedWith(compareByDescending<HealthIssue> { it.problem.severity }.thenBy { it.id })
+        val all = (setup + files + libraryFound + found.values.flatten()).sortedWith(compareByDescending<HealthIssue> { it.problem.severity }.thenBy { it.id })
         state.value = state.value.copy(issues = all)
     }
 
@@ -356,9 +363,12 @@ internal class DefaultHealthOps(
 
     // ---------------------------------------------------------------------------------- files
 
-    private fun checkFiles() {
+    private fun checkFiles(library: Boolean) {
+        // A look at the library asked for while a scan's check runs is made right after it.
+        if (library) libraryWanted = true
         if (filesJob?.isActive == true) return
         filesJob = ctx.scope.launch(Dispatchers.Default) {
+            val withLibrary = libraryWanted.also { libraryWanted = false }
             state.value = state.value.copy(checking = true)
             try {
                 val roots = ctx.offline.value
@@ -395,7 +405,8 @@ internal class DefaultHealthOps(
                     )
                     if (found.size >= GAME_ISSUES_MAX) break
                 }
-                files = found + runCatching { ctx.work.run(BackgroundWork.Job.LIBRARY_HEALTH) { libraryHealth() } }.getOrDefault(emptyList())
+                files = found
+                if (withLibrary) libraryFound = ctx.work.run(BackgroundWork.Job.LIBRARY_HEALTH) { libraryHealth() }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -404,8 +415,11 @@ internal class DefaultHealthOps(
                 state.value = state.value.copy(checking = false, checkedAt = ctx.now())
                 publish()
             }
+            if (libraryWanted) checkFiles(library = true)
         }
     }
+
+    @Volatile private var libraryWanted = false
 
     // ------------------------------------------------------------------------- library health
 
