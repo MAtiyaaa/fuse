@@ -49,7 +49,8 @@ import org.junit.Assume.assumeTrue
  *   opening the library again does;
  * - **home**: Home opened again with the store warm, 20 times (p50, p95);
  * - **search**: the first search right after the start (which may have to build the index), 40
- *   more (p50, p95), and a first search once Fuse has settled for a few seconds (its index ready);
+ *   more (p50, p95) while the start's background work (series, suggestions) still runs, then once
+ *   Fuse has settled for a few seconds a first search nobody made yet and 40 more (p50, p95);
  * - **heap**: what the store keeps once it settles.
  *
  * Results go to `scale.json` in -Pfuse.perf.dir. Not part of the normal test run:
@@ -189,6 +190,11 @@ class LibraryScale {
         val settledMark = TimeSource.Monotonic.markNow()
         store.library.search("island quest").first()
         val settledSearchMs = settledMark.elapsedNow().inWholeMicroseconds / 1000.0
+        val settledTimes = (0 until 40).map { k ->
+            val m = TimeSource.Monotonic.markNow()
+            store.library.search(queries[k % queries.size]).first()
+            m.elapsedNow().inWholeMicroseconds / 1000.0
+        }.sorted()
         phase("end", games)
         // What the background work cost while all that ran, from the Performance Observatory.
         store.observatory.jobs.first { it.isNotEmpty() }.forEach { j ->
@@ -214,7 +220,8 @@ class LibraryScale {
             "warmListMs" to listMs, "warmListP50Ms" to p(listTimes, 50), "warmListP95Ms" to p(listTimes, 95),
             "warmHomeP50Ms" to p(homeTimes, 50), "warmHomeP95Ms" to p(homeTimes, 95),
             "firstSearchMs" to firstSearchMs, "searchP50Ms" to p(searchTimes, 50), "searchP95Ms" to p(searchTimes, 95),
-            "settledSearchMs" to "%.2f".format(settledSearchMs), "heapHeldMb" to heldMb,
+            "settledSearchMs" to "%.2f".format(settledSearchMs), "settledP50Ms" to p(settledTimes, 50), "settledP95Ms" to p(settledTimes, 95),
+            "heapHeldMb" to heldMb,
         )
     }
 
