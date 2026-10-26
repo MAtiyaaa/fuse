@@ -453,6 +453,27 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         settle(2_500)
         shoot("drives, systems and games")
     }
+    // Fuse 0.4.5: the Performance Observatory, measured, then its report.
+    scenario("settings", "performance observatory") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("displays"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Performance Observatory")
+        waitFor("Measuring")
+        shoot("measuring", settleMs = 300)
+        // The test's clock moves only as frames are pumped: two seconds of them, then the results.
+        pumpUntil("the measurements", 60_000) { hasExactText("Missed refreshes") }
+        settle(800)
+        shoot("frames, library, pictures and background work")
+        focusText("Report")
+        settle(600)
+        shoot("down to the device and the report")
+        tapText("Report")
+        waitFor("Performance report")
+        settle(800)
+        shoot("the report")
+    }
     scenario("settings", "transfer rules") {
         useLibrary()
         openSettings()

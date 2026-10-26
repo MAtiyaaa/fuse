@@ -81,6 +81,8 @@ fun healthRows(app: AppState): List<MenuAction> {
     val notes = issues.size - attention
     val drawing by app.platform.drawing.collectAsState()
     val power = powerRows(app)
+    val context = coil3.compose.LocalPlatformContext.current
+    val images = androidx.compose.runtime.remember(context) { runCatching { coil3.SingletonImageLoader.get(context) }.getOrNull() }
     return buildList {
         add(MenuAction(
             "status",
@@ -120,6 +122,13 @@ fun healthRows(app: AppState): List<MenuAction> {
         app.graphicsRow(drawing, section = here)?.let(::add)
         // Power and heat folds open in place, its facts read only while shown.
         addAll(app.group("health.power", "Power and heat", FuseIcons.BatteryMedium, summary = power.firstOrNull { it.id == "power.heat" }?.let { (it.trailing as? Trailing.Value)?.text }, detail = "The battery, how warm the device is, the screen's rate and what keeps it awake") { power }.map { it.copy(section = it.section ?: here) })
+        add(MenuAction(
+            "observatory", "Performance Observatory", FuseIcons.Dashboard,
+            detail = "How smoothly Fuse draws and how quickly the library answers here, measured now",
+            trailing = Trailing.Chevron,
+            section = "Diagnostics",
+            onSelect = { app.showObservatory(images) },
+        ))
         add(MenuAction(
             "report", "Diagnostics report", FuseIcons.ClipboardList,
             detail = "For a bug report: versions, systems, emulators, drives and what went wrong. You see it before it's saved",

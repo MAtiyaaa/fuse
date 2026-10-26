@@ -1895,6 +1895,8 @@ fun displayRows(app: AppState): List<MenuAction> {
 
 @Composable
 fun performanceRows(app: AppState): List<MenuAction> {
+    val context = coil3.compose.LocalPlatformContext.current
+    val images = androidx.compose.runtime.remember(context) { runCatching { coil3.SingletonImageLoader.get(context) }.getOrNull() }
     val drawing by app.platform.drawing.collectAsState()
     val p by app.store.prefs.collectAsState()
     val displays by app.platform.displays.collectAsState()
@@ -1910,6 +1912,12 @@ fun performanceRows(app: AppState): List<MenuAction> {
             add(toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "No video previews, blur, moving backgrounds or CRT; lighter artwork and a smaller image cache. Navigation stays quick, and the refresh rate stays yours") { v -> app.store.updatePrefs { it.copy(lowPower = v) } })
             app.graphicsRow(drawing)?.let(::add)
             add(toggleRow("overlay", "Performance overlay", FuseIcons.ChartLine, p.performanceOverlay, "Fuse's own frame rate, memory and temperatures, only as the system reports them. Other apps' frame rates can't be read") { v -> app.store.updatePrefs { it.copy(performanceOverlay = v) } })
+            add(MenuAction(
+                "observatory", "Performance Observatory", FuseIcons.Dashboard,
+                detail = "Fuse's frames, how quickly the library answers, the picture caches and background work, measured now, with a report to keep",
+                trailing = Trailing.Chevron,
+                onSelect = { app.showObservatory(images) },
+            ))
         }
         labelled("") {
             addAll(app.group(
