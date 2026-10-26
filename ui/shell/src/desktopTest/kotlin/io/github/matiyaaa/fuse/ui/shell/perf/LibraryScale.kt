@@ -136,6 +136,7 @@ class LibraryScale {
         }
         val before = heapMb()
         val scope = newScope()
+        phase("start", games)
         val startMark = TimeSource.Monotonic.markNow()
         val store: FuseStore = createFuseStore(FakeServices(FuseData(DesktopDatabase.open(db)), cache), scope)
         val systems = SYSTEMS.size.coerceAtMost(games)
@@ -152,10 +153,12 @@ class LibraryScale {
         val startListMs = withTimeout(START_LIMIT_MS) { library.await() }
 
         // The library again, warm, and searches: the first builds the index.
+        phase("list", games)
         val listMark = TimeSource.Monotonic.markNow()
         store.library.games(GameQuery()).first { it.size >= games }
         val listMs = listMark.elapsedNow().inWholeMilliseconds
         val queries = listOf("kart", "legend rocket", "shadow knight 2", "quest", "puzzle island", "zz none", "racer", "star dungeon", "soccer 1", "knight")
+        phase("search", games)
         val firstMark = TimeSource.Monotonic.markNow()
         store.library.search(queries.first()).first()
         val firstSearchMs = firstMark.elapsedNow().inWholeMilliseconds
@@ -164,6 +167,7 @@ class LibraryScale {
             store.library.search(queries[k % queries.size]).first()
             m.elapsedNow().inWholeMicroseconds / 1000.0
         }.sorted()
+        phase("end", games)
         val heldMb = heapMb() - before
         scope.cancel()
         root.deleteRecursively()
@@ -175,6 +179,9 @@ class LibraryScale {
             "heapHeldMb" to heldMb,
         )
     }
+
+    /** Marks where a measured stretch begins, so a profile of the run can be cut into them. */
+    private fun phase(name: String, games: Int) = println("SCALE-PHASE $name $games ${System.currentTimeMillis()}")
 
     /**
      * A pool of real images to point games' art at: covers and logos with text-like shapes and

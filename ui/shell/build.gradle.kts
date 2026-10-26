@@ -121,7 +121,10 @@ tasks.register<Test>("desktopPerf") {
     systemProperty("fuse.perf.size", providers.gradleProperty("fuse.perf.size").getOrElse(""))
     systemProperty("fuse.perf.matrix", providers.gradleProperty("fuse.perf.matrix").getOrElse(""))
     systemProperty("fuse.perf.refresh", providers.gradleProperty("fuse.perf.refresh").getOrElse("60"))
+    systemProperty("fuse.perf.scale", providers.gradleProperty("fuse.perf.scale").getOrElse(""))
     systemProperty("kotlinx.coroutines.test.default_timeout", "40m")
+    // -Pfuse.jfr=<file> records the whole run for a profile, with exact lines.
+    providers.gradleProperty("fuse.jfr").orNull?.let { jvmArgs("-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:StartFlightRecording=filename=$it,settings=profile") }
     maxHeapSize = "1536m"
     testLogging { showStandardStreams = true }
     outputs.upToDateWhen { false }
