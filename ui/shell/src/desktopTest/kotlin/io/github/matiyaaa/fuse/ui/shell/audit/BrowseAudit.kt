@@ -865,6 +865,32 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         shoot("choice list")
     }
 
+    // Fuse 0.4.5: how it runs here, in the person's own words, and what went wrong.
+    scenario("game", "how it runs here") {
+        useLibrary()
+        openGame("Emberline Saga")
+        tap(PadButton.X)
+        tapText("How It Runs Here")
+        waitFor("Only you can say")
+        shoot("untested, with the choices")
+        tapText("Plays, with problems")
+        waitFor("What went wrong?")
+        tapText("Sound")
+        tapText("Speed")
+        settle(600)
+        shoot("what went wrong, two chosen")
+        tapText("Done")
+        settle(800)
+        tap(PadButton.X)
+        tapText("How It Runs Here")
+        waitFor("playable with issues")
+        shoot("playable with issues")
+        tapText("Compatibility Report")
+        waitFor("How your games run on this device")
+        settle(600)
+        shoot("the report")
+    }
+
     scenario("game", "rename") {
         useLibrary()
         openGame("Emberline Saga")

@@ -482,6 +482,10 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
             }
         }
+        // Fuse 0.4.5: how it runs on this device, in the person's own words.
+        if (!card.isApp) {
+            add(MenuAction("runs", "How It Runs Here", FuseIcons.Gauge, detail = "Plays well, with problems, or not at all, as you found it on this device", trailing = Trailing.Chevron, onSelect = { compatSheet(card) }))
+        }
         if (!card.isApp && card.platformId.value == "ps3") {
             add(MenuAction("compat", "How It Runs in RPCS3", FuseIcons.Gauge, detail = "From RPCS3's compatibility list. Asks rpcs3.net with the game's title id", trailing = Trailing.Chevron, onSelect = { showCompatibility(card) }))
         }

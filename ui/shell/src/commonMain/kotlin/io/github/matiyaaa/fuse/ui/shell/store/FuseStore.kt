@@ -86,6 +86,9 @@ interface FuseStore {
     /** Fuse Performance Observatory: background work's cost, and how quickly the library answers. */
     val observatory: ObservatoryOps get() = ObservatoryOps.None
 
+    /** How each game runs on this device, in the person's own words (compatibility reports). */
+    val compat: CompatOps get() = CompatOps.None
+
     /** The Store, where Fuse can install apps (Android); [AppStoreOps.None] elsewhere. */
     val appStore: AppStoreOps get() = AppStoreOps.None
 
