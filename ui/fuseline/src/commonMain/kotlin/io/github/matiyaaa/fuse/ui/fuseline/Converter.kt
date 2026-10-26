@@ -113,7 +113,7 @@ object ColorConverter : Converter<Color> {
         val l3 = l * l * l
         val m3 = m * m * m
         val s3 = s * s * s
-        // Fuseline 4.4: each channel's 8-bit sRGB code straight from its linear value, without the
+        // Fuseline 4.3: each channel's 8-bit sRGB code straight from its linear value, without the
         // transfer curve's power, packed as Compose packs an sRGB colour: the very colour the curve
         // and Compose's own packing make, to the bit (SrgbCodes).
         val red = SrgbCodes.code((4.0767416621f * l3 - 3.3077115913f * m3 + 0.2309699292f * s3).coerceIn(0f, 1f))

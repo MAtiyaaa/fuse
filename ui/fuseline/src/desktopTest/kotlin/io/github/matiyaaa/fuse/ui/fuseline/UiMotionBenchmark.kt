@@ -46,7 +46,7 @@ import androidx.compose.animation.slideOutHorizontally as cSlideOut
  * Whole interface paths, composition, layout and drawing included: tiles reflowing as their window
  * changes width (layout motion), an element shared between two screens whose destination keeps
  * moving, rapid tab switching, pages of tiles with following values, and a decorative room. Fuseline
- * 4.4, and Fuseline 4.2, 3.1, 3, 2 and 1 (frozen in these tests) where each has the capability, and Compose
+ * 4.3, and Fuseline 4.2, 3.1, 3, 2 and 1 (frozen in these tests) where each has the capability, and Compose
  * (animateBounds in a LookaheadScope, SharedTransitionLayout, AnimatedContent, animate*AsState).
  * The whole run of frames is timed, and the bytes allocated counted, after a warm-up; rounds rotate
  * between engines and the median counts. Runs only with -Pfuse.bench=true.
@@ -78,7 +78,7 @@ class UiMotionBenchmark {
         return result
     }
 
-    /** [f4] is the engine in use (Fuseline 4.4); [v42], [v31], [v3] and [v1] the frozen Fuseline 4.2, 3.1, 3 and 1. */
+    /** [f4] is the engine in use (Fuseline 4.3); [v42], [v31], [v3] and [v1] the frozen Fuseline 4.2, 3.1, 3 and 1. */
     private class Row(val case: String, val results: List<Measured?>)
 
     private class Measured(val nanos: Double, val bytes: Double, val low: Double, val high: Double)
@@ -87,7 +87,7 @@ class UiMotionBenchmark {
     private val rounds = System.getProperty("fuse.bench.rounds")?.toIntOrNull() ?: 9
 
     private fun compare(case: String, f4: () -> Result, f2: (() -> Result)?, compose: (() -> Result)?, v3: (() -> Result)? = null, v1: (() -> Result)? = null, v31: (() -> Result)? = null, v42: (() -> Result)? = null) {
-        // Columns: Fuseline 4.4, 4.2, 3.1, 3, 2, 1, Compose.
+        // Columns: Fuseline 4.3, 4.2, 3.1, 3, 2, 1, Compose.
         val columns = listOf(f4, v42, v31, v3, f2, v1, compose)
         val engines = columns.filterNotNull()
         repeat(3) { for (e in engines) e() }
@@ -450,7 +450,7 @@ class UiMotionBenchmark {
 
     private fun report() {
         val losses = ArrayList<String>()
-        val names = listOf("Fuseline 4.4", "Fuseline 4.2", "Fuseline 3.1", "Fuseline 3", "Fuseline 2", "Fuseline 1", "Compose")
+        val names = listOf("Fuseline 4.3", "Fuseline 4.2", "Fuseline 3.1", "Fuseline 3", "Fuseline 2", "Fuseline 1", "Compose")
         fun us(x: Measured?) = x?.let { "%.0f µs".format(it.nanos / 1000) } ?: "n/a"
         fun kb(x: Measured?) = x?.let { "%.1f KB".format(it.bytes / 1024) } ?: "n/a"
         val table = buildString {
@@ -461,11 +461,11 @@ class UiMotionBenchmark {
                 val best = ms.minBy { it.value!!.nanos }
                 val clear = ms.filter { it.index != best.index }.all { best.value!!.high < it.value!!.low }
                 val winner = if (clear) names[best.index] else "unresolved (${names[best.index]} ahead, intervals overlap)"
-                if (winner != "Fuseline 4.4") losses += "${r.case}: $winner"
-                val v44 = r.results[0]!!
+                if (winner != "Fuseline 4.3") losses += "${r.case}: $winner"
+                val v43 = r.results[0]!!
                 val v42 = r.results[1]
-                val reduction = v42?.let { "%.1f%%".format(100 * (1 - v44.nanos / it.nanos)) } ?: "n/a"
-                val speedup = v42?.let { "%.2f×".format(it.nanos / v44.nanos) } ?: "n/a"
+                val reduction = v42?.let { "%.1f%%".format(100 * (1 - v43.nanos / it.nanos)) } ?: "n/a"
+                val speedup = v42?.let { "%.2f×".format(it.nanos / v43.nanos) } ?: "n/a"
                 appendLine("| ${r.case} | ${r.results.joinToString(" | ") { us(it) }} | $reduction | $speedup | $winner |")
             }
             appendLine()
@@ -477,7 +477,7 @@ class UiMotionBenchmark {
             appendLine()
             appendLine("A room needing 30 updates a second on a 120 Hz screen, redrawn per second:")
             appendLine()
-            appendLine("| Room | Fuseline 4.4 | Fuseline 4.2 | Fuseline 3.1 | Fuseline 3 | Compose |")
+            appendLine("| Room | Fuseline 4.3 | Fuseline 4.2 | Fuseline 3.1 | Fuseline 3 | Compose |")
             appendLine("|---|---|---|---|---|---|")
             for ((name, w) in decorationRows) {
                 fun n(x: Work?) = x?.let { "%.0f".format(it.redraws) } ?: "n/a"
@@ -490,7 +490,7 @@ class UiMotionBenchmark {
         val report = "$table\n$method\n$decorationTable"
         println(report)
         File("build/ui-motion-bench.md").apply { parentFile.mkdirs() }.writeText(report)
-        assertTrue(losses.isEmpty() || System.getProperty("fuse.bench.lenient").toBoolean(), "Fuseline 4.4 is not clearly first in: $losses")
+        assertTrue(losses.isEmpty() || System.getProperty("fuse.bench.lenient").toBoolean(), "Fuseline 4.3 is not clearly first in: $losses")
     }
 
 }

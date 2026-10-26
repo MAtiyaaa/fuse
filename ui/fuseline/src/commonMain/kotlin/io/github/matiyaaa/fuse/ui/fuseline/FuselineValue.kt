@@ -192,11 +192,11 @@ class FuselineValue<T>(
      * Nobody has read the value since it was last bumped: every reader it had has been told already,
      * so another bump would tell nobody anything, and the frame driver can let it rest ([park]).
      */
-    // Fuseline 4.4: a new value has had no reader, so it starts as one nobody has read since it was
+    // Fuseline 4.3: a new value has had no reader, so it starts as one nobody has read since it was
     // shown: moved before anything draws it, it rests until the first read, as any unread value does.
     private var unreadSinceShown = true
 
-    // Fuseline 4.4: a new value's target has had no reader to tell: its first aim writes nothing,
+    // Fuseline 4.3: a new value's target has had no reader to tell: its first aim writes nothing,
     // and its first read builds the target from the floats as any first read does.
     private var targetUnread = true
 
@@ -414,7 +414,7 @@ class FuselineValue<T>(
         }
 
     /**
-     * Fuseline 4.4: [owner] itself, a plain field: Fuseline's own checks (every retarget and every
+     * Fuseline 4.3: [owner] itself, a plain field: Fuseline's own checks (every retarget and every
      * drag event asks) read it without a snapshot read or a subscription. Readers of [owner] watch
      * [ownerChanges], written on each change once anything has read it: a value nobody asks who
      * moves it (most of them) makes no write when a move starts or ends.
@@ -485,7 +485,7 @@ class FuselineValue<T>(
             pulsing = null
             p.pulse(always = true)
         } else if (unreadSinceShown && (toldGlobally || !everRead)) {
-            // Fuseline 4.4: never read at all, or told already by a write outside any snapshot of its
+            // Fuseline 4.3: never read at all, or told already by a write outside any snapshot of its
             // own (so one that is always applied) and not read since: every reader it had is
             // redrawing or about to, and will read this. Another write would tell nobody anything (a
             // value dragged, snapped or landing while nobody draws it), so only the reading is moved
@@ -671,7 +671,7 @@ class FuselineValue<T>(
                     nowAt = Long.MIN_VALUE
                     // Cancelled from outside (not taken over): it rests where it got to, which is now
                     // its target. Its velocity is kept, so the next move carries on from it.
-                    // Fuseline 4.4: short of the motion's cheap lower bound it can't have finished, so
+                    // Fuseline 4.3: short of the motion's cheap lower bound it can't have finished, so
                     // its exact end (a spring's Newton solve) is only worked out when it might have.
                     if (job === currentCoroutineContext().job && (r.playNanos < r.boundNanos() || r.playNanos < r.durationNanos())) {
                         now.copyInto(goal)

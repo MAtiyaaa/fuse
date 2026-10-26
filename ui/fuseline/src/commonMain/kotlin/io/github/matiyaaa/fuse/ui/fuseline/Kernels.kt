@@ -34,7 +34,7 @@ internal class SpringKernel private constructor(val dampingRatio: Float, val sti
     val under = q < 0.0
     val over = q > 0.0
 
-    // The last moment solved, shared by everyone on this spring. Fuseline 4.4: kept by its play time
+    // The last moment solved, shared by everyone on this spring. Fuseline 4.3: kept by its play time
     // in nanoseconds, so a value reading another's solution doesn't first turn its time into seconds.
     private var memoPlay = Long.MIN_VALUE
     var memoEc = 0.0

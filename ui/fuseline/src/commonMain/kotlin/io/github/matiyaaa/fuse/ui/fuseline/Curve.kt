@@ -186,7 +186,7 @@ class CubicCurve(val x1: Float, val y1: Float, val x2: Float, val y2: Float) : C
     }
 
     // Fuseline 4: the last moment solved, shared by every tween on this curve that asks for it in the
-    // same frame (tiles revealed together, a page's values moving as one). Fuseline 4.4 keeps the
+    // same frame (tiles revealed together, a page's values moving as one). Fuseline 4.3 keeps the
     // whole answer, the share of time it came from and the curve's height and slope there, in one
     // object replaced whole (a read on another thread sees all of one moment or none of it).
     private var memo = CurveMoment(-1L, 0L, 0f, 0f)

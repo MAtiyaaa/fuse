@@ -6,8 +6,8 @@ opening sequence.
 
 It lives in `ui/fuseline` (package `io.github.matiyaaa.fuse.ui.fuseline`). Fuse 0.3.7 brought
 **Fuseline 3**, Fuse 0.3.7.5 **Fuseline 3.1** ([what 3.1 adds](#fuseline-31)), Fuse 0.4.0
-**Fuseline 4** ([what 4 changes](#fuseline-4)), and Fuse 0.4.4.2 brings **Fuseline 4.4** ([what
-4.4 takes away](#fuseline-44)). All are built around two rules:
+**Fuseline 4** ([what 4 changes](#fuseline-4)), and Fuse 0.4.4.2 brings **Fuseline 4.3** ([what
+4.3 takes away](#fuseline-43)). All are built around two rules:
 
 - **Motion never breaks continuity.** Whatever happens to a moving thing (a new target, a finger
   catching it, a reversal, a seek, a new motion, the window changing size), it carries on from the
@@ -297,9 +297,9 @@ frame, and a thousand snapshot observers for Compose to look up.
   a position, an eighth of a pixel), never more; positions, velocities, targets and finishes agree
   as they did.
 
-## Fuseline 4.4
+## Fuseline 4.3
 
-Fuseline 4.4 keeps every motion of Fuseline 4.2, to the frame, and takes away work nobody sees:
+Fuseline 4.3 keeps every motion of Fuseline 4.2, to the frame, and takes away work nobody sees:
 writes that tell no reader anything, frames that only find a value still unread, and arithmetic
 that many values share.
 
@@ -332,7 +332,7 @@ that many values share.
   finished; short of its cheap lower bound it can't have, so the Newton solve for its exact end
   is never made for it.
 - **Exactly the same motion.** Fuseline 4.2 is kept in the tests exactly as it shipped (package
-  `v42`). `Fuseline4EquivalenceTest` runs 4.4 against 3.1 as before (20,000 random histories pass):
+  `v42`). `Fuseline4EquivalenceTest` runs 4.3 against 3.1 as before (20,000 random histories pass):
   a value that rested unread or had a write left out gets the room a woken value always had (a
   reader within a quarter of a threshold of what 3.1 would show), and positions, velocities,
   targets, owners, progress and finishes agree as they did.
@@ -905,7 +905,7 @@ checked by `FuselineAndroidTest` in `app/android`:
   `SpringSolverTest`, `HandoffTest`, `MotionMathTest`).
 - **Values**: every operation, ownership, gestures, decay, seek, retarget, fuzzed sequences of all
   of them never jumping (`FuselineValueTest`, `RetargetTest`, `ConverterTest`), and colours read
-  through Fuseline 4.4's table the same to the bit as through sRGB's curve (`SrgbCodesTest`).
+  through Fuseline 4.3's table the same to the bit as through sRGB's curve (`SrgbCodesTest`).
 - **Driver**: 1 to 1,000 values, true idle, no per-value allocation, refresh rates from 30 to 240 Hz
   (`FrameDriverTest`).
 - **Decoration** (3.1): a paced loop makes every update it needs with about one wake each, and holds

@@ -184,7 +184,7 @@ internal class TweenTrack(tween: Tween, start: Float, target: Float, velocity: F
         if (playNanos < delay || playNanos >= duration || length == 0L) return
         val c = curve
         if (c is CubicCurve) {
-            // Fuseline 4.4: the curve keeps its whole answer for the moment (share of time, height
+            // Fuseline 4.3: the curve keeps its whole answer for the moment (share of time, height
             // and slope), so every tween on it at that moment reads all three: one division, one
             // solve and one slope a frame for all of them, the same numbers each would work out.
             val s = c.shapeAt(playNanos - delay, length)
@@ -329,7 +329,7 @@ internal class SpringTrack(
         val ax = abs(x0)
         val th = threshold.toDouble()
         restBound = if (kn.a > 0.0 && ax > th * (1.0 + 1e-6)) {
-            // Fuseline 4.4: a bound on the logarithm from below, within 0.06 of it (lnBelow): the
+            // Fuseline 4.3: a bound on the logarithm from below, within 0.06 of it (lnBelow): the
             // bound only has to be early, and a spring retargeted every frame then pays no logarithm.
             val seconds = min(lnBelow(ax / th) / kn.a, MAX_SPRING_SECONDS)
             ((seconds * (1.0 - 1e-6)) * NANOS_PER_SECOND).toLong() - 1_000L
@@ -555,7 +555,7 @@ internal class DecayTrack(friction: Float, start: Float, velocity: Float, thresh
     override val durationNanos: Long = (decaySeconds(velocity, friction, threshold) * NANOS_PER_SECOND).toLong()
 
     /**
-     * Fuseline 4.4: e^(−kt) belongs to the friction and the moment, not the value: every decay on the
+     * Fuseline 4.3: e^(−kt) belongs to the friction and the moment, not the value: every decay on the
      * same friction at the same moment (a list's items flung together) reads one exponential, and a
      * track asking again for the moment it last sampled (its event horizon) reads its own.
      */

@@ -7,7 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Fuseline 4.4 reads a moving colour without sRGB's transfer curve: the 8-bit codes come from a
+ * Fuseline 4.3 reads a moving colour without sRGB's transfer curve: the 8-bit codes come from a
  * table of where each code begins. These prove it makes the very same colours, to the bit, as the
  * curve and Compose's packing did.
  */
