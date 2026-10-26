@@ -150,8 +150,11 @@ class TransferManager(
     }
 
     override fun pause(id: String) = scope.launch {
-        jobs.remove(id)?.cancel(Paused())
-        update { list -> list.map { if (it.id == id && !it.status.finished) it.copy(status = TransferStatus.PAUSED, phase = null, waiting = null) else it } }
+        // Waited for, as a cancel is: what arrived is on the drive and counted before it reads as
+        // paused, so a resume straight after carries on from it instead of racing the write closing.
+        jobs.remove(id)?.let { it.cancel(Paused()); it.join() }
+        val live = lives[id]?.value
+        update { list -> list.map { if (it.id == id && !it.status.finished) it.copy(status = TransferStatus.PAUSED, phase = null, waiting = null, doneBytes = live?.doneBytes ?: it.doneBytes) else it } }
         kick()
     }
 
@@ -173,8 +176,8 @@ class TransferManager(
 
     override fun pauseAll() = scope.launch {
         val active = _items.value.filter { !it.status.finished && it.status != TransferStatus.PAUSED }.map { it.id }.toSet()
-        active.forEach { jobs.remove(it)?.cancel(Paused()) }
-        update { list -> list.map { if (it.id in active) it.copy(status = TransferStatus.PAUSED, phase = null, waiting = null) else it } }
+        active.mapNotNull { jobs.remove(it)?.also { j -> j.cancel(Paused()) } }.forEach { it.join() }
+        update { list -> list.map { if (it.id in active) it.copy(status = TransferStatus.PAUSED, phase = null, waiting = null, doneBytes = lives[it.id]?.value?.doneBytes ?: it.doneBytes) else it } }
     }
 
     override fun resumeAll() = scope.launch {
