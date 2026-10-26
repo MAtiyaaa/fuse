@@ -6,6 +6,8 @@ import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MediaSource
 import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.data.repo.key
+import io.github.matiyaaa.fuse.data.repo.type
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -28,6 +30,31 @@ class MediaRepositoryTest {
     }
 
     private fun sgdb(kind: MediaKind, url: String) = MediaItem(kind, MediaSource.STEAMGRIDDB, remoteUrl = url)
+
+    @Test
+    fun manyOwnersReadTogetherGetJustWhatEachReadAloneGets() = runBlocking {
+        TestDb().use { t ->
+            val rnd = kotlin.random.Random(45)
+            // Owners of two kinds, more than one chunk of them, with no art, some art, or a lot.
+            val owners = (1..1_300).map { MediaOwner.OfPlatform(PlatformId("p$it")) } + (1..400).map { MediaOwner.OfCollection(io.github.matiyaaa.fuse.model.CollectionId(it.toLong())) }
+            val kinds = listOf("BOXART", "LOGO", "HERO", "SCREENSHOT", "SOMETHING_NEWER")
+            val sources = listOf("USER", "STEAMGRIDDB", "IGDB", "LOCAL_FOLDER", "UNHEARD_OF")
+            t.data.database.transaction {
+                for (o in owners) repeat(rnd.nextInt(0, 7)) { k ->
+                    t.data.database.mediaQueries.insert(
+                        o.type(), o.key(), kinds.random(rnd), sources.random(rnd),
+                        if (rnd.nextBoolean()) "/art/${o.key()}-$k.png" else null, if (rnd.nextBoolean()) "https://example.org/${o.key()}/$k" else null,
+                        rnd.nextLong(1, 4000).takeIf { rnd.nextBoolean() }, rnd.nextLong(1, 4000).takeIf { rnd.nextBoolean() },
+                        rnd.nextDouble(), rnd.nextDouble(), 1.0 + rnd.nextDouble(), rnd.nextLong(0, 3), 0L,
+                    )
+                }
+            }
+            val together = t.data.media.mediaFor(owners)
+            assertEquals(owners.size, together.size)
+            for (o in owners) assertEquals(t.data.media.get(o), together[o], "$o")
+            assertEquals(together, t.data.media.observeFor(owners).first())
+        }
+    }
 
     @Test
     fun aListSeesEveryChangeToItsArtAndOnlyReadsWhatChanged() = runBlocking {

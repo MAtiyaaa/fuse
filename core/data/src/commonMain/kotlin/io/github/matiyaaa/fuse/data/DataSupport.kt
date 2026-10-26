@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.data
 
 import io.github.matiyaaa.fuse.data.db.FuseDatabase
+import kotlin.enums.enumEntries
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 
@@ -12,8 +13,9 @@ internal val DataJson: Json = Json {
     explicitNulls = false
 }
 
+// The enum's own kept list of entries: enumValues made a copy of every value for each row read.
 internal inline fun <reified E : Enum<E>> enumOrNull(name: String?): E? =
-    if (name == null) null else enumValues<E>().firstOrNull { it.name == name }
+    if (name == null) null else enumEntries<E>().firstOrNull { it.name == name }
 
 internal inline fun <reified E : Enum<E>> enumOr(name: String?, fallback: E): E = enumOrNull<E>(name) ?: fallback
 

@@ -150,6 +150,7 @@ class LibraryScale {
             startMark.elapsedNow().inWholeMilliseconds
         }
         io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.open()
+        phase("library", games)
         val libraryMark = TimeSource.Monotonic.markNow()
         val startListMs = withTimeout(START_LIMIT_MS) {
             val all = store.library.games(GameQuery()).first { it.size >= games }
@@ -195,6 +196,15 @@ class LibraryScale {
         }
         val probe = store.observatory.probe()
         println("SCALE-PROBE $games $probe")
+        // The library list's parts on their own, warm: its rows, and its art.
+        repeat(3) {
+            val rowsMark = TimeSource.Monotonic.markNow()
+            val rowsRead = data.games.observeAll(io.github.matiyaaa.fuse.model.SortOrder.TITLE, false).first()
+            val rowsMs = rowsMark.elapsedNow().inWholeMilliseconds
+            val artMark = TimeSource.Monotonic.markNow()
+            data.media.mediaFor(rowsRead.map { io.github.matiyaaa.fuse.model.MediaOwner.OfGame(it.id) })
+            println("SCALE-PARTS $games rows ${rowsMs} ms, art ${artMark.elapsedNow().inWholeMilliseconds} ms")
+        }
         val heldMb = (heapMb() - before).coerceAtLeast(0)
         scope.cancel()
         root.deleteRecursively()
