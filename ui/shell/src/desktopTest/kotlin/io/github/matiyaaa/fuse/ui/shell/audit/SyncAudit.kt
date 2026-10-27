@@ -336,6 +336,26 @@ internal fun AuditDriver.syncScreens() {
         shoot("further down the games: the header folded away", 600)
     }
 
+    scenario("sync", "sync tab down and back up") {
+        useSync(asHost = true)
+        tab(Destination.CARTRIDGE)
+        tap(PadButton.DPAD_UP)
+        focusText("Sync") { tap(PadButton.DPAD_RIGHT) }
+        tap(PadButton.DPAD_DOWN)
+        waitFor("Sync Now")
+        shoot("at the top", 1_200)
+        tap(PadButton.DPAD_DOWN, 4)
+        shoot("down in the games", 600)
+        tap(PadButton.DPAD_DOWN, 30)
+        shoot("at the bottom: devices and what happened", 800)
+        tap(PadButton.DPAD_UP, 1)
+        shoot("one up from the bottom", 600)
+        tap(PadButton.DPAD_UP, 4)
+        shoot("five up from the bottom", 600)
+        tap(PadButton.DPAD_UP, 30)
+        shoot("back at the top", 1_000)
+    }
+
     scenario("sync", "this device alone") {
         syncOff()
         sync.ownProfiles()
@@ -357,6 +377,12 @@ internal fun AuditDriver.syncScreens() {
         waitFor("Kept on this device")
         shoot("one game's saves, kept on this device", 1_000)
         tap(PadButton.B)
+        waitFor("Your games on this device")
+        // Down past the games to what a household adds and what happened, then back up.
+        tap(PadButton.DPAD_DOWN, 30)
+        shoot("at the bottom", 800)
+        tap(PadButton.DPAD_UP, 30)
+        shoot("back up at the top", 1_000)
     }
 
     scenario("sync", "top line") {

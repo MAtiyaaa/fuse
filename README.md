@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.5 is the <b>Evolution Update</b>: Home in about a fifth of a second at 25,000 games, new games found as they're copied in, the Performance Observatory, Library Health and How It Runs Here</sub><br>
+<sub>0.4.5.1 is the <b>Evolution Update</b>: Home in about a fifth of a second at 25,000 games, new games found as they're copied in, the Performance Observatory, Library Health and How It Runs Here; 0.4.5.1 keeps downloads going while your device sleeps</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -166,13 +166,15 @@ second-screen companion, Storage, backups and System health: everything is in
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.5 "The Evolution Update"**: Fuse Instant, so a library of 10,000 or 25,000 games shows
+> **Fuse 0.4.5.1 "The Evolution Update"**: Fuse Instant, so a library of 10,000 or 25,000 games shows
 > Home in about a fifth of a second, opens again at once and answers a search in hundredths of a
 > second; library folders followed, so a game copied in appears by itself; the Performance
 > Observatory, which measures Fuse on your own device; Library Health, which puts right pictures
-> that point nowhere; and How It Runs Here, your own word on how each game plays. See
-> [the release notes](docs/releases/0.4.5.md) and [the engineering record](docs/audits/0.4.5-evolution.md);
-> every earlier release is in [CHANGELOG.md](CHANGELOG.md).
+> that point nowhere; and How It Runs Here, your own word on how each game plays. 0.4.5.1 keeps
+> downloads going while your device sleeps and carries them on when it wakes, and follows game
+> folders too. See [the release notes](docs/releases/0.4.5.1.md), [0.4.5's](docs/releases/0.4.5.md)
+> and [the engineering record](docs/audits/0.4.5-evolution.md); every earlier release is in
+> [CHANGELOG.md](CHANGELOG.md).
 
 Fuse runs on Android handhelds and phones, Linux (SteamOS and its Game Mode too), Windows and macOS,
 and every screen is checked at 23 screen sizes. Not there yet: translations and native patches for

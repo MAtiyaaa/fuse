@@ -58,6 +58,16 @@ internal class FakeServices(
     /** How library folders are followed; a test that follows them puts its own here. */
     override var folderWatch: FolderWatch = FolderWatch.None
 
+    /** The screen and the connection, as a test turns them off and on. */
+    override val interactive = kotlinx.coroutines.flow.MutableStateFlow(true)
+    override val online = kotlinx.coroutines.flow.MutableStateFlow(true)
+
+    /** Whether Fuse is kept running for transfers now (Android's foreground service), and with what words. */
+    val keptAlive = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    override fun keepAliveForTransfers(active: Boolean, text: String, progress: Int?) {
+        keptAlive.value = if (active) text else null
+    }
+
     override val appVersion = "0.0.1"
     val javaFs = JavaFileSystem()
     override val fs: FuseFileSystem = javaFs

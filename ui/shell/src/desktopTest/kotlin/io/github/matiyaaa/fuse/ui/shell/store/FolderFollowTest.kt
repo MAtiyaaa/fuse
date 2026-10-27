@@ -82,6 +82,16 @@ class FolderFollowTest {
         watch.changed()
         withTimeout(20_000) { watch.folders.first { list -> list.any { File(it) == File(root, "gba").absoluteFile } } }
         assertTrue(watch.closed >= 1, "the old watch is let go when the folders change")
+
+        // A game kept in a folder of its own: its folder is followed too, so a second disc copied
+        // into it is noticed, and a game folder made later is followed once a scan has run.
+        File(root, "snes/Hacks").mkdirs()
+        File(root, "snes/Hacks/Super Metroid Redesign.sfc").writeBytes(ByteArray(64))
+        File(root, "snes").setLastModified(System.currentTimeMillis() + 6_000)
+        watch.changed()
+        withTimeout(20_000) { watch.folders.first { list -> list.any { File(it) == File(root, "snes/Hacks").absoluteFile } } }
+        // Hidden folders (a download being put together) are never followed.
+        assertFalse(watch.folders.value.any { File(it).name.startsWith(".") }, watch.folders.value.toString())
     }
 
     @Test

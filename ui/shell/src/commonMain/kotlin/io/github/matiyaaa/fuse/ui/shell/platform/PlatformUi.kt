@@ -671,8 +671,10 @@ data class StayAwake(val cpu: Boolean, val screen: Boolean, val finding: Boolean
          * left on: anywhere else the system may turn the screen off and the work carries on.
          */
         fun plan(transfers: Int, finding: Boolean, standby: Boolean): StayAwake {
-            // [transfers] counts what moves: one waiting its turn starts within moments of a place,
-            // and one that can't start (its source signed out) held the locks for as long as it stayed.
+            // [transfers] counts what moves, and what the network dropped and tries again within a
+            // minute (let go, the device slept through every try). One waiting its turn starts within
+            // moments of a place, and one that can't start (its source signed out) held the locks for
+            // as long as it stayed.
             val working = transfers > 0 || finding
             return StayAwake(cpu = working, screen = working && standby, finding = finding)
         }

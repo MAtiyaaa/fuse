@@ -92,6 +92,7 @@ object TransferScheduler {
             waiting = items.count { it.status == TransferStatus.WAITING },
             failed = items.count { it.status == TransferStatus.FAILED },
             progress = if (known && total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else null,
+            retrying = items.count { it.status == TransferStatus.WAITING && it.waiting == WaitReason.NETWORK },
         )
     }
 }

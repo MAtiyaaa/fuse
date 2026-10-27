@@ -61,6 +61,14 @@ interface Transfers {
 
     /** A device came back or went: transfers waiting for one look again at once. */
     fun devicesChanged() {}
+
+    /**
+     * This device woke from sleep, or its connection came back: what waits on the network tries
+     * again now, its tries counted afresh; what gave up on the connection in the last day goes
+     * again; and what stopped moving meanwhile (a connection the sleep left dead) starts again from
+     * where it was.
+     */
+    fun woke() {}
     fun live(id: String): StateFlow<TransferLive>
     suspend fun enqueue(item: TransferItem): String
     fun pause(id: String): Job

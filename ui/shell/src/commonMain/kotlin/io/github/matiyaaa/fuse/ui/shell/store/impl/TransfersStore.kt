@@ -34,6 +34,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -100,18 +102,33 @@ internal class DefaultTransfersOps(
         ctx.scope.launch {
             ctx.settings.map { it.downloads }.distinctUntilChanged().collect { engine.configure(it.toTransferSettings()) }
         }
-        // Long transfers keep Fuse running (Android) while they move.
+        // Long transfers keep Fuse running (Android) while they move, and while one the network
+        // dropped waits to try again: let go then, the device slept through every try. A game being
+        // sent to another device keeps it running too.
         ctx.scope.launch {
-            engine.summary.map { s -> if (s.active > 0) keepAliveText(s) to s.progress?.let { (it * 100).toInt() } else null }
-                .distinctUntilChanged().collect { now ->
-                    if (now == null) ctx.services.keepAliveForTransfers(false, "", null)
-                    else ctx.services.keepAliveForTransfers(true, now.first, now.second)
+            combine(engine.summary, ctx.sendingTo) { s, sending ->
+                when {
+                    s.going > 0 -> keepAliveText(s) to s.progress?.let { (it * 100).toInt() }
+                    sending != null -> "Sending a game to $sending" to null
+                    else -> null
                 }
+            }.distinctUntilChanged().collect { now ->
+                if (now == null) ctx.services.keepAliveForTransfers(false, "", null)
+                else ctx.services.keepAliveForTransfers(true, now.first, now.second)
+            }
         }
+        // Back from sleep, or the connection back: what waits on the network goes now, and what
+        // stopped moving while asleep starts again, instead of a minute later (or, given up, never).
+        ctx.scope.launch { ctx.services.interactive.drop(1).filter { it }.collect { engine.woke() } }
+        ctx.scope.launch { ctx.services.online.drop(1).filter { it }.collect { engine.woke() } }
         // Wi-Fi comes and goes without telling, and quiet hours begin and end: looked at every little while.
         ctx.scope.launch {
             while (true) {
-                kotlinx.coroutines.delay(15_000)
+                val before = ctx.now()
+                kotlinx.coroutines.delay(CONDITIONS_EVERY_MS)
+                // A wait that took far longer was the device asleep (a laptop's lid, a computer's
+                // sleep, a handheld's deep sleep): nothing else tells Fuse it woke.
+                if (ctx.now() - before > CONDITIONS_EVERY_MS + SLEPT_SLACK_MS) engine.woke()
                 if (ctx.services.unmetered() != lastUnmetered || minuteNow() != lastMinute) conditions(lastPlaying)
             }
         }
@@ -195,7 +212,14 @@ internal class DefaultTransfersOps(
     }
 
     private fun actionsFor(t: TransferItem): List<TransferAction> = when (t.status) {
-        TransferStatus.ACTIVE, TransferStatus.WAITING -> listOf(TransferAction.PAUSE, TransferAction.CANCEL, TransferAction.MOVE_TO_TOP)
+        TransferStatus.ACTIVE -> listOf(TransferAction.PAUSE, TransferAction.CANCEL, TransferAction.MOVE_TO_TOP)
+        // Waiting on the network: tried again now when asked, rather than paused and resumed.
+        TransferStatus.WAITING -> listOfNotNull(
+            TransferAction.PAUSE,
+            TransferAction.RETRY.takeIf { t.waiting == io.github.matiyaaa.fuse.transfer.WaitReason.NETWORK || t.waiting == io.github.matiyaaa.fuse.transfer.WaitReason.DEVICE },
+            TransferAction.CANCEL,
+            TransferAction.MOVE_TO_TOP,
+        )
         TransferStatus.QUEUED -> listOf(TransferAction.PAUSE, TransferAction.MOVE_UP, TransferAction.MOVE_DOWN, TransferAction.MOVE_TO_TOP, TransferAction.CANCEL)
         TransferStatus.PAUSED -> listOf(TransferAction.RESUME, TransferAction.MOVE_TO_TOP, TransferAction.CANCEL)
         TransferStatus.FAILED -> listOfNotNull(TransferAction.RETRY, TransferAction.CANCEL, TransferAction.REMOVE)
@@ -321,6 +345,12 @@ internal class DefaultTransfersOps(
         const val FUSE = "fuse"
         const val CARTRIDGE = "cartridge"
 
+        /** How often Wi-Fi, quiet hours and sleep are looked at. */
+        const val CONDITIONS_EVERY_MS = 15_000L
+
+        /** How late that look may run before it means the device slept (a busy game makes it a little late). */
+        const val SLEPT_SLACK_MS = 30_000L
+
         /** Every summary row the Downloads button turns into counts. */
         fun summaryOf(rows: List<TransferRow>, live: (String) -> TransferLive?): TransferSummary = TransferScheduler.summary(rows.map { it.item }, live)
     }
@@ -354,4 +384,5 @@ internal fun keepAliveText(s: TransferSummary): String = listOfNotNull(
     when (s.activeDownloads) { 0 -> null; 1 -> "Downloading 1 item"; else -> "Downloading ${s.activeDownloads} items" },
     when (s.activeUploads) { 0 -> null; 1 -> "uploading 1"; else -> "uploading ${s.activeUploads}" },
     if (s.queued > 0) "${s.queued} queued" else null,
+    when (s.retrying) { 0 -> null; 1 -> "1 waiting for the connection"; else -> "${s.retrying} waiting for the connection" },
 ).joinToString(", ").replaceFirstChar { it.uppercase() }

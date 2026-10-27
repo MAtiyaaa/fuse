@@ -132,6 +132,11 @@ data class TransferItem(
     val attempts: Int = 0,
     /** When a waiting transfer tries again by itself. */
     val retryAt: Long? = null,
+    /**
+     * It failed because the connection kept dropping, not because it was refused: it goes again by
+     * itself when the device wakes or its connection comes back ([Transfers.woke]).
+     */
+    val lostConnection: Boolean = false,
     val payload: String = "",
 ) {
     val progress: Float? get() = totalBytes?.takeIf { it > 0 }?.let { (doneBytes.toFloat() / it).coerceIn(0f, 1f) }
@@ -254,8 +259,17 @@ data class TransferSummary(
     val failed: Int = 0,
     /** 0..1 over everything moving whose size is known; null when none is known. */
     val progress: Float? = null,
+    /** Of [waiting], those the network dropped: each tries again within a minute. */
+    val retrying: Int = 0,
 ) {
     val active: Int get() = activeDownloads + activeUploads
+
+    /**
+     * Moving, or about to try again after the connection dropped: what keeps Fuse (and an Android
+     * device) awake. A transfer the network dropped is still on its way; let go then, the device
+     * slept through every try and the download stopped until someone came back to it.
+     */
+    val going: Int get() = active + retrying
     val any: Boolean get() = active + queued + waiting > 0
 }
 

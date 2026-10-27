@@ -91,6 +91,14 @@ interface FuseServices {
      */
     val interactive: StateFlow<Boolean> get() = io.github.matiyaaa.fuse.sync.Awake.always
 
+    /**
+     * Whether the device has a connection to the network now (Android: its default network). Its
+     * coming back sends transfers waiting on the network on at once. Always true where nothing says
+     * (a computer): those transfers try again by themselves within a minute, and a computer's sleep
+     * is seen as its clock jumping.
+     */
+    val online: StateFlow<Boolean> get() = io.github.matiyaaa.fuse.sync.Awake.always
+
     /** lsfg-vk is set up here (Linux, its configuration file there), so games can have frame generation. */
     fun frameGenerationReady(): Boolean = false
 

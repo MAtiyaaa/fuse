@@ -85,6 +85,9 @@ internal class StoreContext(
     /** The game being played on this device right now, if any (transfers ease off or pause meanwhile). */
     val playing = MutableStateFlow<GameId?>(null)
 
+    /** The device a game is being sent to from here (Fuse One), which keeps Fuse running as a transfer does. */
+    val sendingTo = MutableStateFlow<String?>(null)
+
     /**
      * Whether Fuse's own optional rounds on the network may run: the device awake ([FuseServices.awake])
      * and no game in front. A game has the device: Jellyfin's and RomM's checks every half minute
