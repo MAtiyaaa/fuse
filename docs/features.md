@@ -199,8 +199,12 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   well under a fifth of a second after Fuse starts, the library opens again at once, and a search answers in a
   few hundredths of a second, its index kept ready in the background. Background work (series,
   suggestions, the index, checks) runs two jobs at a time at most and waits while a game runs.
-- **New games appear by themselves**: library folders are followed as they change, so a game copied
-  in, renamed or deleted shows in the library seconds later, without a scan.
+- **New games appear by themselves**: library folders, and the game folders in them, are followed
+  as they change, so a game copied in, renamed or deleted (or a second disc added to its folder)
+  shows in the library seconds later, without a scan.
+- **Downloads that survive sleep**: a download the connection dropped keeps Fuse running while it
+  waits to try again, carries on the moment the device wakes or the connection comes back, and has
+  Try Now in its options.
 - **Performance Observatory** (Settings, Display, and System health): Fuse's own frames, how quickly
   the library answers, the picture caches, each background job's cost and the device's readings,
   measured now, with a report to copy or save.
