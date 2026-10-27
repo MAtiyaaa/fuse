@@ -215,7 +215,16 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                 }
                 inRest -> when (e.action) {
                     NavAction.DOWN -> if (list.canScrollForward) { app.scope.launch { list.animateScrollBy(step) }; NavResult.MOVED } else NavResult.BLOCKED
-                    NavAction.UP, NavAction.BACK -> { inRest = false; NavResult.MOVED }
+                    // Back up through it the way Down came, until the games are in view again; then
+                    // the last game (or the actions) is chosen, and glides into place.
+                    NavAction.UP -> if (list.firstVisibleItemIndex > firstGame + games.size - 1) {
+                        app.scope.launch { list.animateScrollBy(-step) }
+                        NavResult.MOVED
+                    } else {
+                        inRest = false
+                        NavResult.MOVED
+                    }
+                    NavAction.BACK -> { inRest = false; NavResult.MOVED }
                     NavAction.LEFT, NavAction.RIGHT, NavAction.SELECT -> NavResult.BLOCKED
                     else -> NavResult.IGNORED
                 }
@@ -257,8 +266,10 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
             }
         }
         // The game chosen stays in view with the one before it above, so moving down folds the top
-        // line and the tabs away; back up at the actions, everything is in view again.
-        LaunchedEffect(inList, sel.index, games.size) {
+        // line and the tabs away; back up at the actions, everything is in view again. Coming back
+        // up out of what is below the games counts too: the list was left scrolled down there, the
+        // game chosen (or the actions) out of view, and the page seemed to show nothing chosen.
+        LaunchedEffect(inList, inRest, sel.index, games.size) {
             if (!inList) {
                 if (!inRest) list.glideTo(0)
                 return@LaunchedEffect
