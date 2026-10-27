@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -74,13 +75,23 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
     private var followed: List<String> = emptyList()
     private val folderChanges = Channel<Unit>(Channel.CONFLATED)
 
-    /** Follows the library folders and the system folders a scan [found] in them, when they changed. */
+    /**
+     * Follows the library folders, the system folders a scan [found] in them and the game folders in
+     * those (a game's second disc copied into its folder changes only that folder), when they changed.
+     */
     private suspend fun followFolders(found: Map<PlatformId, List<String>>) {
+        // Nothing to follow with (a host, a test): no folder is read for it.
+        if (ctx.services.folderWatch === io.github.matiyaaa.fuse.ui.shell.store.FolderWatch.None) return
         val roots = data.sources.all().filter { it.enabled }.map { s ->
             // A Steam library changes in its steamapps folder, where each install leaves its manifest.
             if (s.kind == LibrarySourceKind.STEAM_LIBRARY) FsPath.join(FsPath.normalize(s.path), "steamapps") else FsPath.normalize(s.path)
         }
-        val folders = (roots + found.values.flatten().map(FsPath::normalize)).distinct().take(MAX_FOLLOWED)
+        val systems = found.values.flatten().map(FsPath::normalize).distinct()
+        // The game folders, the ones changed most lately first where there are more than fit.
+        val games = systems.flatMap { folder ->
+            runCatching { ctx.services.fs.list(folder) }.getOrDefault(emptyList()).filter { it.isDirectory && !it.name.startsWith(".") }
+        }.sortedByDescending { it.modifiedAt }.map { FsPath.normalize(it.path) }
+        val folders = (roots + systems + games).distinct().take(MAX_FOLLOWED)
         if (folders == followed) return
         folderWatch?.close()
         followed = folders
@@ -266,7 +277,11 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         // look waits for it to end.
         ctx.scope.launch {
             try {
-                platformFolders.collect { found -> runCatching { followFolders(found) } }
+                // Again after every scan as well: a game folder made since is followed from then on.
+                kotlinx.coroutines.flow.merge(
+                    platformFolders.map { },
+                    scanState.map { it.phase }.distinctUntilChanged().filter { it == ScanPhase.DONE }.map { },
+                ).collect { runCatching { followFolders(platformFolders.value) } }
             } finally {
                 folderWatch?.close()
             }
@@ -478,7 +493,10 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         /** Wait after a folder's changes go quiet before looking (on top of the platform's own quiet). */
         const val FOLDER_SETTLE_MS = 500L
 
-        /** Folders followed at most: a library of many systems on several drives stays well inside it. */
+        /**
+         * Folders followed at most: library and system folders first, then as many game folders as
+         * fit. Each is one of the system's own watches (inotify, FileObserver), well inside its limits.
+         */
         const val MAX_FOLLOWED = 512
     }
 }
