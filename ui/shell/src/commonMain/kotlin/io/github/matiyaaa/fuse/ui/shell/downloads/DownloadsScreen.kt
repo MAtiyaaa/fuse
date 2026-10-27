@@ -423,7 +423,13 @@ private fun optionsFor(app: AppState, row: TransferRow, systems: Map<PlatformId,
             },
         ) + row.actions.map { a ->
             MenuAction(
-                "transfer.${a.name}", if (a == TransferAction.OPEN) "Open ${row.mirrored ?: ""}".trim() else a.label, icon(a),
+                "transfer.${a.name}",
+                when {
+                    a == TransferAction.OPEN -> "Open ${row.mirrored ?: ""}".trim()
+                    a == TransferAction.RETRY && t.status == io.github.matiyaaa.fuse.transfer.TransferStatus.WAITING -> "Try Now"
+                    else -> a.label
+                },
+                icon(a),
                 destructive = a == TransferAction.CANCEL,
                 detail = when {
                     t.source == "request" && a == TransferAction.CANCEL -> "${row.deviceName ?: "The other device"} won't fetch it"
@@ -431,6 +437,7 @@ private fun optionsFor(app: AppState, row: TransferRow, systems: Map<PlatformId,
                 } ?: when (a) {
                     TransferAction.CANCEL -> if (t.upload) "Stops sending; nothing on the server changes" else "What was downloaded so far is removed"
                     TransferAction.PAUSE -> "Keeps what is done, to carry on later"
+                    TransferAction.RETRY -> if (t.status == io.github.matiyaaa.fuse.transfer.TransferStatus.WAITING) "Carries on from where it stopped, now instead of in a moment" else null
                     else -> null
                 },
                 onSelect = { app.closeOverlays(); app.store.transfers.act(t.id, a) },

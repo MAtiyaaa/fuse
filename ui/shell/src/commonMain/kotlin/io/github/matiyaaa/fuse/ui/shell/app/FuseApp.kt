@@ -1568,7 +1568,8 @@ private fun StayAwakeWatch(app: AppState) {
     val filling by app.store.media.fillProgress.collectAsState()
     val systemArt by app.store.media.systemArtProgress.collectAsState()
     val awake = io.github.matiyaaa.fuse.ui.shell.platform.StayAwake.plan(
-        transfers = transfers.active,
+        // Moving, or waiting to try again after the connection dropped (see TransferSummary.going).
+        transfers = transfers.going,
         finding = io.github.matiyaaa.fuse.ui.shell.platform.StayAwake.finding(filling, systemArt),
         standby = app.standby,
     )

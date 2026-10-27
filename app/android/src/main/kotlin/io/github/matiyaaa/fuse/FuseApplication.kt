@@ -100,6 +100,8 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
         io.github.matiyaaa.fuse.platform.DevicePacing.start(this)
         // The screen going off holds Fuse's rounds on the network until it comes back (see DeviceAwake).
         io.github.matiyaaa.fuse.platform.DeviceAwake.start(this)
+        // The connection coming back sends downloads the network dropped on at once (see NetworkWatch).
+        io.github.matiyaaa.fuse.platform.NetworkWatch.start(this)
         activities = ActivityHolder(this)
         registerActivityLifecycleCallbacks(activities)
         activities.onFuseResumed = { platformUi.onFuseResumed() }

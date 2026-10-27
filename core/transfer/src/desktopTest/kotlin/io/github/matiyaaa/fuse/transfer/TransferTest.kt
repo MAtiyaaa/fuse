@@ -9,6 +9,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -121,6 +122,8 @@ class TransferTest {
         @Volatile var cutAfter: Int? = null
         @Volatile var status: HttpStatusCode? = null
         @Volatile var ignoreRange = false
+        /** Sends this many bytes of the next answer, then nothing more: a connection a sleep left dead. */
+        @Volatile var stallAfter: Int? = null
         val ranges = ArrayList<String?>()
 
         val client = HttpClient(MockEngine { req ->
@@ -130,6 +133,16 @@ class TransferTest {
             synchronized(ranges) { ranges += range }
             val from = if (ignoreRange) 0 else range?.removePrefix("bytes=")?.substringBefore('-')?.toInt() ?: 0
             var body = payload.copyOfRange(from, payload.size)
+            stallAfter?.let { stall ->
+                stallAfter = null
+                val channel = io.ktor.utils.io.ByteChannel(autoFlush = true)
+                channel.writeFully(body, 0, stall)
+                return@MockEngine respond(
+                    channel,
+                    if (range != null && !ignoreRange) HttpStatusCode.PartialContent else HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentLength to listOf(body.size.toString()), HttpHeaders.ContentRange to listOf("bytes $from-${payload.size - 1}/${payload.size}")),
+                )
+            }
             val cut = cutAfter
             if (cut != null) {
                 cutAfter = null
@@ -174,10 +187,15 @@ class TransferTest {
 
     private fun sha256(b: ByteArray) = MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
 
-    private fun manager(dir: File = File(root, "state"), volumes: () -> List<StorageVolume> = { emptyList() }): TransferManager {
+    private fun manager(
+        dir: File = File(root, "state"),
+        volumes: () -> List<StorageVolume> = { emptyList() },
+        stallMs: Long = 10_000,
+        stopWaitMs: Long = 10_000,
+    ): TransferManager {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scopes += scope
-        return TransferManager(dir, scope, volumes = { volumes() }).also { it.start() }
+        return TransferManager(dir, scope, volumes = { volumes() }, stallMs = stallMs, stopWaitMs = stopWaitMs).also { it.start() }
     }
 
     private fun download(name: String, place: TransferPlace = TransferPlace(File(root, "games/$name").path)) =
@@ -369,6 +387,101 @@ class TransferTest {
         m.resume(id).join()
         m.awaitStatus(id, TransferStatus.DONE)
         assertContentEquals(payload, File(root, "games/Paused.bin").readBytes())
+    }
+
+    @Test
+    fun `a download the network dropped tries again at once when the device wakes`() = runBlocking<Unit> {
+        val server = Server().apply { status = HttpStatusCode.ServiceUnavailable }
+        val m = manager()
+        m.register(FileHandler(server))
+        val id = m.enqueue(download("Woke.bin"))
+        val waiting = m.awaitStatus(id, TransferStatus.WAITING)
+        assertEquals(WaitReason.NETWORK, waiting.waiting)
+        assertEquals(1, waiting.attempts)
+        // Still on its way: what keeps the device awake counts it, so it isn't slept through.
+        val summary = withTimeout(5_000) { m.summary.first { it.retrying == 1 } }
+        assertEquals(1, summary.going)
+        server.status = null
+        val woke = System.currentTimeMillis()
+        m.woke()
+        m.awaitStatus(id, TransferStatus.DONE)
+        assertTrue(System.currentTimeMillis() - woke < 4_000, "it tried when the device woke, not after its 5 s wait")
+        assertContentEquals(payload, File(root, "games/Woke.bin").readBytes())
+    }
+
+    @Test
+    fun `a download that gave up on the connection goes again when the device wakes`() = runBlocking<Unit> {
+        val dir = File(root, "gave-up").apply { mkdirs() }
+        val now = System.currentTimeMillis()
+        fun failed(name: String, lost: Boolean, at: Long) = download(name).copy(
+            id = name, status = TransferStatus.FAILED, error = "The connection kept dropping.", attempts = TransferManager.MAX_ATTEMPTS,
+            lostConnection = lost, finishedAt = at, order = 1,
+        )
+        val items = listOf(
+            failed("Lost.bin", lost = true, at = now - 3_600_000L),
+            // Refused, not dropped: trying again by itself wouldn't help.
+            failed("Refused.bin", lost = false, at = now - 3_600_000L),
+            // Long ago: left for the person.
+            failed("Old.bin", lost = true, at = now - 3 * 86_400_000L),
+        )
+        File(dir, "transfers.json").writeText(kotlinx.serialization.json.Json.encodeToString(kotlinx.serialization.builtins.ListSerializer(TransferItem.serializer()), items))
+        val m = manager(dir)
+        m.register(FileHandler(Server()))
+        delay(200)
+        assertEquals(TransferStatus.FAILED, m.items.value.first { it.id == "Lost.bin" }.status)
+        m.woke()
+        m.awaitStatus("Lost.bin", TransferStatus.DONE)
+        assertContentEquals(payload, File(root, "games/Lost.bin").readBytes())
+        assertEquals(TransferStatus.FAILED, m.items.value.first { it.id == "Refused.bin" }.status)
+        assertEquals(TransferStatus.FAILED, m.items.value.first { it.id == "Old.bin" }.status)
+    }
+
+    @Test
+    fun `a download left stuck by a sleep starts again from where it was when the device wakes`() = runBlocking<Unit> {
+        val server = Server().apply { stallAfter = 20_000 }
+        val m = manager(stallMs = 300)
+        m.register(FileHandler(server))
+        val id = m.enqueue(download("Slept.bin"))
+        withTimeout(10_000) { m.live(id).first { it.doneBytes >= 20_000 } }
+        // Nothing more comes, as from a connection the sleep left dead.
+        delay(600)
+        assertEquals(TransferStatus.ACTIVE, m.items.value.first { it.id == id }.status)
+        m.woke()
+        m.awaitStatus(id, TransferStatus.DONE)
+        assertContentEquals(payload, File(root, "games/Slept.bin").readBytes())
+        // It carried on by range instead of starting over.
+        assertEquals("bytes=20000-", synchronized(server.ranges) { server.ranges.last() })
+    }
+
+    @Test
+    fun `a download that is still moving is left alone when the device wakes`() = runBlocking<Unit> {
+        val server = Server()
+        val m = manager(stallMs = 2_000)
+        m.configure(TransferSettings(bandwidthLimit = 400_000))
+        m.register(FileHandler(server))
+        val id = m.enqueue(download("Moving.bin"))
+        withTimeout(10_000) { m.live(id).first { it.doneBytes > 0 } }
+        m.woke()
+        m.awaitStatus(id, TransferStatus.DONE)
+        assertEquals(1, server.requests.get())
+    }
+
+    @Test
+    fun `a pause is answered even when the transfer can't be stopped at once`() = runBlocking<Unit> {
+        val release = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val m = manager(stopWaitMs = 300)
+        m.register(object : TransferHandler {
+            override val source = "stuck"
+            override suspend fun run(item: TransferItem, io: TransferIo) {
+                // Somewhere a stop isn't seen (a blocking read), until it is let go.
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { release.await() }
+            }
+        })
+        val id = m.enqueue(download("Stuck.bin").copy(source = "stuck"))
+        m.awaitStatus(id, TransferStatus.ACTIVE)
+        m.pause(id).join()
+        assertEquals(TransferStatus.PAUSED, m.items.value.first { it.id == id }.status)
+        release.complete(Unit)
     }
 
     @Test

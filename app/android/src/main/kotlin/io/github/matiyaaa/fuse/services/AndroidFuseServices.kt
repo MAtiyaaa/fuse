@@ -82,6 +82,7 @@ class AndroidFuseServices(
 
     override val awake: kotlinx.coroutines.flow.StateFlow<Boolean> get() = io.github.matiyaaa.fuse.platform.DeviceAwake.awake
     override val interactive: kotlinx.coroutines.flow.StateFlow<Boolean> get() = io.github.matiyaaa.fuse.platform.DeviceAwake.screenOn
+    override val online: kotlinx.coroutines.flow.StateFlow<Boolean> get() = io.github.matiyaaa.fuse.platform.NetworkWatch.online
     override val deviceName: String =
         android.provider.Settings.Global.getString(appContext.contentResolver, android.provider.Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() } ?: android.os.Build.MODEL
 

@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -33,6 +34,10 @@ class TransferManager(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val clock: () -> Long = System::currentTimeMillis,
     private val volumes: suspend () -> List<StorageVolume> = { emptyList() },
+    /** A transfer that hasn't moved for this long when the device wakes is started again ([woke]). */
+    private val stallMs: Long = STALL_MS,
+    /** How long a pause or cancel waits for the transfer to stop before saying so anyway. */
+    private val stopWaitMs: Long = STOP_WAIT_MS,
 ) : Transfers {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val file = File(dir, "transfers.json")
@@ -41,6 +46,9 @@ class TransferManager(
     private val jobs = ConcurrentHashMap<String, Job>()
     private val lives = ConcurrentHashMap<String, MutableStateFlow<TransferLive>>()
     private val meters = ConcurrentHashMap<String, SpeedMeter>()
+    /** When each running transfer last moved a byte (or started). */
+    private val moved = ConcurrentHashMap<String, Long>()
+    private val waking = Mutex()
 
     private val _items = MutableStateFlow(load())
     override val items: StateFlow<List<TransferItem>> = _items.asStateFlow()
@@ -152,7 +160,7 @@ class TransferManager(
     override fun pause(id: String) = scope.launch {
         // Waited for, as a cancel is: what arrived is on the drive and counted before it reads as
         // paused, so a resume straight after carries on from it instead of racing the write closing.
-        jobs.remove(id)?.let { it.cancel(Paused()); it.join() }
+        jobs.remove(id)?.let { stop(it, Paused()) }
         val live = lives[id]?.value
         update { list -> list.map { if (it.id == id && !it.status.finished) it.copy(status = TransferStatus.PAUSED, phase = null, waiting = null, doneBytes = live?.doneBytes ?: it.doneBytes) else it } }
         kick()
@@ -162,7 +170,7 @@ class TransferManager(
         update { list ->
             list.map {
                 if (it.id == id && (it.status == TransferStatus.PAUSED || it.status == TransferStatus.WAITING || it.status == TransferStatus.FAILED)) {
-                    it.copy(status = TransferStatus.QUEUED, waiting = null, waitingFor = null, retryAt = null, error = null, attempts = 0)
+                    it.copy(status = TransferStatus.QUEUED, waiting = null, waitingFor = null, retryAt = null, error = null, attempts = 0, lostConnection = false)
                 } else {
                     it
                 }
@@ -176,7 +184,7 @@ class TransferManager(
 
     override fun pauseAll() = scope.launch {
         val active = _items.value.filter { !it.status.finished && it.status != TransferStatus.PAUSED }.map { it.id }.toSet()
-        active.mapNotNull { jobs.remove(it)?.also { j -> j.cancel(Paused()) } }.forEach { it.join() }
+        active.mapNotNull { jobs.remove(it)?.also { j -> j.cancel(Paused()) } }.forEach { stop(it, null) }
         update { list -> list.map { if (it.id in active) it.copy(status = TransferStatus.PAUSED, phase = null, waiting = null, doneBytes = lives[it.id]?.value?.doneBytes ?: it.doneBytes) else it } }
     }
 
@@ -187,7 +195,7 @@ class TransferManager(
 
     /** Stops [id] for good: what it left half done is removed. */
     override fun cancel(id: String) = scope.launch {
-        jobs.remove(id)?.let { it.cancel(Cancelled()); it.join() }
+        jobs.remove(id)?.let { stop(it, Cancelled()) }
         val item = _items.value.firstOrNull { it.id == id } ?: return@launch
         if (item.status.finished && item.status != TransferStatus.FAILED) return@launch
         runCatching { handlers[item.source]?.discard(item, ioFor(item)) }
@@ -207,6 +215,54 @@ class TransferManager(
             if (orders.isEmpty()) list else list.map { t -> orders[t.id]?.let { t.copy(order = it) } ?: t }
         }
         kick()
+    }
+
+    override fun woke() {
+        // One at a time: the screen and the connection coming back together restart nothing twice.
+        scope.launch { waking.withLock { wake() } }
+    }
+
+    private suspend fun wake() {
+        val now = clock()
+        // Stopped moving: the sleep left its connection dead, and it would wait out the socket's
+        // timeout, then the back-off, before trying again. Local work (checking, placing) is left.
+        val stalled = _items.value.filter {
+            it.status == TransferStatus.ACTIVE && it.phase != TransferPhase.VERIFYING && it.phase != TransferPhase.PLACING &&
+                it.phase != TransferPhase.FINISHING && now - (moved[it.id] ?: now) >= stallMs
+        }.map { it.id }.toSet()
+        val stopped = stalled.filter { id ->
+            val job = jobs.remove(id)
+            if (job != null) stop(job, Restarted())
+            job != null
+        }.toSet()
+        // Back in the queue, or waiting for what holds its direction now (a game being played).
+        fun again(t: TransferItem): TransferItem {
+            val reason = held(t.direction)
+            return t.copy(status = if (reason == null) TransferStatus.QUEUED else TransferStatus.WAITING, waiting = reason, phase = null, retryAt = null)
+        }
+        update { list ->
+            list.map { t ->
+                when {
+                    t.id in stopped && t.status == TransferStatus.ACTIVE ->
+                        again(t).copy(doneBytes = lives[t.id]?.value?.doneBytes ?: t.doneBytes)
+                    t.status == TransferStatus.WAITING && t.waiting == WaitReason.NETWORK ->
+                        again(t).copy(attempts = 0, error = null)
+                    t.status == TransferStatus.FAILED && t.lostConnection && (t.finishedAt ?: 0) > now - DAY_MS ->
+                        again(t).copy(error = null, attempts = 0, lostConnection = false, finishedAt = null)
+                    else -> t
+                }
+            }
+        }
+        kick()
+    }
+
+    /**
+     * Stops [job] (with [why], unless it was asked already) and waits for it, though never for longer
+     * than [stopWaitMs]: a transfer stuck where it can't be stopped mustn't leave a pause unanswered.
+     */
+    private suspend fun stop(job: Job, why: CancellationException?) {
+        if (why != null) job.cancel(why)
+        withTimeoutOrNull(stopWaitMs) { job.join() }
     }
 
     /** Clears finished transfers (done and cancelled; failed ones stay until retried or cancelled). */
@@ -286,6 +342,7 @@ class TransferManager(
         val handler = handlers[item.source] ?: return
         val io = ioFor(item)
         meters.getOrPut(item.id) { SpeedMeter() }.reset()
+        moved[item.id] = clock()
         val job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             val outcome: (TransferItem) -> TransferItem = try {
                 // A transfer reads and hashes whole files: never on the thread that draws Fuse (a
@@ -312,11 +369,12 @@ class TransferManager(
                     if (interrupted && attempts < MAX_ATTEMPTS) {
                         t.copy(status = TransferStatus.WAITING, waiting = WaitReason.NETWORK, phase = null, attempts = attempts, retryAt = clock() + TransferScheduler.backoff(attempts), error = e.message)
                     } else {
-                        t.copy(status = TransferStatus.FAILED, phase = null, attempts = attempts, error = failureWords(e), retryable = true, finishedAt = clock())
+                        t.copy(status = TransferStatus.FAILED, phase = null, attempts = attempts, error = failureWords(e), retryable = true, finishedAt = clock(), lostConnection = interrupted)
                     }
                 })
             }
             jobs.remove(item.id)
+            moved.remove(item.id)
             val live = liveOf(item.id).value
             update { list -> list.map { if (it.id == item.id) outcome(it).let { o -> if (o.status == TransferStatus.DONE) o else o.copy(doneBytes = live.doneBytes, totalBytes = live.totalBytes ?: o.totalBytes) } else it } }
             val finished = _items.value.firstOrNull { it.id == item.id }
@@ -340,6 +398,7 @@ class TransferManager(
 
         override fun progress(done: Long, total: Long?) {
             val now = clock()
+            moved[item.id] = now
             val speed = meters.getOrPut(item.id) { SpeedMeter() }.sample(done, now)
             val t = total ?: liveOf(item.id).value.totalBytes ?: item.totalBytes
             liveOf(item.id).value = TransferLive(done, t, speed, t?.let { SpeedMeter.eta(it - done, speed) })
@@ -410,6 +469,7 @@ class TransferManager(
     private fun newId(): String = java.util.UUID.randomUUID().toString()
 
     private class Paused : CancellationException("paused")
+    private class Restarted : CancellationException("restarted after the device woke")
     private class Held : CancellationException("held")
     private class Cancelled : CancellationException("cancelled")
 
@@ -419,6 +479,8 @@ class TransferManager(
         private const val SAVE_EVERY_MS = 3_000L
         private const val DRIVE_LOOK_MS = 30_000L
         private const val DEVICE_LOOK_MS = 60_000L
+        private const val STALL_MS = 10_000L
+        private const val STOP_WAIT_MS = 10_000L
         /** A transfer that lost its way this many times in a row stops and says so. */
         const val MAX_ATTEMPTS = 8
 

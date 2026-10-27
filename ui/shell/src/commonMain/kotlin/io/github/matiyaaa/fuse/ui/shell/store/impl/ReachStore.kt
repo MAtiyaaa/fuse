@@ -936,8 +936,9 @@ internal class DefaultReachOps(
             }
 
         override fun sending(what: String?) {
-            if (what == null) ctx.services.keepAliveForTransfers(false, "", null)
-            else ctx.services.keepAliveForTransfers(true, "Sending a game to $what", null)
+            // Downloads keeps Fuse running for both (see DefaultTransfersOps): each switching it on
+            // and off by itself let a download end the send's hold, or the send a download's.
+            ctx.sendingTo.value = what
         }
     }
 
