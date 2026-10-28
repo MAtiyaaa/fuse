@@ -33,7 +33,10 @@ concurrency:
 jobs:
   check:
     name: Every port installs and starts
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04, not the newest image: the RSDK decompilations' Linux builds are linked against
+    # Theora 1.1 (libtheoradec.so.1), and Ubuntu 26.04 has only Theora 1.2, whose libraries are
+    # renamed (libtheoradec.so.2), so no package there can give them what they take (#111).
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - name: Check out
@@ -54,7 +57,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           glew=$(apt-cache pkgnames libglew | grep -E '^libglew[0-9.]+$' | sort -V | tail -n 1 || true)
-          theora=$(apt-cache pkgnames libtheora | grep -Ev -- '-(dev|doc|bin|dbg|tools)$' | sort -u | tr '\n' ' ' || true)
+          theora=$(apt-cache pkgnames libtheora | grep -Ev -- '-(dev|doc|bin|dbg|tools)$|ocaml' | sort -u | tr '\n' ' ' || true)
           if [ -z "$glew" ] || [ -z "$theora" ]; then echo "GLEW or Theora isn't packaged on this image" >&2; exit 1; fi
           echo "GLEW: $glew; Theora: $theora"
           sudo apt-get install -y xvfb mesa-vulkan-drivers libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 \
