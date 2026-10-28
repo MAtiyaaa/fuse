@@ -1717,7 +1717,7 @@ internal class DefaultLibraryOps(
             else -> launch
         }
         val ext = Paths.extension(path).lowercase()
-        if (ext != "iso" && ext != "pbp") return null
+        if (ext != "iso" && ext != "pbp" && ext !in io.github.matiyaaa.fuse.library.disc.PlayStationDisc.COMPRESSED) return null
         val stat = fs.stat(path) ?: return null
         val key = "psp|$path|${stat.sizeBytes}|${stat.modifiedAt}"
         val serializer = kotlinx.serialization.serializer<String>()
@@ -1764,7 +1764,19 @@ internal class DefaultLibraryOps(
         return null
     }
 
-    private val discs by lazy { io.github.matiyaaa.fuse.library.disc.PlayStationDisc(ctx.services.fs) }
+    /** The PlayStation disc reader, reading CHD, CSO and ZSO images through Fuse's own readers of them. */
+    private val discs by lazy {
+        io.github.matiyaaa.fuse.library.disc.PlayStationDisc(ctx.services.fs) { path ->
+            val opened = ArrayList<ClosableByteSource>()
+            fun closeAll() = opened.forEach { runCatching { it.close() } }
+            val files = object : io.github.matiyaaa.fuse.integrations.disc.DiscFiles {
+                override suspend fun open(path: String): io.github.matiyaaa.fuse.integrations.ByteSource? = openByteSource(path)?.also { opened += it }
+
+                override suspend fun readText(path: String): String? = runCatching { ctx.services.fs.readText(path) }.getOrNull()
+            }
+            runCatching { DiscData.sectors(path, files, ::closeAll) }.getOrNull() ?: null.also { closeAll() }
+        }
+    }
 
     override suspend fun discIdentity(id: GameId): io.github.matiyaaa.fuse.library.disc.DiscIdentity? {
         val game = data.games.get(id) ?: return null
@@ -1852,7 +1864,7 @@ internal class DefaultLibraryOps(
     private suspend fun discImage(game: io.github.matiyaaa.fuse.model.Game): String? {
         val path = game.discs.firstOrNull()?.path ?: game.location.launchPath
         val ext = Paths.extension(path).lowercase()
-        if (ext in setOf("iso", "bin", "img")) return path
+        if (ext in setOf("iso", "bin", "img") || ext in io.github.matiyaaa.fuse.library.disc.PlayStationDisc.COMPRESSED) return path
         if (ext != "cue") return null
         val cue = ctx.services.fs.readText(path, 64 * 1024) ?: return null
         val name = Regex("""(?im)^\s*FILE\s+"([^"]+)"""").find(cue)?.groupValues?.get(1) ?: return null

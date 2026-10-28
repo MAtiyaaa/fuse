@@ -75,6 +75,25 @@ class PlayStationDiscTest {
     private val expectedCrc = 0x04030201L xor 0x08070605L
 
     @Test
+    fun aCompressedImageIsReadThroughItsOwnReader() = runTest {
+        val image = iso(ps2Cnf)
+        var closed = false
+        val sectors = object : io.github.matiyaaa.fuse.library.disc.DiscSectors {
+            override suspend fun read(lba: Long, length: Int): ByteArray? =
+                image.copyOfRange((lba * 2048).toInt(), (lba * 2048).toInt() + length).takeIf { lba * 2048 + length <= image.size }
+
+            override fun close() { closed = true }
+        }
+        val disc = PlayStationDisc(BytesFs(emptyMap())) { path -> sectors.takeIf { path == "/g.chd" } }
+        val id = disc.identify("/g.chd")!!
+        assertEquals("SLUS-20946", id.serial)
+        assertEquals(expectedCrc, id.crc)
+        assertEquals(true, closed)
+        // Without a reader for them, compressed images aren't read at all.
+        assertNull(PlayStationDisc(BytesFs(mapOf("/g.chd" to image))).identify("/g.chd"))
+    }
+
+    @Test
     fun aPs2IsoGivesPcsx2sSerialAndCrc() = runTest {
         val id = PlayStationDisc(BytesFs(mapOf("/g.iso" to iso(ps2Cnf)))).identify("/g.iso")!!
         assertEquals("SLUS-20946", id.serial)

@@ -24,16 +24,34 @@ data class DiscIdentity(
 }
 
 /**
- * Reads [DiscIdentity] from uncompressed disc images: ISO files (2048-byte sectors) and raw BIN
- * images (2352-byte sectors, mode 1 or mode 2). Compressed images (CHD, CSO, GZ) aren't read: their
- * games are identified by name instead. The rules follow PCSX2 (pcsx2/CDVD/CDVD.cpp,
- * ExecutablePathToSerial and GetPS2ElfName; pcsx2/Elfheader.cpp, ElfObject::GetCRC), so the serial
- * and CRC are the ones PCSX2 shows for the same disc.
+ * A disc image's data read through a reader of its own (a CHD's hunks, a CSO's blocks): 2048 bytes
+ * a sector, from its data track's first sector. [close] lets go of the files it opened.
  */
-class PlayStationDisc(private val fs: FuseFileSystem) {
+interface DiscSectors {
+    /** [length] bytes of data from sector [lba] on, across sectors; null when they can't be read. */
+    suspend fun read(lba: Long, length: Int): ByteArray?
+
+    fun close() {}
+}
+
+/**
+ * Reads [DiscIdentity] from disc images: ISO files (2048-byte sectors), raw BIN images (2352-byte
+ * sectors, mode 1 or mode 2), and compressed ones (CHD, CSO, ZSO) through [compressed], a reader
+ * of their own, when one is given (without it they are identified by name instead). The rules
+ * follow PCSX2 (pcsx2/CDVD/CDVD.cpp, ExecutablePathToSerial and GetPS2ElfName; pcsx2/Elfheader.cpp,
+ * ElfObject::GetCRC), so the serial and CRC are the ones PCSX2 shows for the same disc.
+ */
+class PlayStationDisc(
+    private val fs: FuseFileSystem,
+    private val compressed: (suspend (String) -> DiscSectors?)? = null,
+) {
     /** The identity of the image at [path], or null when it isn't a readable PlayStation disc. */
     suspend fun identify(path: String): DiscIdentity? {
         val image = open(path) ?: return null
+        return try { identify(image) } finally { image.close() }
+    }
+
+    private suspend fun identify(image: Image): DiscIdentity? {
         val root = image.rootDirectory() ?: return null
         val cnf = image.find(root, "SYSTEM.CNF") ?: return null
         if (cnf.size > MAX_CNF) return null
@@ -47,7 +65,7 @@ class PlayStationDisc(private val fs: FuseFileSystem) {
     /**
      * A PSP game's id as PPSSPP files its cheats and settings under (`ULUS10041`): DISC_ID in the
      * PARAM.SFO of a UMD image (`PSP_GAME/PARAM.SFO`) or of an EBOOT.PBP (whose header says where it
-     * is). Compressed images (CSO, CHD) aren't read.
+     * is). A compressed UMD image (CSO, ZSO, CHD) is read through the same reader as a disc's.
      */
     suspend fun pspGameId(path: String): String? {
         val sfo = if (path.endsWith(".pbp", ignoreCase = true)) pbpParamSfo(path) else umdParamSfo(path)
@@ -56,10 +74,14 @@ class PlayStationDisc(private val fs: FuseFileSystem) {
 
     private suspend fun umdParamSfo(path: String): ByteArray? {
         val image = open(path) ?: return null
-        val root = image.rootDirectory() ?: return null
-        val game = image.find(root, "PSP_GAME")?.takeIf { it.directory } ?: return null
-        val sfo = image.find(game, "PARAM.SFO")?.takeIf { !it.directory && it.size in 1..MAX_CNF } ?: return null
-        return image.readFile(sfo)
+        try {
+            val root = image.rootDirectory() ?: return null
+            val game = image.find(root, "PSP_GAME")?.takeIf { it.directory } ?: return null
+            val sfo = image.find(game, "PARAM.SFO")?.takeIf { !it.directory && it.size in 1..MAX_CNF } ?: return null
+            return image.readFile(sfo)
+        } finally {
+            image.close()
+        }
     }
 
     /** The PARAM.SFO inside an EBOOT.PBP: its header is "\0PBP", a version, then eight offsets, the first two bounding PARAM.SFO. */
@@ -102,32 +124,44 @@ class PlayStationDisc(private val fs: FuseFileSystem) {
     }
 
     private suspend fun open(path: String): Image? {
+        if (path.substringAfterLast('.', "").lowercase() in COMPRESSED) {
+            val reader = compressed ?: return null
+            val sectors = reader(path) ?: return null
+            return Image(sectors)
+        }
         val head = fs.readBytes(path, 0, 16) ?: return null
         // A raw sector starts with the CD sync pattern: 00, ten FF, 00.
         val raw = head.size == 16 && head[0] == 0.toByte() && (1..10).all { head[it] == 0xFF.toByte() } && head[11] == 0.toByte()
-        if (!raw) return Image(fs, path, SECTOR, 0)
+        if (!raw) return Image(FileSectors(fs, path, SECTOR, 0))
         val mode = (fs.readBytes(path, 16L * RAW_SECTOR + 15, 1) ?: return null).firstOrNull()?.toInt() ?: return null
-        return Image(fs, path, RAW_SECTOR, if (mode == 1) 16 else 24)
+        return Image(FileSectors(fs, path, RAW_SECTOR, if (mode == 1) 16 else 24))
     }
 
-    /** A disc image read sector by sector: [stride] bytes per sector, its 2048 bytes of data at [offset]. */
-    private class Image(private val fs: FuseFileSystem, private val path: String, private val stride: Int, private val offset: Int) {
-        suspend fun sector(lba: Long): ByteArray? = fs.readBytes(path, lba * stride + offset, SECTOR)?.takeIf { it.size == SECTOR }
-
-        /** [length] bytes of data from sector [lba] on, across sectors. */
-        suspend fun readRange(lba: Long, length: Int): ByteArray? {
+    /** A plain image file's data: [stride] bytes per sector, its 2048 bytes of data at [offset]. */
+    private class FileSectors(private val fs: FuseFileSystem, private val path: String, private val stride: Int, private val offset: Int) : DiscSectors {
+        override suspend fun read(lba: Long, length: Int): ByteArray? {
             if (stride == SECTOR) return fs.readBytes(path, lba * SECTOR, length)?.takeIf { it.size == length }
             val out = ByteArray(length)
             var at = 0
             var s = lba
             while (at < length) {
-                val data = sector(s++) ?: return null
+                val data = fs.readBytes(path, s++ * stride + offset, SECTOR)?.takeIf { it.size == SECTOR } ?: return null
                 val n = minOf(SECTOR, length - at)
                 data.copyInto(out, at, 0, n)
                 at += n
             }
             return out
         }
+    }
+
+    /** A disc image read sector by sector through its [sectors]. */
+    private class Image(private val sectors: DiscSectors) {
+        suspend fun sector(lba: Long): ByteArray? = sectors.read(lba, SECTOR)?.takeIf { it.size == SECTOR }
+
+        /** [length] bytes of data from sector [lba] on, across sectors. */
+        suspend fun readRange(lba: Long, length: Int): ByteArray? = sectors.read(lba, length)?.takeIf { it.size == length }
+
+        fun close() = sectors.close()
 
         suspend fun readFile(e: Entry): ByteArray? = readRange(e.sector, e.size.toInt())
 
@@ -181,6 +215,9 @@ class PlayStationDisc(private val fs: FuseFileSystem) {
         private const val MAX_ELF = 64L * 1024 * 1024
         private const val MAX_DIR_SECTORS = 256
         private val PSP_ID = Regex("[A-Z]{4}[0-9]{5}")
+
+        /** Images read through [compressed]: CHD, and CSO and ZSO (compressed ISOs). */
+        val COMPRESSED = setOf("chd", "cso", "zso")
 
         private fun le32(b: ByteArray, at: Int): Long =
             (b[at].toLong() and 0xFF) or ((b[at + 1].toLong() and 0xFF) shl 8) or

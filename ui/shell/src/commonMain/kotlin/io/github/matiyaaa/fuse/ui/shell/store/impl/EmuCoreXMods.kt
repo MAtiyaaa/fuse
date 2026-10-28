@@ -57,7 +57,7 @@ internal class EmuCoreXMods(
         val serial = disc?.serial ?: game.tags.serial
         val crc = disc?.crcText
         if (serial == null && crc == null) {
-            return none(null, null, "Fuse couldn't read this game's disc for its serial and CRC, which is how EmuCoreX's packs and cheats are matched. Compressed images (CHD, CSO) aren't read.")
+            return none(null, null, "Fuse couldn't read this game's disc for its serial and CRC, which is how EmuCoreX's packs and cheats are matched. It reads ISO, BIN, CHD and CSO images; this one doesn't say them.")
         }
         val kinds = enhancements.list(id).kinds
         val textures = catalogue(EmuCoreX.TEXTURES_URL)?.let(EmuCoreX::parseTextures)

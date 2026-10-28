@@ -172,7 +172,7 @@ internal class NativePatches(
         val home = files.pcsx2(pcsx2) ?: return no("PCSX2 isn't set up yet", "Start PCSX2 once and finish its first-run setup, then come back.")
         val disc = discIdentity(id) ?: return no(
             "Fuse can't read this disc",
-            "Patches are filed under the game's serial and CRC, which Fuse reads from ISO and BIN images. Compressed images (CHD, CSO) aren't read; change their patches in PCSX2.",
+            "Patches are filed under the game's serial and CRC, which Fuse reads from ISO, BIN, CHD and CSO images. This one doesn't say them; change its patches in PCSX2.",
         )
         val crc = disc.crc ?: return no("Not a PS2 disc", "This image doesn't start a PS2 program, so PCSX2 has no patches for it.")
         val rules = Pcsx2PatchRules
@@ -235,7 +235,7 @@ internal class NativePatches(
         val home = files.duckstation(ds) ?: return no("DuckStation isn't set up yet", "Start DuckStation once and finish its first-run setup, then come back.")
         val disc = discIdentity(id) ?: return no(
             "Fuse can't read this disc",
-            "DuckStation files patches and cheats under the game's serial, which Fuse reads from ISO, BIN and CUE images. Compressed images (CHD, PBP) aren't read; change them in DuckStation's Game Properties.",
+            "DuckStation files patches and cheats under the game's serial, which Fuse reads from ISO, BIN, CUE and CHD images. PBP files aren't read; change them in DuckStation's Game Properties.",
         )
         if (disc.ps2) return no("Not a PlayStation disc", "This image starts a PS2 program, so DuckStation has nothing for it.")
         val rules = DuckStationPatchRules
@@ -303,7 +303,7 @@ internal class NativePatches(
         val home = files.ppsspp(ppsspp) ?: return no("PPSSPP isn't set up yet", "Start PPSSPP once so it makes its memory stick, then come back.")
         val gameId = pspGameId(game) ?: return no(
             "Fuse can't tell which game this is",
-            "PPSSPP files cheats under the game's id (like ULUS10041), which Fuse reads from ISO images and EBOOT.PBP files, or from a game id in its name. Compressed images (CSO, CHD) aren't read.",
+            "PPSSPP files cheats under the game's id (like ULUS10041), which Fuse reads from ISO, CSO and CHD images and EBOOT.PBP files, or from a game id in its name.",
         )
         val path = home.cheatFile(gameId)
         val text = fs.readText(path, MAX_TEXT) ?: ""

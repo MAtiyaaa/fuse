@@ -630,8 +630,8 @@ interface LibraryOps {
 
     /**
      * What a PlayStation or PS2 disc image says about itself (its serial, and PCSX2's CRC for PS2
-     * discs), read from the image once and remembered. Null for other games, compressed images and
-     * images that can't be read.
+     * discs), read from the image (ISO, BIN, CHD, CSO or ZSO) once and remembered. Null for other
+     * games and images that can't be read.
      */
     suspend fun discIdentity(id: GameId): io.github.matiyaaa.fuse.library.disc.DiscIdentity? = null
 

@@ -229,7 +229,7 @@ internal class NativeEnhancements(
     private suspend fun pcsx2(id: GameId, kind: EnhancementKind, files: EmulatorFiles, source: String, listing: SourceListing): EnhancementPreview {
         val pcsx2 = installed("pcsx2") ?: return no("PCSX2 isn't installed", "Install PCSX2 and start it once, then add this.")
         val home = files.pcsx2(pcsx2) ?: return no("PCSX2 isn't set up yet", "Start PCSX2 once and finish its first-run setup, then come back.")
-        val disc = discIdentity(id) ?: return no("Fuse can't read this disc", "PCSX2 files these under the game's serial and CRC, which Fuse reads from ISO and BIN images. Compressed images (CHD, CSO) aren't read.")
+        val disc = discIdentity(id) ?: return no("Fuse can't read this disc", "PCSX2 files these under the game's serial and CRC, which Fuse reads from ISO, BIN, CHD and CSO images. This one doesn't say them.")
         val crc = disc.crc ?: return no("Not a PS2 disc", "This image doesn't start a PS2 program.")
         val crcText = disc.crcText!!
         val settingsFile = "${home.gameSettings}/${Pcsx2PatchRules.gameSettingsName(disc.serial, crc)}"
@@ -305,7 +305,7 @@ internal class NativeEnhancements(
     private suspend fun duckstation(id: GameId, kind: EnhancementKind, files: EmulatorFiles, source: String, listing: SourceListing): EnhancementPreview {
         val ds = installed("duckstation") ?: return no("DuckStation isn't installed", "Install DuckStation and start it once, then add this.")
         val home = files.duckstation(ds) ?: return no("DuckStation isn't set up yet", "Start DuckStation once and finish its first-run setup, then come back.")
-        val disc = discIdentity(id) ?: return no("Fuse can't read this disc", "DuckStation files these under the game's serial, which Fuse reads from ISO, BIN and CUE images. Compressed images (CHD, PBP) aren't read.")
+        val disc = discIdentity(id) ?: return no("Fuse can't read this disc", "DuckStation files these under the game's serial, which Fuse reads from ISO, BIN, CUE and CHD images. PBP files aren't read.")
         if (disc.ps2) return no("Not a PlayStation disc", "This image starts a PS2 program.")
         val serial = disc.serial
         val settingsFile = "${home.gameSettings}/${DuckStationPatchRules.gameSettingsName(serial)}"
@@ -372,7 +372,7 @@ internal class NativeEnhancements(
         if (kind == EnhancementKind.PATCHES) return no("PPSSPP has no patch files", "PPSSPP's own changes to games are cheats. Add them as cheats.")
         val pp = installed("ppsspp") ?: return no("PPSSPP isn't installed", "Install PPSSPP and start it once, then add this.")
         val home = files.ppsspp(pp) ?: return no("PPSSPP isn't set up yet", "Start PPSSPP once so it makes its memory stick, then come back.")
-        val gameId = pspGameId(game) ?: return no("Fuse can't tell which game this is", "PPSSPP files these under the game's id (like ULUS10041), which Fuse reads from ISO images and EBOOT.PBP files. Compressed images (CSO, CHD) aren't read.")
+        val gameId = pspGameId(game) ?: return no("Fuse can't tell which game this is", "PPSSPP files these under the game's id (like ULUS10041), which Fuse reads from ISO, CSO and CHD images and EBOOT.PBP files. This one doesn't say it.")
         if (kind == EnhancementKind.TEXTURES) {
             val pack = EnhancementRules.texturePack("ppsspp", listing.entries)
                 ?: return no("Not a PPSSPP texture pack", "A PPSSPP texture pack has a textures.ini (or textures.zip) in it. ${listing.name} has neither.")

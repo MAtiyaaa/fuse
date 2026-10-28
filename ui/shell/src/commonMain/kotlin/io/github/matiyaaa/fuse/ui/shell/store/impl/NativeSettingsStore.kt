@@ -266,7 +266,7 @@ internal class NativeSettingsStore(
         // ARMSX2 numbers its own releases, not PCSX2's: which of PCSX2's it follows isn't known.
         val version = installed.version.takeUnless { installed.id.value.substringAfter('.') in NativeSettings.ownVersions }
         fun notSetUp() = no("$name isn't set up yet", "Start $name once and finish its first-run setup, then come back.")
-        fun unreadable(what: String) = no("Fuse can't tell which game this is", "$name keeps a game's own settings under its $what, which Fuse reads from ISO and BIN images (and EBOOT.PBP files for PSP). Compressed images (CHD, CSO) aren't read; change this game's settings in $name.")
+        fun unreadable(what: String) = no("Fuse can't tell which game this is", "$name keeps a game's own settings under its $what, which Fuse reads from the disc image (ISO, BIN, CHD or CSO, and EBOOT.PBP files for PSP). This one doesn't say it; change this game's settings in $name.")
         return when (family) {
             "pcsx2" -> {
                 val home = files.pcsx2(installed) ?: return notSetUp()
