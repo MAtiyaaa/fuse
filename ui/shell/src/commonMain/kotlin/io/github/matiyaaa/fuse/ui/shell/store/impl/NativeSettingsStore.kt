@@ -720,34 +720,47 @@ internal class NativeSettingsStore(
      */
     suspend fun setHotkeys(emulator: EmulatorId): Set<io.github.matiyaaa.fuse.launch.settings.Hotkeys.Action>? {
         val t = target(null, emulator).first?.takeIf { it.family in io.github.matiyaaa.fuse.launch.settings.Hotkeys.families } ?: return null
-        val path = t.globalPath
-        val text = t.text(fs.readText(path, MAX_TEXT) ?: return null, path)
-        val applied = io.github.matiyaaa.fuse.launch.settings.Hotkeys.apply(t.family, text, data.owned.get(HOTKEYS, path), data.owned.get(HOTKEYS_SET, path))
-        if (applied.changed) {
-            if (!t.writer.write(path, text.toString())) return null
-            data.owned.set(HOTKEYS, path, applied.added)
-            data.owned.set(HOTKEYS_SET, path, applied.records)
+        val kept = LinkedHashSet<io.github.matiyaaa.fuse.launch.settings.Hotkeys.Action>()
+        for (file in io.github.matiyaaa.fuse.launch.settings.Hotkeys.filesFor(t.family)) {
+            val path = hotkeyPath(t, file)
+            val text = t.text(fs.readText(path, MAX_TEXT) ?: return null, path)
+            val applied = io.github.matiyaaa.fuse.launch.settings.Hotkeys.apply(t.family, text, data.owned.get(HOTKEYS, path), data.owned.get(HOTKEYS_SET, path), ctx.host, file)
+            // PPSSPP before it has saved its own mappings: nothing to add to yet.
+            if (applied.unwritable && !applied.changed) return null
+            if (applied.changed) {
+                if (!t.writer.write(path, text.toString())) return null
+                data.owned.set(HOTKEYS, path, applied.added)
+                data.owned.set(HOTKEYS_SET, path, applied.records)
+            }
+            kept += applied.kept
         }
-        return applied.kept
+        return kept
     }
 
     /** Takes Fuse's hotkeys out of [emulator]'s settings again; a binding changed in the emulator since stays. True when there were some. */
     suspend fun restoreHotkeys(emulator: EmulatorId): Boolean {
         val t = target(null, emulator).first?.takeIf { it.family in io.github.matiyaaa.fuse.launch.settings.Hotkeys.families } ?: return false
-        val path = t.globalPath
-        val added = data.owned.get(HOTKEYS, path)
-        val records = data.owned.get(HOTKEYS_SET, path)
-        if (added.isEmpty() && records.isEmpty()) return false
-        val content = fs.readText(path, MAX_TEXT)
-        if (content != null) {
-            val text = t.text(content, path)
-            io.github.matiyaaa.fuse.launch.settings.Hotkeys.restore(text, added, records)
-            if (!t.writer.write(path, text.toString())) return false
+        var any = false
+        for (file in io.github.matiyaaa.fuse.launch.settings.Hotkeys.filesFor(t.family)) {
+            val path = hotkeyPath(t, file)
+            val added = data.owned.get(HOTKEYS, path)
+            val records = data.owned.get(HOTKEYS_SET, path)
+            if (added.isEmpty() && records.isEmpty()) continue
+            val content = fs.readText(path, MAX_TEXT)
+            if (content != null) {
+                val text = t.text(content, path)
+                io.github.matiyaaa.fuse.launch.settings.Hotkeys.restore(text, added, records)
+                if (!t.writer.write(path, text.toString())) return false
+            }
+            data.owned.set(HOTKEYS, path, emptySet())
+            data.owned.set(HOTKEYS_SET, path, emptySet())
+            any = true
         }
-        data.owned.set(HOTKEYS, path, emptySet())
-        data.owned.set(HOTKEYS_SET, path, emptySet())
-        return true
+        return any
     }
+
+    /** Where [t]'s hotkeys of [file] go: that file beside its file for every game, or that one. */
+    private fun hotkeyPath(t: Target, file: String?): String = file?.let { t.globalPath.substringBeforeLast('/') + "/" + it } ?: t.globalPath
 
     private suspend fun setRecorded(kind: String, emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Boolean {
         val t = target(null, emulator).first ?: return false

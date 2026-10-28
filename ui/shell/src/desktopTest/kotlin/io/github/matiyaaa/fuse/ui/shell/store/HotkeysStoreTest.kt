@@ -23,7 +23,8 @@ import kotlinx.coroutines.runBlocking
 
 /**
  * The same hotkeys in every emulator, end to end: written into DuckStation's settings.ini beside the
- * person's own and into RetroArch's quit combo, then taken out again, leaving each file as it was.
+ * person's own, into PPSSPP's controls.ini as more of each list, and into RetroArch's quit combo,
+ * then taken out again, leaving each file as it was.
  */
 class HotkeysStoreTest {
     private lateinit var cache: File
@@ -47,7 +48,8 @@ class HotkeysStoreTest {
     fun hotkeysGoInBesideThePersonsOwnAndComeOutAgain(): Unit = runBlocking {
         val duck = InstalledEmulator(EmulatorId("linux.duckstation"), "DuckStation", Host.LINUX, "/usr/bin/duckstation-qt", platforms = setOf(PlatformId("psx")), detectedVia = "PATH")
         val ra = InstalledEmulator(EmulatorId("linux.retroarch"), "RetroArch", Host.LINUX, "/usr/bin/retroarch", platforms = setOf(PlatformId("snes")), detectedVia = "PATH")
-        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache, installedEmulators = listOf(duck, ra))
+        val psp = InstalledEmulator(EmulatorId("linux.ppsspp"), "PPSSPP", Host.LINUX, "/usr/bin/ppsspp", platforms = setOf(PlatformId("psp")), detectedVia = "PATH")
+        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache, installedEmulators = listOf(duck, ra, psp))
         val ds = File(emu, "duckstation").apply { mkdirs() }
         val ini = File(ds, "settings.ini")
         val iniText = "[Main]\nSettingsVersion = 3\n\n[Hotkeys]\nOpenPauseMenu = Keyboard/Escape\n"
@@ -58,11 +60,18 @@ class HotkeysStoreTest {
         val cfgText = "input_quit_gamepad_combo = \"0\"\nvideo_fullscreen = \"true\"\n"
         cfg.writeText(cfgText)
         services.retroArchHome = RetroArchHome(cfg.absolutePath, "${raDir.absolutePath}/cheats", raDir.absolutePath)
+        val memstick = File(emu, "ppsspp").apply { File(this, "PSP/SYSTEM").mkdirs() }
+        File(memstick, "PSP/SYSTEM/ppsspp.ini").writeText("[General]\nFirstRun = False\n")
+        val controls = File(memstick, "PSP/SYSTEM/controls.ini")
+        val controlsText = "[ControlMapping]\nExit App = \nSave State = 1-132\nLoad State = 1-134\nPause = 1-111\n"
+        controls.writeText(controlsText)
+        services.ppssppHome = io.github.matiyaaa.fuse.launch.patches.PpssppHome(memstick.absolutePath)
         val store = createFuseStore(services, scope)
 
-        assertEquals(setOf("DuckStation" to "duckstation", "RetroArch" to "retroarch"), store.library.hotkeysHere().map { it.name to it.family }.toSet())
+        assertEquals(setOf("DuckStation" to "duckstation", "RetroArch" to "retroarch", "PPSSPP" to "ppsspp"), store.library.hotkeysHere().map { it.name to it.family }.toSet())
         val on = store.library.applyHotkeys(true)
-        assertEquals(setOf("DuckStation", "RetroArch"), on.map { it.emulator }.toSet())
+        assertEquals(setOf("DuckStation", "RetroArch", "PPSSPP"), on.map { it.emulator }.toSet())
+        assertTrue("Pause = 1-111,10-196:10-188\n" in controls.readText(), controls.readText())
         assertTrue(on.all { it.kept.isEmpty() })
         val written = ini.readText()
         assertTrue("OpenPauseMenu = Keyboard/Escape\n" in written, written)
@@ -74,9 +83,10 @@ class HotkeysStoreTest {
         assertEquals(written, ini.readText())
 
         // Off: both files exactly as they were.
-        assertEquals(setOf("DuckStation", "RetroArch"), store.library.applyHotkeys(false).map { it.emulator }.toSet())
+        assertEquals(setOf("DuckStation", "RetroArch", "PPSSPP"), store.library.applyHotkeys(false).map { it.emulator }.toSet())
         assertEquals(iniText, ini.readText())
         assertEquals(cfgText, cfg.readText())
+        assertEquals(controlsText, controls.readText())
         assertEquals(emptyList(), store.library.applyHotkeys(false))
     }
 }

@@ -37,7 +37,7 @@ internal fun hotkeysWords(here: List<HotkeyEmulator>): String {
     val where = listOfNotNull(
         all.takeIf { it.isNotEmpty() }?.let { "In ${namesInWords(it)}" },
         quitOnly.takeIf { it.isNotEmpty() }?.let { "${namesInWords(it)}: quit" },
-    ).joinToString("; ").ifEmpty { "In DuckStation and PCSX2 once one is set up here" }
+    ).joinToString("; ").ifEmpty { "In DuckStation, PCSX2 and PPSSPP once one is set up here" }
     return "Select + Start quits, Select + R1 saves a state, Select + L1 loads it. $where. Your own hotkeys stay, and off takes Fuse's out"
 }
 

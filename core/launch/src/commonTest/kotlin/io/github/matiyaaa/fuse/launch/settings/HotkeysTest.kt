@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.launch.settings
 
 import io.github.matiyaaa.fuse.launch.patches.IniText
+import io.github.matiyaaa.fuse.model.Host
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -65,10 +66,41 @@ class HotkeysTest {
     }
 
     @Test
+    fun ppssppGetsEachComboAsOneMoreItemOfItsListsAndOnlyInTheSectionItWrote() {
+        val text = "[ControlMapping]\nUp = 1-19,10-19\nExit App = \nSave State = 1-132\nLoad State = 1-134\nPause = 1-111,10-106\n"
+        val ini = IniText(text)
+        val applied = Hotkeys.apply("ppsspp", ini, emptySet(), emptySet(), Host.LINUX, Hotkeys.PPSSPP_CONTROLS)
+        assertTrue(applied.changed)
+        // SDL's Back with Start, the shoulders and the north button, as PPSSPP numbers them.
+        assertEquals("10-196:10-197", ini.values("ControlMapping", "Exit App").single())
+        assertEquals("1-132,10-196:10-192", ini.values("ControlMapping", "Save State").single())
+        assertEquals("1-134,10-196:10-193", ini.values("ControlMapping", "Load State").single())
+        assertEquals("1-111,10-106,10-196:10-188", ini.values("ControlMapping", "Pause").single())
+        assertFalse(Hotkeys.apply("ppsspp", ini, applied.added, applied.records, Host.LINUX, Hotkeys.PPSSPP_CONTROLS).changed)
+        Hotkeys.restore(ini, applied.added, applied.records)
+        assertEquals(text, ini.toString())
+        // An XInput pad on Windows, Android's own codes there.
+        val windows = IniText(text).also { Hotkeys.apply("ppsspp", it, emptySet(), emptySet(), Host.WINDOWS, Hotkeys.PPSSPP_CONTROLS) }
+        assertEquals("20-109:20-108", windows.values("ControlMapping", "Exit App").single())
+        val android = IniText(text).also { Hotkeys.apply("ppsspp", it, emptySet(), emptySet(), Host.ANDROID, Hotkeys.PPSSPP_CONTROLS) }
+        assertEquals("1-111,10-106,10-109:10-100", android.values("ControlMapping", "Pause").single())
+        // Before PPSSPP has written its own mappings, a section of Fuse's alone would take away every default.
+        val fresh = IniText("")
+        val none = Hotkeys.apply("ppsspp", fresh, emptySet(), emptySet(), Host.LINUX, Hotkeys.PPSSPP_CONTROLS)
+        assertTrue(none.unwritable)
+        assertFalse(none.changed)
+        assertEquals("", fresh.toString())
+        // Nothing goes in ppsspp.ini itself.
+        assertFalse(Hotkeys.apply("ppsspp", IniText("[General]\n"), emptySet(), emptySet(), Host.LINUX, null).changed)
+        assertEquals(setOf<String?>(Hotkeys.PPSSPP_CONTROLS), Hotkeys.filesFor("ppsspp"))
+    }
+
+    @Test
     fun anEmulatorWithoutFusesLayoutGetsNothing() {
         val ini = IniText("[General]\nA = 1\n")
         assertFalse(Hotkeys.apply("dolphin", ini, emptySet(), emptySet()).changed)
-        assertEquals(emptyList(), Hotkeys.actionsFor("ppsspp"))
+        assertEquals(emptyList(), Hotkeys.actionsFor("dolphin"))
         assertEquals(Hotkeys.Action.entries.toList(), Hotkeys.actionsFor("duckstation"))
+        assertEquals(Hotkeys.Action.entries.toList(), Hotkeys.actionsFor("ppsspp"))
     }
 }
