@@ -317,7 +317,15 @@ object InstallResults {
         PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> PackageOutcome.Failed("Android says the app isn't compatible with this device.")
         PackageInstaller.STATUS_FAILURE_STORAGE -> PackageOutcome.Failed("There isn't enough storage to install it.")
         PackageInstaller.STATUS_FAILURE_INVALID -> PackageOutcome.Failed("Android says the download isn't a valid app.")
-        PackageInstaller.STATUS_FAILURE_BLOCKED -> PackageOutcome.Failed("The device blocked the installation.")
+        PackageInstaller.STATUS_FAILURE_BLOCKED -> PackageOutcome.Failed(blocked(message))
         else -> PackageOutcome.Failed("Android couldn't finish" + (message?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: "."))
     }
+
+    /**
+     * Why an install was blocked, and what to do: it is Play Protect or a policy on the device
+     * (a work profile's, a parent's), never Fuse. Android's own words follow when it gave any.
+     */
+    fun blocked(message: String?): String =
+        "Play Protect or a policy on this device blocked it. Play Protect lets it through from its own prompt; " +
+            "a managed device's admin decides for theirs." + (message?.takeIf { it.isNotBlank() }?.let { " Android said: $it" } ?: "")
 }

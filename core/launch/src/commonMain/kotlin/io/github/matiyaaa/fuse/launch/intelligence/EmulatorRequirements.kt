@@ -33,6 +33,10 @@ object EmulatorRequirements {
             cpuFlags = setOf("sse4_1"), cpuWords = "SSE4.1",
             source = "pcsx2.net/docs/setup/requirements: x86-64 with SSE4.1",
         ),
+        "xenia" to Needs(
+            cpuFlags = setOf("avx"), cpuWords = "AVX (Intel Sandy Bridge, AMD Bulldozer or newer)",
+            source = "xenia-canary wiki, Quickstart: a 64-bit x86 processor with AVX or AVX2, and Direct3D 12 or Vulkan",
+        ),
     )
 
     /**

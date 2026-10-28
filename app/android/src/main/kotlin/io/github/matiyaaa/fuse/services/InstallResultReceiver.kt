@@ -43,7 +43,7 @@ class InstallResultReceiver : BroadcastReceiver() {
                 UpdateRelaunch.disarm(context)
                 // Should this phone refuse the profile that went with it, the next try goes without.
                 if (intent.getBooleanExtra(EXTRA_PROFILED, false)) InstallProfile.leaveOut(context)
-                Toast.makeText(context, failureMessage(status), Toast.LENGTH_LONG).show()
+                Toast.makeText(context, failureMessage(status, intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -78,13 +78,13 @@ class InstallResultReceiver : BroadcastReceiver() {
             intent.getParcelableExtra(Intent.EXTRA_INTENT)
         }
 
-    private fun failureMessage(status: Int): String = when (status) {
+    private fun failureMessage(status: Int, message: String?): String = when (status) {
         PackageInstaller.STATUS_FAILURE_CONFLICT ->
             "Install failed: it conflicts with the installed app (signed with a different key?)."
         PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> "Install failed: the app isn't compatible with this device."
         PackageInstaller.STATUS_FAILURE_STORAGE -> "Install failed: not enough storage."
         PackageInstaller.STATUS_FAILURE_INVALID -> "Install failed: the download isn't a valid app."
-        PackageInstaller.STATUS_FAILURE_BLOCKED -> "Install was blocked by the device."
+        PackageInstaller.STATUS_FAILURE_BLOCKED -> "Install blocked. " + InstallResults.blocked(message)
         else -> "Install failed."
     }
 

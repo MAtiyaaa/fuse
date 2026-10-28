@@ -106,8 +106,11 @@ class EmulatorRequirementsTest {
         val shad = assertNotNull(EmulatorRequirements.unmet("shadps4", Host.LINUX, m))
         assertTrue("x86-64-v3" in shad)
         assertNull(EmulatorRequirements.unmet("pcsx2", Host.LINUX, m))
+        assertNull(EmulatorRequirements.unmet("xenia", Host.LINUX, m))
         m.cpu = Processor("x86_64", setOf("sse2", "ssse3"))
         assertTrue("SSE4.1" in assertNotNull(EmulatorRequirements.unmet("pcsx2", Host.LINUX, m)))
+        // Xenia needs AVX, which a processor before Sandy Bridge lacks.
+        assertTrue("AVX" in assertNotNull(EmulatorRequirements.unmet("xenia", Host.LINUX, m)))
         // No feature list (Windows, macOS), or an ARM processor whose features are named otherwise: nothing is said.
         m.cpu = Processor("x86_64", null)
         assertNull(EmulatorRequirements.unmet("shadps4", Host.LINUX, m))

@@ -46,12 +46,19 @@ jobs:
       # (Arx Libertatis, dhewm 3, openQ4), X11's keyboard library (wc1-modern, wc2-modern),
       # OpenGL's own library (the recompilations' runtimes) and EGL (Ninja Gaiden Black's setup,
       # which a runner image does not always have).
+      # GLEW's and Theora's runtime packages are named after their versions, which change between
+      # Ubuntu releases (the runner's newer image has no libtheora0, #111): whichever of them this
+      # image has is installed, never a fixed name.
       - name: Install a virtual screen and a desktop's libraries
         run: |
           set -euo pipefail
           sudo apt-get update
+          glew=$(apt-cache pkgnames libglew | grep -E '^libglew[0-9.]+$' | sort -V | tail -n 1 || true)
+          theora=$(apt-cache pkgnames libtheora | grep -Ev -- '-(dev|doc|bin|dbg|tools)$' | sort -u | tr '\n' ' ' || true)
+          if [ -z "$glew" ] || [ -z "$theora" ]; then echo "GLEW or Theora isn't packaged on this image" >&2; exit 1; fi
+          echo "GLEW: $glew; Theora: $theora"
           sudo apt-get install -y xvfb mesa-vulkan-drivers libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 \
-            libglew2.2 libtheora0 libopenal1 libxkbcommon-x11-0 libopengl0 libegl1
+            "$glew" $theora libopenal1 libxkbcommon-x11-0 libopengl0 libegl1
 
       - name: Test the check itself
         working-directory: tools/ports

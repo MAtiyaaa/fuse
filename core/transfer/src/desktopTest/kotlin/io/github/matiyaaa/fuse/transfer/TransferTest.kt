@@ -485,6 +485,20 @@ class TransferTest {
     }
 
     @Test
+    fun `the overall limit is shared, never halved for a direction moving alone`() = runBlocking<Unit> {
+        val m = manager()
+        m.configure(TransferSettings(bandwidthLimit = 2_000_000))
+        // All of it, for whichever way moves; each direction has no limit of its own.
+        assertEquals(2_000_000L to mapOf(TransferDirection.DOWNLOAD to 0L, TransferDirection.UPLOAD to 0L), m.limits())
+        // While a game plays and downloads are set to slow down, only downloads take the reduced rate as well.
+        m.configure(TransferSettings(bandwidthLimit = 2_000_000, downloadsWhilePlaying = WhilePlaying.REDUCED))
+        m.conditions(TransferConditions(playing = true))
+        val (all, each) = m.limits()
+        assertEquals(2_000_000L, all)
+        assertEquals(TransferSettings.REDUCED_RATE, each.getValue(TransferDirection.DOWNLOAD))
+    }
+
+    @Test
     fun `cancel removes the partial file`() = runBlocking<Unit> {
         val m = manager()
         m.configure(TransferSettings(bandwidthLimit = 200_000))

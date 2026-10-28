@@ -38,7 +38,7 @@ interface PlatformUi {
     /** Window and login controls on desktop Linux; null where the system manages Fuse's window. */
     val windowControls: WindowControls? get() = null
 
-    /** Screenshots and recordings of Fuse's own screen; null where Fuse can't capture it (desktop for now). */
+    /** Screenshots and recordings of Fuse's own screen (Android's, the desktop's window); null where Fuse can't capture it. */
     val capture: ScreenCapture? get() = null
 
     /** Steam on a computer: Fuse in Steam's library, for Game Mode. Null where there is no Steam (Android). */

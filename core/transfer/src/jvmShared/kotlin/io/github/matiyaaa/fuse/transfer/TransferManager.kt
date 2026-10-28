@@ -63,6 +63,16 @@ class TransferManager(
     override val summary: StateFlow<TransferSummary> = _summary.asStateFlow()
 
     private val buckets = TransferDirection.entries.associateWith { TokenBucket(clock) }
+
+    /**
+     * The person's overall limit, one bucket every transfer takes from whichever way it goes: a
+     * direction moving alone has all of it, and both share it when both move. (Halved for each
+     * direction, a download alone only ever had half the limit the person set.)
+     */
+    private val overall = TokenBucket(clock)
+
+    /** The overall limit in force now, in bytes a second (0 for none), and each direction's own (the reduced rate while playing). */
+    internal fun limits(): Pair<Long, Map<TransferDirection, Long>> = overall.rate to buckets.mapValues { it.value.rate }
     private var ticker: Job? = null
     private var started = false
 
@@ -292,11 +302,9 @@ class TransferManager(
     private fun applyConditions() {
         // The rates first, at once: a transfer started right after a new limit is set moves at that limit.
         val s = _settings.value
+        overall.rate = s.bandwidthLimit.coerceAtLeast(0)
         for (d in TransferDirection.entries) {
-            val playingRate = if (_conditions.value.playing && s.whilePlaying(d) == WhilePlaying.REDUCED) TransferSettings.REDUCED_RATE else 0L
-            // The overall limit is shared between the directions that are moving.
-            val user = if (s.bandwidthLimit > 0) s.bandwidthLimit / 2 else 0L
-            buckets.getValue(d).rate = listOf(user, playingRate).filter { it > 0 }.minOrNull() ?: 0L
+            buckets.getValue(d).rate = if (_conditions.value.playing && s.whilePlaying(d) == WhilePlaying.REDUCED) TransferSettings.REDUCED_RATE else 0L
         }
         scope.launch {
             // Held directions: running transfers step aside (keeping what they did) and wait.
@@ -412,7 +420,10 @@ class TransferManager(
             update { list -> list.map { if (it.id == item.id) it.copy(payload = payload) else it } }
         }
 
-        override suspend fun throttle(bytes: Int) = buckets.getValue(item.direction).take(bytes)
+        override suspend fun throttle(bytes: Int) {
+            overall.take(bytes)
+            buckets.getValue(item.direction).take(bytes)
+        }
     }
 
     /** Keeps the counts and stored byte totals moving while anything runs, without touching the list each chunk. */
