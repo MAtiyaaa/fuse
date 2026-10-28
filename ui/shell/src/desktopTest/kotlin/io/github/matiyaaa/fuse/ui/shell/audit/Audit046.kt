@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.audit
 
+import androidx.compose.ui.test.click
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.GameJournal
 import io.github.matiyaaa.fuse.model.HomeLayoutConfig
@@ -124,10 +125,11 @@ internal fun AuditDriver.fuse046Screens() {
         tap(PadButton.DPAD_RIGHT)
         tap(PadButton.A)
         waitFor("games on RomM")
-        // A game on its way (the fourth): its options lead to Downloads.
+        // A game on its way (the fourth): its options lead to Downloads. Two columns on a phone:
+        // the three collections take two rows, and the fourth game is on the second.
         tap(PadButton.DPAD_DOWN)
         if (size == AuditSize.V) {
-            tap(PadButton.DPAD_DOWN)
+            tap(PadButton.DPAD_DOWN, 2)
             tap(PadButton.DPAD_RIGHT)
         } else {
             tap(PadButton.DPAD_RIGHT, 3)
@@ -143,6 +145,41 @@ internal fun AuditDriver.fuse046Screens() {
         waitFor("Takes its turn now")
         shoot("its options", 900)
         tap(PadButton.B)
+    }
+    scenario("companion", "while you play") {
+        useLibrary()
+        val base = libraryStore
+        val card = runBlocking { base.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first().first { it.title == "Velvet Orbit" } }
+        val start = kotlin.time.Clock.System.now().toEpochMilliseconds() - 42 * 60_000L
+        val session = runBlocking { libraryData.playSessions.start(card.id, io.github.matiyaaa.fuse.model.EmulatorId("linux.flycast"), start) }
+        // A device that can close the game it runs, as Linux and macOS can.
+        val library = object : LibraryOps by base.library { override val canQuitPlaying = true }
+        val store = object : FuseStore by base { override val library = library }
+        fun tapDescribed(d: String) {
+            val at = describedBounds(d).firstOrNull() ?: throw NotCovered("Nothing on screen is described as \"$d\"")
+            touch { click(at.center) }
+            settle(700)
+        }
+        try {
+            pumpUntil("the open session to show", 20_000) { base.library.home.value.playtime.currentGame != null }
+            io.github.matiyaaa.fuse.ui.shell.app.CompanionPage.current.value = 0
+            view = AuditView.Companion(store, platform, io.github.matiyaaa.fuse.model.DualScreenMode.GAME_COMPANION)
+            settle(1_500)
+            shoot("the game running, with its Journal and Quit", 1_200)
+            tapDescribed("Journal")
+            shoot("choosing where you are with it", 900)
+            val beaten = textCentre("Beaten")
+            touch { click(beaten) }
+            settle(900)
+            shoot("marked Beaten", 900)
+            tapDescribed("Quit")
+            shoot("Quit asks for a second tap", 600)
+        } finally {
+            runBlocking {
+                libraryData.playSessions.end(session, kotlin.time.Clock.System.now().toEpochMilliseconds())
+                base.library.setJournal(card.id, GameJournal())
+            }
+        }
     }
     scenario("storage", "make room") {
         useLibrary()

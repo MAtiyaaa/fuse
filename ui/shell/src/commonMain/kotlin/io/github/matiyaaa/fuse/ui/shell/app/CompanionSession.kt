@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,7 +26,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +40,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.tween
+import kotlinx.coroutines.launch
 import io.github.matiyaaa.fuse.model.Achievement
 import io.github.matiyaaa.fuse.model.AchievementState
 import io.github.matiyaaa.fuse.model.GameId
@@ -62,7 +72,8 @@ import kotlinx.coroutines.delay
  * The second screen while a game runs: its logo, how long this session has run and when it began,
  * its time this week and in all; and, for a game with achievements, how far through the set you
  * are, what this session unlocked and the next few to go for. Touching the achievements opens the
- * whole list. Side by side on a screen wider than tall, one above the other otherwise.
+ * whole list. Under the figures, by touch: where you are with it in the Journal, and Quit where
+ * Fuse can close the game. Side by side on a screen wider than tall, one above the other otherwise.
  */
 @Composable
 internal fun SessionPage(store: FuseStore, game: GameCard, since: Long?, onAchievements: (GameId) -> Unit) {
@@ -89,6 +100,17 @@ internal fun SessionPage(store: FuseStore, game: GameCard, since: Long?, onAchie
         total?.takeIf { it > 0 }?.let { playtimeText(it) to "in all" },
     )
     val started = since?.let { "Started at " + clockWords(it, prefs.clock24h) }
+    val journal = detail?.game?.journal
+    val scope = rememberCoroutineScope()
+    // Choosing where you are with it in the Journal; asking once more before the game is closed.
+    var choosing by remember(game.id) { mutableStateOf(false) }
+    var quitting by remember(game.id) { mutableStateOf(false) }
+    LaunchedEffect(quitting) {
+        if (quitting) {
+            delay(QUIT_ARMED_MS)
+            quitting = false
+        }
+    }
     val c = Fuse.colors
     BoxWithConstraints(Modifier.fillMaxSize().padding(start = Space.xl, end = Space.xl, top = CompanionTopBar, bottom = CompanionDotsBar + Space.s)) {
         // A soft pool of shade behind it all, so it reads over any art.
@@ -127,7 +149,31 @@ internal fun SessionPage(store: FuseStore, game: GameCard, since: Long?, onAchie
                 Spacer(Modifier.height(Space.l))
                 // Beside the achievements there is room for two: this session's and the game's in all.
                 val shown = if (wide && figures.size > 2) listOf(figures.first(), figures.last()) else figures
-                SessionFigures(shown, Modifier.widthIn(max = 520.dp).fillMaxWidth())
+                // Choosing a Journal status takes the figures' place for a moment, so nothing below moves.
+                Swap(targetState = choosing, label = "sessionJournal") { picking ->
+                    if (picking) {
+                        StatusGrid(journal?.status, Modifier.widthIn(max = 520.dp).fillMaxWidth()) { picked ->
+                            choosing = false
+                            val j = journal ?: return@StatusGrid
+                            val at = clockNow()
+                            scope.launch { store.library.setJournal(game.id, j.copy(status = picked, statusAt = if (j.status == picked) j.statusAt else picked?.let { at })) }
+                        }
+                    } else {
+                        SessionFigures(shown, Modifier.widthIn(max = 520.dp).fillMaxWidth())
+                    }
+                }
+                Spacer(Modifier.height(Space.m))
+                SessionActions(
+                    journal?.status, choosing, quitting, hasJournal = journal != null, canQuit = store.library.canQuitPlaying,
+                    onJournal = { choosing = !choosing; quitting = false },
+                    onQuit = {
+                        choosing = false
+                        if (!quitting) quitting = true else {
+                            quitting = false
+                            scope.launch { store.library.quitPlaying() }
+                        }
+                    },
+                )
             }
         }
         if (wide) {
@@ -142,6 +188,97 @@ internal fun SessionPage(store: FuseStore, game: GameCard, since: Long?, onAchie
                 if (set != null) {
                     Spacer(Modifier.height(Space.l))
                     SessionAchievements(set, unlocked, next = if (short) 2 else 3, Modifier.fillMaxWidth()) { onAchievements(game.id) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * What can be done for the game while it runs, by touch: where you are with it in the Journal (a
+ * tap lays the statuses out to choose from), and Quit, which asks for a second tap before the game
+ * closes as its own window would.
+ */
+@Composable
+private fun SessionActions(
+    status: io.github.matiyaaa.fuse.model.PlayStatus?,
+    choosing: Boolean,
+    quitting: Boolean,
+    hasJournal: Boolean,
+    canQuit: Boolean,
+    onJournal: () -> Unit,
+    onQuit: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
+        if (hasJournal) SessionPill(
+            status?.let(::statusIcon) ?: FuseIcons.NotebookPen,
+            status?.let(io.github.matiyaaa.fuse.ui.shell.store.JournalWords::label) ?: "Journal",
+            lit = choosing, onClick = onJournal,
+        )
+        if (canQuit) SessionPill(FuseIcons.Power, if (quitting) "Tap again to quit" else "Quit", warn = quitting, onClick = onQuit)
+    }
+}
+
+/** A round-ended touch button on the session page, lit while what it opened is open, red while it waits to be sure. */
+@Composable
+private fun SessionPill(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, lit: Boolean = false, warn: Boolean = false, onClick: () -> Unit) {
+    val c = Fuse.colors
+    val bg by io.github.matiyaaa.fuse.ui.fuseline.fuselineColor(
+        when {
+            warn -> c.danger
+            lit -> c.text
+            else -> c.ink.copy(alpha = 0.55f)
+        },
+        Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST), label = "sessionPill",
+    )
+    val fg = when {
+        warn -> Color.White
+        lit -> c.ink
+        else -> c.text
+    }
+    Row(
+        Modifier
+            .heightIn(min = 44.dp)
+            .clip(PillShape)
+            .background({ bg })
+            .border(1.dp, c.text.copy(alpha = if (lit || warn) 0f else 0.12f), PillShape)
+            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
+            .semantics { contentDescription = label }
+            .padding(horizontal = Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FuseIcon(icon, size = 18.dp, tint = fg)
+        Spacer(Modifier.width(Space.s))
+        FText(label, Fuse.type.label, color = fg, maxLines = 1)
+    }
+}
+
+/** The Journal's statuses as a grid of touch tiles, the game's own lit; touching it again clears it. */
+@Composable
+private fun StatusGrid(current: io.github.matiyaaa.fuse.model.PlayStatus?, modifier: Modifier, onPick: (io.github.matiyaaa.fuse.model.PlayStatus?) -> Unit) {
+    val c = Fuse.colors
+    val statuses = io.github.matiyaaa.fuse.ui.shell.store.JournalWords.order.filterNotNull()
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+        statuses.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                row.forEach { s ->
+                    val on = s == current
+                    Row(
+                        Modifier
+                            .weight(1f)
+                            .heightIn(min = 40.dp)
+                            .clip(PillShape)
+                            .background(if (on) c.accent else c.ink.copy(alpha = 0.55f))
+                            .clickable(remember { MutableInteractionSource() }, null) { onPick(if (on) null else s) }
+                            .semantics { selected = on }
+                            .padding(horizontal = Space.s),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        FuseIcon(statusIcon(s), size = 16.dp, tint = if (on) c.onAccent else c.textMuted)
+                        Spacer(Modifier.width(Space.xs))
+                        FText(io.github.matiyaaa.fuse.ui.shell.store.JournalWords.label(s), Fuse.type.label, color = if (on) c.onAccent else c.text, maxLines = 1)
+                    }
                 }
             }
         }
@@ -270,3 +407,6 @@ private fun clockNow() = kotlin.time.Clock.System.now().toEpochMilliseconds()
 
 /** The most badges this session's row shows before "+N". */
 private const val SHOWN_BADGES = 6
+
+/** How long Quit waits for its second tap before it goes back to asking. */
+private const val QUIT_ARMED_MS = 4_000L

@@ -267,6 +267,11 @@ class UiAudit {
 
     @Test fun fuse046V() = audit(AuditSize.V) { fuse046Screens() }
 
+    /** The second screen's own: a game running, with its Journal and Quit. */
+    @Test fun fuse046C() = audit(AuditSize.C) { fuse046Screens() }
+
+    @Test fun fuse046L() = audit(AuditSize.L) { fuse046Screens() }
+
     @Test fun reachM() = audit(AuditSize.M) { reachScreens() }
 
     @Test fun reachV() = audit(AuditSize.V) { reachScreens() }

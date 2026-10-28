@@ -1196,11 +1196,21 @@ internal class DefaultRommOps(
             missing.map { ctx.summaryToCard(it, media[MediaOwner.OfGame(it.id)]) }
         }.flowOn(Dispatchers.Default)
 
-    override fun games(slug: String?): Flow<List<RommGame>> = combine(mirrorRevision, matches, transfers.items) { _, _, _ -> }.mapLatest {
+    /**
+     * RomM's downloads by key and where each stands: what a list's marks follow. Only a download
+     * added, finished or changing state moves it, never its bytes (saved every few seconds while it
+     * runs), so a system of thousands isn't drawn again for each.
+     */
+    private val rommTransferStates = transfers.items
+        .map { list -> list.filter { it.source == ROMM_SOURCE && !it.status.finished }.associate { it.key to it.status } }
+        .distinctUntilChanged()
+
+    override fun games(slug: String?): Flow<List<RommGame>> = combine(mirrorRevision, matches, rommTransferStates) { _, _, _ -> }.mapLatest {
         toGames(if (slug == null) mirror.all(server) else mirror.onPlatform(server, slug))
     }.flowOn(Dispatchers.Default)
 
-    override fun collection(id: String): Flow<List<RommGame>> = combine(mirrorRevision, matches) { _, _ -> }.mapLatest {
+    // With the transfers, as a system's page: a game queued from here shows it is on its way.
+    override fun collection(id: String): Flow<List<RommGame>> = combine(mirrorRevision, matches, rommTransferStates) { _, _, _ -> }.mapLatest {
         val c = mirror.collections(server).firstOrNull { it.id == id } ?: return@mapLatest emptyList()
         toGames(mirror.roms(server, c.romIds))
     }.flowOn(Dispatchers.Default)
@@ -1296,7 +1306,7 @@ internal class DefaultRommOps(
         }.flowOn(Dispatchers.Default)
     }
 
-    override fun forGame(game: GameId): Flow<RommGameView?> = combine(matches, transfers.items, mirrorRevision) { m, _, _ -> m.entries.firstOrNull { it.value.first == game } }
+    override fun forGame(game: GameId): Flow<RommGameView?> = combine(matches, rommTransferStates, mirrorRevision) { m, _, _ -> m.entries.firstOrNull { it.value.first == game } }
         .mapLatest { e ->
             if (!settings.enabled) return@mapLatest null
             val romId = e?.key ?: ctx.data.games.get(game)?.links?.rommRomId ?: return@mapLatest null
@@ -1351,7 +1361,7 @@ internal class DefaultRommOps(
         return added
     }
 
-    override fun forRom(romId: Long): Flow<RommGameView?> = combine(matches, transfers.items, mirrorRevision) { m, _, _ -> m[romId] }
+    override fun forRom(romId: Long): Flow<RommGameView?> = combine(matches, rommTransferStates, mirrorRevision) { m, _, _ -> m[romId] }
         .mapLatest { v -> view(romId, v?.first, v?.second) }.flowOn(Dispatchers.Default)
 
     private suspend fun view(romId: Long, game: GameId?, reason: MatchReason?): RommGameView? {
