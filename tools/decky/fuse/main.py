@@ -26,6 +26,8 @@ TIMEOUT_S = 4
 ART_KINDS = ("capsule", "hero", "logo", "header", "icon")
 # The most of a failure's words sent back to Fuse.
 MESSAGE_CHARS = 300
+# The Journal's statuses as Fuse names them, and NONE for none: nothing else is passed on.
+STATUSES = ("WANT", "PLAYING", "PAUSED", "BEATEN", "COMPLETED", "DROPPED", "NONE")
 # The most finished sessions kept waiting for Fuse, and the longest one counted.
 MAX_SESSIONS = 200
 MAX_SESSION_MS = 24 * 60 * 60 * 1000
@@ -207,6 +209,20 @@ class Plugin:
         if game_id is None:
             return {"error": "bad-request"}
         return await _ask("POST", "/v1/game/" + str(game_id) + "/open")
+
+    async def playing(self):
+        """The game being played in Fuse: its name, system, since when, its Journal status, and whether Fuse can close it."""
+        return await _ask("GET", "/v1/playing")
+
+    async def quit_playing(self):
+        """Asks Fuse to close the game being played, as closing its window would; Fuse never forces it."""
+        return await _ask("POST", "/v1/playing/quit")
+
+    async def set_playing_status(self, status):
+        """The game being played given a status in the person's Journal (one of STATUSES)."""
+        if status not in STATUSES:
+            return {"error": "bad-request"}
+        return await _ask("POST", "/v1/playing/journal", {"status": status})
 
     async def emulators(self):
         return await _ask("GET", "/v1/emulators")

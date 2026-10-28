@@ -127,6 +127,8 @@ data class UiPrefs(
     val systemSpotlight: Boolean = true,
     /** Continue where you left off (see LibraryPreferences.keepPlace). */
     val keepPlace: Boolean = true,
+    /** The same hotkeys in every emulator (see LibraryPreferences.gameHotkeys). */
+    val gameHotkeys: Boolean = false,
     /** Series Fuse no longer makes (hidden, or kept as the user's own), lower case. */
     val hiddenSeries: List<String> = emptyList(),
     /** Systems whose firmware the user marked as set up, by platform id. */

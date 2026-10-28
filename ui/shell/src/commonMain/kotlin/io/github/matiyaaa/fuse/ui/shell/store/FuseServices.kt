@@ -390,6 +390,15 @@ interface GameLauncher {
 
     /** The display to use for "Open games on the second screen", or null when there is none. */
     fun secondaryDisplayId(): Int? = null
+
+    /** Whether [quitGame] can ask a game to close here (never by force). */
+    val canQuit: Boolean get() = false
+
+    /**
+     * Asks the game Fuse started, and what it started, to close as closing its window would, so
+     * whatever it saves on the way out is saved; never forced. False when no game of Fuse's runs.
+     */
+    suspend fun quitGame(): Boolean = false
 }
 
 /** Talks to Cartridge: status provider or status file, and deep links. */

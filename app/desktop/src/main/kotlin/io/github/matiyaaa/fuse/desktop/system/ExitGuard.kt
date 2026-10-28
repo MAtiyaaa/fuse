@@ -50,6 +50,19 @@ object ExitGuard {
         }, "fuse-exit-deadline").apply { isDaemon = true; start() }
     }
 
+    /**
+     * Asks what Fuse started to play, and what those started, to close: the polite signal a window's
+     * close sends (SIGTERM), never a forced end, so a game saves on its way out as when closed
+     * itself. False when nothing of Fuse's is running.
+     */
+    fun askPlayedToClose(): Boolean {
+        val all = played.filter { it.isAlive }.flatMap { h -> runCatching { h.descendants().toList() }.getOrDefault(emptyList()) + h }.distinct()
+        if (all.isEmpty()) return false
+        Log.info("asking what Fuse started to close: " + all.joinToString { it.pid().toString() })
+        all.forEach { runCatching { it.destroy() } }
+        return true
+    }
+
     /** Ends what Fuse started to play, the processes those started too: asked first, then made to. */
     fun endPlayed() {
         val all = played.filter { it.isAlive }.flatMap { h -> runCatching { h.descendants().toList() }.getOrDefault(emptyList()) + h }.distinct()

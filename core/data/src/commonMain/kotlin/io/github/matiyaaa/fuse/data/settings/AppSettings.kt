@@ -575,6 +575,12 @@ data class LibraryPreferences(
      * keeps by itself), and a game's page offers Continue from it beside Start Fresh.
      */
     val keepPlace: Boolean = true,
+    /**
+     * The same hotkeys in every emulator (core:launch's `Hotkeys`):
+     * written into the emulators that can take them as a game starts, beside the person's own
+     * bindings; turned off, Fuse's are taken out again.
+     */
+    val gameHotkeys: Boolean = false,
     /** Series the user hid or kept as their own collection, lower case, so Fuse doesn't make them again. */
     val hiddenSeries: List<String> = emptyList(),
     /** Brand colours from the system art pack (opaque ARGB), by platform id. */

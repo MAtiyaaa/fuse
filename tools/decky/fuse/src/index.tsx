@@ -2,6 +2,7 @@ import { definePlugin, toaster } from "@decky/api";
 import {
   ButtonItem,
   ConfirmModal,
+  DropdownItem,
   Field,
   PanelSection,
   PanelSectionRow,
@@ -25,6 +26,11 @@ import {
   may,
   openGame,
   addGame,
+  playing,
+  Playing,
+  PlayStatus,
+  quitPlaying,
+  setPlayingStatus,
   status,
   Status,
   steamGame,
@@ -79,6 +85,62 @@ const Connection: VFC<{ hi: Hello | null }> = ({ hi }) => {
         <PanelSectionRow>
           <ButtonItem layout="below" onClick={() => { if (!startFuse()) toaster.toast({ title: "Fuse", body: "Add Fuse to Steam from Fuse's settings to start it from here." }); }}>
             Open Fuse
+          </ButtonItem>
+        </PanelSectionRow>
+      )}
+    </PanelSection>
+  );
+};
+
+/** The Journal's statuses, in its own order, as the person sees them in Fuse. */
+const STATUSES: { data: PlayStatus | "NONE"; label: string }[] = [
+  { data: "NONE", label: "Not in your Journal" },
+  { data: "WANT", label: "Want to Play" },
+  { data: "PLAYING", label: "Playing" },
+  { data: "PAUSED", label: "On Hold" },
+  { data: "BEATEN", label: "Beaten" },
+  { data: "COMPLETED", label: "Completed" },
+  { data: "DROPPED", label: "Dropped" },
+];
+
+/**
+ * While you play: the game Fuse has in front, how long it has run, where the person is with it,
+ * and closing it (as its own window would, with its saves sent as it ends). Nothing while no game runs.
+ */
+const NowPlaying: VFC<{ canClose: boolean; canMark: boolean }> = ({ canClose, canMark }) => {
+  const [p, refresh] = usePoll<Playing>(() => playing());
+  if (!p || failure(p) || !p.playing) return null;
+  const minutes = p.since ? Math.max(0, Math.round((Date.now() - p.since) / 60_000)) : null;
+  const since = minutes == null ? null : minutes < 1 ? "Started just now" : `Playing for ${duration(minutes * 60)}`;
+  return (
+    <PanelSection title="Playing now">
+      <PanelSectionRow>
+        <Field focusable label={p.name ?? "A game"} description={[p.system, since].filter(Boolean).join("  ·  ")} />
+      </PanelSectionRow>
+      {canMark && (
+        <PanelSectionRow>
+          <DropdownItem
+            label="Journal"
+            rgOptions={STATUSES}
+            selectedOption={p.status ?? "NONE"}
+            onChange={async (o) => { say(await setPlayingStatus(o.data), "Kept in your Journal"); refresh(); }}
+          />
+        </PanelSectionRow>
+      )}
+      {canClose && p.canQuit && (
+        <PanelSectionRow>
+          <ButtonItem
+            layout="below"
+            onClick={() => showModal(
+              <ConfirmModal
+                strTitle={`Quit ${p.name ?? "the game"}?`}
+                strDescription="It closes as when you close its window, and Fuse sends its saves as it ends. Anything not saved in the game is lost."
+                strOKButtonText="Quit"
+                onOK={async () => { say(await quitPlaying(), "Closing the game"); refresh(); }}
+              />,
+            )}
+          >
+            Quit the game
           </ButtonItem>
         </PanelSectionRow>
       )}
@@ -274,6 +336,7 @@ const Content: VFC = () => {
   return (
     <>
       <Connection hi={hi} />
+      {connected && may(hi, "status") && <NowPlaying canClose={may(hi, "play")} canMark={may(hi, "change_library")} />}
       {connected && may(hi, "library") && <ThisGame />}
       {connected && may(hi, "library") && <FuseLibrary canOpen={may(hi, "play")} />}
       {connected && may(hi, "status") && <FuseOne s={s} />}

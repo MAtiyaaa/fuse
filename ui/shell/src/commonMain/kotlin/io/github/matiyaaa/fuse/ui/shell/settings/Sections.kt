@@ -1710,6 +1710,21 @@ fun inputRows(app: AppState): List<MenuAction> {
             add(toggleRow("shoulders", "Swap bumpers and triggers", FuseIcons.Swap, i.swapShoulders, if (i.swapShoulders) "Now: L2 and R2 switch tabs, L1 and R1 turn widgets" else "Now: L1 and R1 switch tabs, L2 and R2 turn widgets") { v -> setInput { it.copy(swapShoulders = v) } })
             add(toggleRow("keyhints", "Keyboard hints when typing", FuseIcons.Keyboard, i.autoGlyphs, "Show keyboard keys in hints after a keyboard key is used") { v -> setInput { it.copy(autoGlyphs = v) } })
         }
+        // The same hotkeys in every emulator, where Fuse can write them (a computer's emulators).
+        val hotkeysHere by androidx.compose.runtime.produceState<List<io.github.matiyaaa.fuse.ui.shell.store.HotkeyEmulator>?>(null) { value = runCatching { app.store.library.hotkeysHere() }.getOrDefault(emptyList()) }
+        val here = hotkeysHere
+        if (here != null && (here.isNotEmpty() || p.gameHotkeys)) labelled("In games") {
+            add(toggleRow(
+                "hotkeys", "Same hotkeys in every emulator", FuseIcons.Gamepad, p.gameHotkeys,
+                io.github.matiyaaa.fuse.ui.shell.app.hotkeysWords(here),
+            ) { v -> io.github.matiyaaa.fuse.ui.shell.app.setHotkeys(app, v) })
+            if (p.gameHotkeys) add(MenuAction(
+                "hotkeys.layout", "The hotkeys", FuseIcons.Keyboard,
+                detail = "What each does, and in which emulator",
+                trailing = Trailing.Chevron,
+                onSelect = { io.github.matiyaaa.fuse.ui.shell.app.hotkeysSheet(app, here) },
+            ))
+        }
         labelled("Feel") {
             val d = io.github.matiyaaa.fuse.model.InputProfile()
             val changed = listOf(

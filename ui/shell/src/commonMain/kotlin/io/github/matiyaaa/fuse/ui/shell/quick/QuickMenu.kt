@@ -111,6 +111,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.calibration
 import io.github.matiyaaa.fuse.ui.shell.app.changeScreenCalibration
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorSettingsSheet
+import io.github.matiyaaa.fuse.ui.shell.app.journalSheet
 import io.github.matiyaaa.fuse.ui.shell.sync.syncWords
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
@@ -668,6 +669,33 @@ fun QuickMenu(app: AppState) {
             detail = listOfNotNull(card.platformShort, minutes?.let { if (it < 1) "Started just now" else "Playing for ${playTimeWords(it)}" }).joinToString("  ·  "),
             trailing = Trailing.Chevron, section = "Now",
             onSelect = { close(); app.go(Route.GameInfo(card.id)) },
+        ))
+        // Quit, asked first: it closes as its own window would, and its saves go up as it ends.
+        if (app.store.library.canQuitPlaying) add(MenuAction(
+            "play.quit", "Quit the game", FuseIcons.Power,
+            detail = "Closes it as its own window would. Its saves go up as it ends", section = "Now",
+            onSelect = {
+                close()
+                app.confirm = ConfirmSpec(
+                    "Quit ${card.title}?",
+                    "It closes as when you close its window. Anything you haven't saved in the game is lost.",
+                    "Quit", destructive = true,
+                ) {
+                    app.scope.launch { if (!app.store.library.quitPlaying()) app.toasts.show("The game had already closed") }
+                }
+            },
+        ))
+        add(MenuAction(
+            "play.journal", "Journal", card.status?.let { io.github.matiyaaa.fuse.ui.shell.app.statusIcon(it) } ?: FuseIcons.NotebookPen,
+            detail = card.status?.let { io.github.matiyaaa.fuse.ui.shell.store.JournalWords.label(it) } ?: "Where you are with it, a rating and a note",
+            section = "This game",
+            onSelect = {
+                close()
+                app.scope.launch {
+                    val g = app.store.library.game(card.id).first()?.game ?: return@launch
+                    app.journalSheet(g.id, g.displayTitle, g.journal)
+                }
+            },
         ))
         add(MenuAction("play.saves", "Its saves", FuseIcons.Save, detail = "Every version kept, from every device", section = "This game", onSelect = { close(); app.go(Route.SaveHistory(card.id, card.title)) }))
         add(MenuAction("play.emulator", "Emulator settings", FuseIcons.Sliders, detail = "For this game, or every game", section = "This game", onSelect = { close(); app.emulatorSettingsSheet(card) }))

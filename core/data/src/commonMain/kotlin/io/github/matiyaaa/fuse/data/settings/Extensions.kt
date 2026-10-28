@@ -11,7 +11,7 @@ import kotlinx.serialization.Serializable
 enum class ExtensionScope(val title: String, val detail: String) {
     STATUS("See what Fuse shows", "Fuse One's state, downloads, and who is playing"),
     LIBRARY("See your library", "Which games are in Fuse, with their names and art"),
-    PLAY("Open games in Fuse", "Fuse opens the game's page; starting it stays yours"),
+    PLAY("Open games in Fuse", "Fuse opens the game's page, or closes the one being played; starting one stays yours"),
     CHANGE_LIBRARY("Change your library", "Add and remove games, fix their names and art"),
     EMULATORS("Install and remove emulators", "Through Fuse's Store, as you would there"),
     CONTROL("Type into Fuse", "From its keyboard, into the text field open on the device"),

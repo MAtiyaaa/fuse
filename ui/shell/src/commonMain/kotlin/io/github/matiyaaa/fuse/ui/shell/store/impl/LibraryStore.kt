@@ -1090,6 +1090,7 @@ internal class DefaultLibraryOps(
                         is PlayResolution.Stopped -> Unit
                     }
                 }
+                hotkeysFor(installedEmulator)
                 onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING)
                 // Hosting: the household hears of it with this device's presence while it is played.
                 val hosting = if (together == io.github.matiyaaa.fuse.ui.shell.store.Together.Host) togetherStore.hosting(installedEmulator) else null
@@ -1141,6 +1142,43 @@ internal class DefaultLibraryOps(
                 retroArchResumeConfig(load = point != null)?.let { cfg -> io.github.matiyaaa.fuse.launch.Resume(point?.path.orEmpty(), cfg) }
             else -> point?.let { io.github.matiyaaa.fuse.launch.Resume(it.path) }
         }
+    }
+
+    /**
+     * The same hotkeys in every emulator: written into [emulator] as a game starts while they are
+     * on (beside the person's own, so nothing of theirs stops working), taken out again once they
+     * are off. A file read and, only when something is missing, written.
+     */
+    private suspend fun hotkeysFor(emulator: InstalledEmulator) {
+        if (io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(emulator.id.value) !in io.github.matiyaaa.fuse.launch.settings.Hotkeys.families) return
+        runCatching {
+            if (ctx.settings.value.library.gameHotkeys) nativeSettings.setHotkeys(emulator.id) else nativeSettings.restoreHotkeys(emulator.id)
+        }
+    }
+
+    /** The emulators here Fuse can write its hotkeys into: set up, and of a family [io.github.matiyaaa.fuse.launch.settings.Hotkeys] knows. */
+    private suspend fun hotkeyEmulators(): List<InstalledEmulator> {
+        if (ctx.services.settingsFiles == null) return emptyList()
+        if (ctx.installed.value.isEmpty()) emulators.detectNow()
+        return ctx.installed.value.filter { io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(it.id.value) in io.github.matiyaaa.fuse.launch.settings.Hotkeys.families }
+    }
+
+    override val canQuitPlaying: Boolean get() = ctx.services.launcher.canQuit
+
+    override suspend fun quitPlaying(): Boolean = runCatching { ctx.services.launcher.quitGame() }.getOrDefault(false)
+
+    override suspend fun hotkeysHere(): List<io.github.matiyaaa.fuse.ui.shell.store.HotkeyEmulator> = hotkeyEmulators()
+        .map { io.github.matiyaaa.fuse.ui.shell.store.HotkeyEmulator(it.name, io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(it.id.value)) }
+        .distinctBy { it.name }
+
+    override suspend fun applyHotkeys(on: Boolean): List<io.github.matiyaaa.fuse.ui.shell.store.HotkeysApplied> = hotkeyEmulators().mapNotNull { e ->
+        runCatching {
+            if (on) {
+                nativeSettings.setHotkeys(e.id)?.let { kept -> io.github.matiyaaa.fuse.ui.shell.store.HotkeysApplied(e.name, kept.map { it.label }) }
+            } else {
+                io.github.matiyaaa.fuse.ui.shell.store.HotkeysApplied(e.name, emptyList()).takeIf { nativeSettings.restoreHotkeys(e.id) }
+            }
+        }.getOrNull()
     }
 
     /** RetroArch's settings for one run of Continue: the automatic state kept as the game is left, and loaded when [load]. */

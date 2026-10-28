@@ -46,6 +46,12 @@ internal class DesktopLauncher(
         is LaunchPlan.AndroidIntent -> RunResult.Failed("This launch needs Android.")
     }
 
+    // On Windows a process can only be ended by force (TerminateProcess), which loses what a game
+    // would save as it closes: there Fuse doesn't offer to quit one.
+    override val canQuit: Boolean get() = !DesktopOs.isWindows
+
+    override suspend fun quitGame(): Boolean = canQuit && io.github.matiyaaa.fuse.desktop.system.ExitGuard.askPlayedToClose()
+
     override suspend fun openApp(appId: String): RunResult = when {
         appId.isBlank() || appId == "builtin" || baseName(appId) == "gio" ->
             RunResult.Failed("Desktop shortcuts have no app of their own to open.")

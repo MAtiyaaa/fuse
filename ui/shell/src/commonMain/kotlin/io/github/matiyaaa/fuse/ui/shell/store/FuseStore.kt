@@ -479,6 +479,12 @@ enum class GameSet { LIBRARY, MISSING, HIDDEN, REMOVED }
  */
 data class ResumeInfo(val emulator: String, val at: Long?, val device: String? = null)
 
+/** An emulator Fuse writes its hotkeys into: its name, and its family ([io.github.matiyaaa.fuse.launch.settings.Hotkeys.families]). */
+data class HotkeyEmulator(val name: String, val family: String)
+
+/** What [LibraryOps.applyHotkeys] did in one emulator: its name, and the actions left on the person's own binding. */
+data class HotkeysApplied(val emulator: String, val kept: List<String>)
+
 data class LocalSave(
     val name: String,
     val path: String,
@@ -525,6 +531,25 @@ interface LibraryOps {
      * it was made and on which device. Null when there is none, or Continue is off.
      */
     suspend fun resumePoint(id: GameId): ResumeInfo? = null
+
+    /** Whether the game being played can be asked to close from Fuse (on Linux and macOS). */
+    val canQuitPlaying: Boolean get() = false
+
+    /**
+     * Asks the game being played to close, as closing its window would; its play time is kept
+     * and its saves go up as it ends, as after any game. False when none of Fuse's is running.
+     */
+    suspend fun quitPlaying(): Boolean = false
+
+    /** The emulators here Fuse can write the same hotkeys into (set up, on a computer). */
+    suspend fun hotkeysHere(): List<HotkeyEmulator> = emptyList()
+
+    /**
+     * Fuse's hotkeys written into every emulator here that takes them ([on]), each beside the
+     * person's own bindings, or taken out again. What each emulator got; one the settings can't
+     * be changed in is left out.
+     */
+    suspend fun applyHotkeys(on: Boolean): List<HotkeysApplied> = emptyList()
 
     /** [old]'s save copied to where [id]'s emulator reads it now, the one there kept aside first; where it was kept. */
     suspend fun useOldSave(id: GameId, old: io.github.matiyaaa.fuse.sync.OldSave): Result<String?> = Result.failure(UnsupportedOperationException())
