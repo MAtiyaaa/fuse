@@ -1,6 +1,9 @@
 package io.github.matiyaaa.fuse.ui.shell.audit
 
 import androidx.compose.ui.test.click
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxSize
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.GameJournal
 import io.github.matiyaaa.fuse.model.HomeLayoutConfig
@@ -180,6 +183,29 @@ internal fun AuditDriver.fuse046Screens() {
                 base.library.setJournal(card.id, GameJournal())
             }
         }
+    }
+    scenario("library", "box art in square tiles") {
+        // Covers only (most scraped games): each square tile shows the cover whole over a soft copy of
+        // itself, made from a tiny decode rather than a blur filter on every tile.
+        val colors = listOf(0xFF7A4DFF, 0xFFE0573E, 0xFF2E9E6E, 0xFFDAA520, 0xFF3A7BD5, 0xFFB03A8C)
+        val names = listOf("Lantern Coast", "Velvet Orbit", "Hollow Meridian", "Ember Tactics", "Beacon Bay", "Tanuki Trails")
+        val covers = names.mapIndexed { i, n -> java.io.File(cache, "boxart-$i.png").also { AuditCovers.cover(it, n, colors[i]) } }
+        val cards = runBlocking { libraryStore.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first() }.take(6)
+        view = AuditView.Piece {
+            androidx.compose.foundation.layout.Row(
+                androidx.compose.ui.Modifier.fillMaxSize().padding(40.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(24.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                cards.forEachIndexed { i, c ->
+                    io.github.matiyaaa.fuse.ui.shell.components.GameIconTile(
+                        c.copy(art = io.github.matiyaaa.fuse.ui.shell.store.Art.None.copy(boxart = covers[i].absolutePath)),
+                        selected = i == 1, size = 180.dp,
+                    )
+                }
+            }
+        }
+        shoot("covers whole over their soft copies", 2_000)
     }
     scenario("storage", "make room") {
         useLibrary()

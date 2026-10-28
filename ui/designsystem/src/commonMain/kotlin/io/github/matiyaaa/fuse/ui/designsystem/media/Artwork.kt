@@ -14,8 +14,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
@@ -36,8 +34,8 @@ import coil3.size.Scale
 import coil3.size.Dimension
 import coil3.size.Size
 import coil3.size.SizeResolver
+import io.github.matiyaaa.fuse.model.ArtworkPixels
 import io.github.matiyaaa.fuse.model.ArtworkSizing
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.painter.Painter
 import io.github.matiyaaa.fuse.ui.designsystem.effects.shimmer
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
@@ -106,10 +104,10 @@ fun Artwork(
     val context = LocalPlatformContext.current
     val fit = backdrop || contentScale == ContentScale.Fit
     val sizer = rememberConstraintsSizeResolver()
-    var measuredSize by remember { mutableStateOf<IntSize?>(null) }
-    val pixels = remember(measuredSize, zoom) {
-        measuredSize?.let { ArtworkSizing.decode(it.width, it.height, enlargement = maxOf(1.15f, zoom)) }
-    }
+    // The size it is decoded at only ever grows: a picture decoded larger serves a smaller slot just
+    // as well, so a grid of tiles shrinking with a folding header (a change of size every frame)
+    // never asks for its pictures again, and never recomposes for it.
+    var pixels by remember(zoom) { mutableStateOf<ArtworkPixels?>(null) }
     val decodeSizer = remember(sizer, zoom, pixels) {
         SizeResolver {
             val ready = pixels
@@ -136,6 +134,20 @@ fun Artwork(
     // fractional desktop scale) instead of the plainest filter. Android keeps the plainest, for speed.
     val filter = if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cachedLayers) androidx.compose.ui.graphics.FilterQuality.Low else androidx.compose.ui.graphics.FilterQuality.Medium
     val loader = rememberAsyncImagePainter(request, contentScale = if (backdrop) ContentScale.Fit else contentScale, filterQuality = filter)
+    // The soft copy behind fitted art is the picture decoded a few pixels across and drawn large:
+    // stretched smoothly, it reads as blurred, at the cost of one tiny picture. A blur filter on each
+    // tile was worked out again every frame for every tile on screen, which made a grid of covers
+    // stutter as it scrolled on Android.
+    val soft = backdrop && backdropBlur > 0.dp
+    val softRequest = remember(model, context, attempt, still, soft) {
+        if (!soft) null else ImageRequest.Builder(context).data(model).crossfade(false)
+            .size(BACKDROP_PX, BACKDROP_PX).scale(Scale.FILL)
+            // Its own entry in the memory cache, so the full-size picture is never handed back for it.
+            .memoryCacheKeyExtra(BACKDROP_EXTRA, attempt.toString())
+            .apply { if (still) MovingPictures.still(this, model) }
+            .build()
+    }
+    val softPainter = softRequest?.let { rememberAsyncImagePainter(it, contentScale = ContentScale.Crop, filterQuality = androidx.compose.ui.graphics.FilterQuality.Low) }
     val state by loader.state.collectAsStateCompat()
     val success = state as? AsyncImagePainter.State.Success
     val failed = state is AsyncImagePainter.State.Error
@@ -183,7 +195,11 @@ fun Artwork(
         slow = true
     }
     Box(modifier.then(sizer).onSizeChanged { measured ->
-        measuredSize = measured
+        val need = ArtworkSizing.decode(measured.width, measured.height, enlargement = maxOf(1.15f, zoom))
+        val had = pixels
+        if (had == null || need.width > had.width || need.height > had.height) {
+            pixels = if (had == null) need else ArtworkPixels(maxOf(had.width, need.width), maxOf(had.height, need.height))
+        }
     }) {
         val waiting = success == null && !failed
         if (placeholder && !failed && !slow && !shown) {
@@ -194,17 +210,16 @@ fun Artwork(
             if (placeholder) Box(Modifier.matchParentSize().shimmer(active = waiting)) { fallback() } else fallback()
         }
         if (backdrop) {
-            val dim = if (backdropBlur > 0.dp) BACKDROP_DIM else BACKDROP_DIM_SHARP
+            val dim = if (soft) BACKDROP_DIM else BACKDROP_DIM_SHARP
             Box(
                 Modifier
                     .fillMaxSize()
                     .graphicsLayer { this.alpha = alpha.value }
-                    .then(if (backdropBlur > 0.dp) Modifier.blur(backdropBlur, BlurredEdgeTreatment.Rectangle) else Modifier)
                     .drawWithContent {
                         drawContent()
                         drawRect(Color.Black.copy(alpha = dim))
                     }
-                    .paint(painter, contentScale = ContentScale.Crop),
+                    .paint(softPainter ?: painter, contentScale = ContentScale.Crop),
             )
         }
         Box(
@@ -226,6 +241,12 @@ fun Artwork(
         )
     }
 }
+
+/** How many pixels across the soft copy behind fitted art is decoded at: few enough to read as blurred. */
+private const val BACKDROP_PX = 18
+
+/** The memory cache's mark for the soft copy, apart from the picture itself. */
+private const val BACKDROP_EXTRA = "fuse.backdrop"
 
 /** How much the copy behind fitted art is dimmed: blurred, or left sharp where blur is off. */
 private const val BACKDROP_DIM = 0.3f
