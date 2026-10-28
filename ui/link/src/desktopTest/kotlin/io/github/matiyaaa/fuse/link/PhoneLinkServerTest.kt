@@ -157,6 +157,9 @@ class PhoneLinkServerTest {
         assertEquals(9, after.rating)
         assertEquals(400, http(port, "PUT", "/api/games/$id/journal", """{"status":"WON"}""", cookie = cookie).status)
         assertEquals(400, http(port, "PUT", "/api/games/$id/journal", """{"rating":11}""", cookie = cookie).status)
+        // A game's achievements: none known here (no account), said so; a game not here isn't found.
+        assertTrue("\"available\":false" in http(port, "GET", "/api/games/$id/achievements", cookie = cookie).body)
+        assertEquals(404, http(port, "GET", "/api/games/999999/achievements", cookie = cookie).status)
         // No game running here, and this device can't close one: said so, nothing else happens.
         assertTrue("\"canQuit\":false" in http(port, "GET", "/api/now", cookie = cookie).body)
         assertTrue("error" in http(port, "POST", "/api/playing/quit", cookie = cookie).body)
@@ -187,6 +190,37 @@ class PhoneLinkServerTest {
 
         store.updatePrefs { it.copy(phoneLinkEnabled = false) }
         withTimeout(10_000) { link.state.first { !it.running } }
+    }
+
+    @Test
+    fun aGamesAchievementsReachThePhoneTheEarnedOnesNewestFirst(): Unit = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache)
+        val base = createFuseStore(services, scope)
+        base.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { base.library.games(GameQuery()).first { it.size == 2 } }.first()
+        val media = "https://media.retroachievements.org/Badge"
+        fun a(n: Long, title: String, points: Int, earned: Long?, hardcore: Long?) =
+            io.github.matiyaaa.fuse.model.Achievement(n, 1, title, "$title, the description", points, "$media/$n.png", "$media/${n}_lock.png", earned, hardcore, displayOrder = n.toInt())
+        val set = io.github.matiyaaa.fuse.model.AchievementState(
+            1, game.title, "SNES", null, total = 3, earned = 2, earnedHardcore = 1, points = 30, pointsEarned = 15, highestAward = "beaten-hardcore",
+            achievements = listOf(a(1, "First steps", 5, 100, null), a(2, "The boss", 10, 200, 200), a(3, "Everything", 15, null, null)),
+            fetchedAt = 0,
+        )
+        val store = object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base {
+            override val achievements = object : io.github.matiyaaa.fuse.ui.shell.store.AchievementOps by base.achievements {
+                override suspend fun forGame(game: io.github.matiyaaa.fuse.model.GameId) = set
+            }
+        }
+        val reply = PhoneLinkServer(store, services.secrets, scope, "Test Device", "0.0.4").api.achievements(game.id.value)
+        assertEquals(200, reply.status.value)
+        val body = reply.body as kotlinx.serialization.json.JsonObject
+        assertEquals("true", body["available"].toString())
+        assertEquals("15", body["pointsEarned"].toString())
+        val items = body["items"] as kotlinx.serialization.json.JsonArray
+        // Earned, the newest first, then the rest in the set's order, each with the badge it shows.
+        assertEquals(listOf("\"The boss\"", "\"First steps\"", "\"Everything\""), items.map { (it as kotlinx.serialization.json.JsonObject)["title"].toString() })
+        assertEquals("\"$media/3_lock.png\"", (items[2] as kotlinx.serialization.json.JsonObject)["badge"].toString())
+        assertEquals("true", (items[0] as kotlinx.serialization.json.JsonObject)["hardcore"].toString())
     }
 
     @Test

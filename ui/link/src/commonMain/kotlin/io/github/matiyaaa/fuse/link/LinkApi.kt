@@ -533,6 +533,47 @@ internal class LinkApi(
 
     private fun ok() = Reply(buildJsonObject { put("ok", true) })
     private fun bad(message: String) = Reply(error(message), HttpStatusCode.BadRequest)
+    /**
+     * [id]'s achievements as the device knows them (RetroAchievements', or the trophies its own
+     * platform keeps there): how much of the set the person has, and each one with its badge, the
+     * earned ones newest first, then the rest in the set's order. `available` is false when the game
+     * has none Fuse knows of. Asked only when a game's page opens on the phone.
+     */
+    suspend fun achievements(id: Long): Reply {
+        val gameId = GameId(id)
+        store.library.game(gameId).first() ?: return notFound()
+        val s = runCatching { store.achievements.forGame(gameId) }.getOrNull()?.takeIf { it.total > 0 }
+            ?: return Reply(buildJsonObject { put("available", false) })
+        val ordered = s.achievements.filter { it.earned }.sortedByDescending { maxOf(it.earnedAt ?: 0, it.earnedHardcoreAt ?: 0) } +
+            s.achievements.filter { !it.earned }.sortedBy { it.displayOrder }
+        return Reply(buildJsonObject {
+            put("available", true)
+            put("source", s.source.label)
+            put("noun", s.source.noun)
+            put("total", s.total)
+            put("earned", s.earned)
+            put("earnedHardcore", s.earnedHardcore)
+            if (s.source.hasPoints) {
+                put("points", s.points)
+                put("pointsEarned", s.pointsEarned)
+            }
+            put("award", s.highestAward)
+            putJsonArray("items") {
+                ordered.take(ACHIEVEMENTS_SHOWN).forEach { a ->
+                    add(buildJsonObject {
+                        put("title", a.title)
+                        put("description", a.description)
+                        if (s.source.hasPoints) put("points", a.points)
+                        put("badge", url(if (a.earned) a.badgeUrl else a.badgeLockedUrl.ifBlank { a.badgeUrl }))
+                        put("earnedAt", a.earnedHardcoreAt ?: a.earnedAt)
+                        put("hardcore", a.earnedHardcoreAt != null)
+                        a.rarity?.let { put("rarity", it) }
+                    })
+                }
+            }
+        })
+    }
+
     private fun notFound() = Reply(error("This game is no longer in the library."), HttpStatusCode.NotFound)
     private fun error(message: String) = buildJsonObject { put("error", message) }
 
@@ -597,3 +638,6 @@ internal class BoundedMap<K, V>(private val capacity: Int) {
 
 /** How many of the Journal's wanted games the phone's Now shows. */
 private const val UP_NEXT_SHOWN = 8
+
+/** The most achievements a phone is sent for one game: more than any set shows at once. */
+private const val ACHIEVEMENTS_SHOWN = 400

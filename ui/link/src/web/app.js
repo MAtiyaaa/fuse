@@ -2720,6 +2720,7 @@ async function loadGame(opts = {}) {
     }
     g.data = d;
     renderGame();
+    loadAchievements(g);
   } catch (e) {
     if (G !== g || gen !== g.gen || e.status === 401) return;
     if (opts.quiet && g.data) return;
@@ -2860,6 +2861,7 @@ function gameSections(d) {
     stat('history', 'Last played', d.lastPlayedAt ? fmtAgo(d.lastPlayedAt) : 'Never')));
 
   if (d.journal && typeof d.journal === 'object') out.push(journalSection(d));
+  if (G && G.ach) out.push(achievementsSection(G.ach));
 
   // About
   const aboutKids = [];
@@ -2900,6 +2902,110 @@ function gameSections(d) {
     artCard(d),
     fillGameBlock(d)));
   return out;
+}
+
+/**
+ * The game's achievements, asked once as its page opens (the device may have to ask
+ * RetroAchievements): drawn in when they come, and left out when it has none or can't say.
+ */
+async function loadAchievements(g) {
+  if (g.achAsked) return;
+  g.achAsked = true;
+  try {
+    const a = await api(gamePath(g.id, '/achievements'));
+    if (G !== g || !a || a.available !== true) return;
+    g.ach = a;
+    renderGame();
+  } catch (_) {
+    /* Achievements are extra: the page stays as it is. */
+  }
+}
+
+/** A set's highest award, as the device names it, with its mark. */
+const AWARDS = {
+  'mastered': ['Mastered', 'crown'],
+  'completed': ['Completed', 'crown'],
+  'beaten-hardcore': ['Beaten', 'flag'],
+  'beaten-softcore': ['Beaten', 'flag'],
+};
+
+/** How many badges show before Show all. */
+const BADGES_SHOWN = 24;
+
+/** A ring filled to [frac] in the accent on a faint track, [label] in its middle. */
+function progressRing(frac, label) {
+  const r = 26;
+  const c = 2 * Math.PI * r;
+  const f = Math.max(0, Math.min(1, Number(frac) || 0));
+  const svg = svgEl('svg', { viewBox: '0 0 64 64', class: 'ring', 'aria-hidden': 'true' });
+  svg.append(svgEl('circle', { cx: 32, cy: 32, r, class: 'ring-track' }));
+  svg.append(svgEl('circle', { cx: 32, cy: 32, r, class: 'ring-arc', 'stroke-dasharray': c.toFixed(2), 'stroke-dashoffset': (c * (1 - f)).toFixed(2) }));
+  return h('div.ring-box', svg, h('span.ring-label.num', label));
+}
+
+/**
+ * The game's achievements as the device knows them: how much of the set is the person's, its
+ * award, and every badge (the earned ones newest first), each a tap away from what it asks.
+ */
+function achievementsSection(a) {
+  const total = num(a.total);
+  const earned = num(a.earned);
+  const pct = total ? Math.round(earned * 100 / total) : 0;
+  const award = AWARDS[a.award];
+  const sub = [
+    a.points != null ? `${num(a.pointsEarned)} of ${num(a.points)} points` : null,
+    num(a.earnedHardcore) > 0 ? `${num(a.earnedHardcore)} in hardcore` : null,
+  ].filter(Boolean).join(' \u00B7 ');
+  const head = h('div.ach-head',
+    progressRing(total ? earned / total : 0, `${pct}%`),
+    h('div.ach-head-main',
+      h('div.ach-count-row',
+        h('p.ach-count', h('span.num', String(earned)), ` of ${total}`),
+        award ? h('span.pill.is-award', icon(award[1]), award[0]) : null),
+      sub ? h('p.ach-sub', sub) : null));
+  const items = Array.isArray(a.items) ? a.items : [];
+  const grid = h('div.ach-grid');
+  const fill = (all) => grid.replaceChildren(...(all ? items : items.slice(0, BADGES_SHOWN)).map(badgeButton));
+  fill(false);
+  const more = items.length > BADGES_SHOWN
+    ? btn(`Show all ${items.length}`, { kind: 'ghost', block: true, onClick: (b) => { fill(true); b.remove(); } })
+    : null;
+  return h('section.g-section',
+    sectionHead(a.noun || 'Achievements', a.source ? h('span.pill', a.source) : null),
+    h('div.card.ach-card', head, items.length ? grid : null, more));
+}
+
+function badgeButton(it) {
+  const got = !!it.earnedAt;
+  const url = safeUrl(it.badge);
+  const b = h('button', { type: 'button', class: 'ach-badge' + (got ? '' : ' is-locked'), 'aria-label': `${it.title || 'Achievement'}, ${got ? 'earned' : 'not yet'}` },
+    url ? h('img', { src: url, alt: '', loading: 'lazy', decoding: 'async' }) : icon('trophy'));
+  b.addEventListener('click', () => openAchievement(it));
+  return b;
+}
+
+/** [fmtAgo]'s words inside a sentence: "just now" and "yesterday" in lower case, dates as they are. */
+function agoWords(ms) {
+  const w = fmtAgo(ms);
+  return /^(Just|Yesterday)/.test(w) ? w[0].toLowerCase() + w.slice(1) : w;
+}
+
+/** One achievement on its own: its badge large, what it asks, its points and when it was earned. */
+function openAchievement(it) {
+  const got = !!it.earnedAt;
+  const url = safeUrl(it.badge);
+  const facts = [
+    it.points != null ? metaPill('star', `${num(it.points)} points`) : null,
+    got ? metaPill('circle-check', `Earned${it.hardcore ? ' in hardcore,' : ''} ${agoWords(it.earnedAt)}`, 'is-earned') : metaPill('lock', 'Not yet'),
+    it.rarity != null ? metaPill('users', `${Number(it.rarity).toFixed(1)}% of players`) : null,
+  ].filter(Boolean);
+  openModal({
+    title: it.title || 'Achievement',
+    body: h('div.ach-detail',
+      h('div', { class: 'ach-detail-badge' + (got ? '' : ' is-locked') }, url ? h('img', { src: url, alt: '' }) : icon('trophy')),
+      it.description ? h('p.ach-detail-text', it.description) : null,
+      h('div.meta-chips', facts)),
+  });
 }
 
 /** The Journal's statuses in its own order, each with the mark Fuse gives it on the device. */

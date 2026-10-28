@@ -295,6 +295,7 @@ class PhoneLinkServer(
             post("/api/games/{id}/open") { call.signedIn(ExtensionScope.PLAY) { call.reply(api.openOnDevice(call.gameId())) } }
             put("/api/games/{id}/favorite") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.setFavorite(call.gameId(), call.body())) } }
             put("/api/games/{id}/journal") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.setJournal(call.gameId(), call.body())) } }
+            get("/api/games/{id}/achievements") { call.signedIn(ExtensionScope.LIBRARY) { call.reply(api.achievements(call.gameId())) } }
             post("/api/playing/quit") { call.signedIn(ExtensionScope.PLAY) { call.reply(api.quitPlaying()) } }
             post("/api/rescan") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.rescan()) } }
             post("/api/transfers/pause") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.pauseTransfers(true)) } }
