@@ -133,7 +133,7 @@ internal fun SyncStatusFace(face: FaceSize) {
 
 /**
  * The devices on Fuse Sync: which are online now (a green dot), when the rest were last seen, and
- * whose profile each one plays as.
+ * whose profile each one plays as. A device playing says what, and the ones playing come first.
  */
 @Composable
 internal fun SyncDevicesFace(face: FaceSize) {
@@ -145,11 +145,14 @@ internal fun SyncDevicesFace(face: FaceSize) {
         }
         val devices by svc.devices.collectAsState()
         val profiles by svc.profiles.collectAsState()
+        val playingNow by svc.playingNow.collectAsState()
         val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-        val linked = devices.filterNot { it.revoked }.sortedByDescending { it.lastSeen }
-        val online = linked.count { now - it.lastSeen < ONLINE_MS }
+        val playing = playingNow.associateBy { it.deviceId }
+        val linked = devices.filterNot { it.revoked }.sortedWith(compareByDescending<DeviceInfo> { it.id in playing }.thenByDescending { it.lastSeen })
+        val online = linked.count { now - it.lastSeen < ONLINE_MS || it.id in playing }
         WidgetHeader(FuseIcons.MonitorSmartphone, "Your devices", short = "Devices", trailing = when {
             linked.isEmpty() -> null
+            playing.isNotEmpty() -> "${playing.size} playing"
             online > 0 -> "$online online"
             else -> "${linked.size}"
         })
@@ -163,13 +166,13 @@ internal fun SyncDevicesFace(face: FaceSize) {
                 Spacer(Modifier.weight(1f))
                 DeviceStack(linked.take(4), now)
                 Spacer(Modifier.height(Space.s))
-                WidgetCaption(if (online == 1) "1 online now" else "$online online now")
+                WidgetCaption(playingNow.firstOrNull()?.let { p -> "${p.title.ifEmpty { "A game" }} on ${p.deviceName}" } ?: if (online == 1) "1 online now" else "$online online now")
             }
             FaceSize.WIDE -> {
                 Spacer(Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
                     for (d in linked.take(4)) {
-                        DeviceChip(d, now, profiles.firstOrNull { it.id == d.profile }?.avatar, Modifier.weight(1f))
+                        DeviceChip(d, now, profiles.firstOrNull { it.id == (playing[d.id]?.profile ?: d.profile) }?.avatar, playing[d.id], Modifier.weight(1f))
                     }
                 }
             }
@@ -178,7 +181,7 @@ internal fun SyncDevicesFace(face: FaceSize) {
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                     val fit = ((maxHeight + Space.s) / (DEVICE_ROW + Space.s)).toInt().coerceAtLeast(1)
                     Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                        for (d in linked.take(fit)) DeviceRow(d, now, profiles.firstOrNull { it.id == d.profile }?.avatar)
+                        for (d in linked.take(fit)) DeviceRow(d, now, profiles.firstOrNull { it.id == (playing[d.id]?.profile ?: d.profile) }?.avatar, playing[d.id])
                     }
                 }
             }
@@ -276,7 +279,7 @@ private fun OnlineDot(online: Boolean, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun DeviceChip(d: DeviceInfo, now: Long, avatar: String?, modifier: Modifier) {
+private fun DeviceChip(d: DeviceInfo, now: Long, avatar: String?, playing: io.github.matiyaaa.fuse.sync.Presence?, modifier: Modifier) {
     val c = Fuse.colors
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -284,7 +287,7 @@ private fun DeviceChip(d: DeviceInfo, now: Long, avatar: String?, modifier: Modi
                 Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(c.text.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
                     FuseIcon(deviceIcon(d), size = Size.iconXS, tint = c.text)
                 }
-                OnlineDot(now - d.lastSeen < ONLINE_MS, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp))
+                OnlineDot(now - d.lastSeen < ONLINE_MS || playing != null, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp))
             }
             if (avatar != null) {
                 Spacer(Modifier.width(Space.xs))
@@ -293,26 +296,47 @@ private fun DeviceChip(d: DeviceInfo, now: Long, avatar: String?, modifier: Modi
         }
         Spacer(Modifier.height(Space.xs))
         FText(d.name, Fuse.type.label, maxLines = 1, fit = true)
-        FText(seenText(d, now), Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1, fit = true)
+        if (playing != null) PlayingLine(playing, now, Fuse.type.caption) else FText(seenText(d, now), Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1, fit = true)
     }
 }
 
 @Composable
-private fun DeviceRow(d: DeviceInfo, now: Long, avatar: String?) {
+private fun DeviceRow(d: DeviceInfo, now: Long, avatar: String?, playing: io.github.matiyaaa.fuse.sync.Presence?) {
     val c = Fuse.colors
     Row(Modifier.fillMaxWidth().height(DEVICE_ROW), verticalAlignment = Alignment.CenterVertically) {
         Box {
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(c.text.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
                 FuseIcon(deviceIcon(d), size = Size.iconS, tint = c.text)
             }
-            OnlineDot(now - d.lastSeen < ONLINE_MS, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp))
+            OnlineDot(now - d.lastSeen < ONLINE_MS || playing != null, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp))
         }
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f)) {
             FText(d.name, Fuse.type.bodyStrong, maxLines = 1, fit = true)
-            FText(seenText(d, now), Fuse.type.caption, color = c.textMuted, maxLines = 1, fit = true)
+            if (playing != null) PlayingLine(playing, now, Fuse.type.caption) else FText(seenText(d, now), Fuse.type.caption, color = c.textMuted, maxLines = 1, fit = true)
         }
         if (avatar != null) ProfileAvatar(avatar, 26.dp)
+    }
+}
+
+/** "Playing Metroid Fusion, 40 min": a small gamepad in the accent, the game, and for how long. */
+@Composable
+private fun PlayingLine(p: io.github.matiyaaa.fuse.sync.Presence, now: Long, style: androidx.compose.ui.text.TextStyle) {
+    val c = Fuse.colors
+    val minutes = ((now - p.since) / 60_000L).coerceAtLeast(0)
+    val since = when {
+        p.since <= 0 -> null
+        minutes < 1 -> "just started"
+        minutes < 60 -> "$minutes min"
+        else -> "${minutes / 60} h ${minutes % 60} min".removeSuffix(" 0 min")
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        FuseIcon(if (p.hosting != null) FuseIcons.Users else FuseIcons.Gamepad, size = 12.dp, tint = c.accent)
+        Spacer(Modifier.width(Space.xs))
+        FText(
+            listOfNotNull(p.title.ifEmpty { "Playing" }, since).joinToString(", "),
+            style, color = c.text, maxLines = 1, fit = true,
+        )
     }
 }
 

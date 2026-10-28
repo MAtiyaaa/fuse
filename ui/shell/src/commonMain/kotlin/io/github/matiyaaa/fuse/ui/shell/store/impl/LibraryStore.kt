@@ -1969,6 +1969,60 @@ internal class DefaultLibraryOps(
         )
     }.flowOn(Dispatchers.Default)
 
+    override suspend fun recapPeriods(): List<io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod> {
+        val span = data.playSessions.playedSpan() ?: return emptyList()
+        val offset = ctx.services.utcOffsetMillis()
+        fun dateOf(ms: Long) = kotlinx.datetime.LocalDate.fromEpochDays((ms + offset).floorDiv(TimeWords.DAY_MS))
+        val now = dateOf(ctx.now())
+        val first = dateOf(span.first)
+        val month = now.month.ordinal + 1
+        val lastMonth = if (month == 1) io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod(now.year - 1, 12) else io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod(now.year, month - 1)
+        val firstMonth = first.year * 12 + first.month.ordinal
+        return buildList {
+            add(io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod(now.year))
+            add(io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod(now.year, month))
+            if (lastMonth.year * 12 + (lastMonth.month!! - 1) >= firstMonth) add(lastMonth)
+            for (y in now.year - 1 downTo first.year) add(io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod(y))
+        }
+    }
+
+    override fun recap(period: io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod): Flow<io.github.matiyaaa.fuse.ui.shell.store.PlayRecap> = flow {
+        val offset = ctx.services.utcOffsetMillis()
+        val edges = Recaps.edges(period.year, period.month, offset)
+        val from = edges.first()
+        val until = edges.last()
+        val t = Recaps.of(data.playSessions.inWindow(from, until), data.playSessions.firstPlayed(), edges, offset)
+        val wanted = (t.games.take(RECAP_GAMES).map { it.first } + t.firsts.take(RECAP_FIRSTS) + listOfNotNull(t.longest?.first)).distinct()
+        val cards = ctx.cardsOnce(wanted.mapNotNull { data.games.summary(it) }).associateBy { it.id }
+        val finished = data.games.observeJournal(listOf(io.github.matiyaaa.fuse.model.PlayStatus.BEATEN, io.github.matiyaaa.fuse.model.PlayStatus.COMPLETED)).first()
+            .filter { (it.statusAt ?: 0) in from until until }
+        val systems = platforms.value.associateBy { it.platform.id }
+        fun day(d: Long) = TimeWords.date(d).let { if (period.month != null || it.endsWith(" ${period.year}")) it.substringBeforeLast(' ') else it }
+        val now = ctx.now()
+        emit(io.github.matiyaaa.fuse.ui.shell.store.PlayRecap(
+            period = period,
+            title = period.month?.let { "${TimeWords.monthName(Recaps.monthStart(period.year, it, 0) / TimeWords.DAY_MS)} ${period.year}" } ?: "${period.year}",
+            seconds = t.seconds,
+            sessions = t.sessions,
+            days = t.days,
+            gameCount = t.games.size,
+            bars = t.bars,
+            barLabels = if (period.month == null) "JFMAMJJASOND".map { it.toString() } else t.bars.indices.map { (it + 1).toString() },
+            barNow = if (now in from until until) edges.indexOfLast { it <= now }.coerceIn(0, t.bars.size - 1) else null,
+            games = t.games.take(RECAP_GAMES).mapNotNull { (id, s) -> cards[id]?.let { it to s } },
+            systems = t.systems.mapNotNull { (id, s) -> systems[PlatformId(id)]?.let { it to s } },
+            longest = t.longest?.let { (id, s, d) -> cards[id]?.let { io.github.matiyaaa.fuse.ui.shell.store.RecapLongest(it, s, day(d)) } },
+            streakDays = t.streak?.first ?: 0,
+            streakWords = t.streak?.let { (n, d) -> "${day(d)} to ${day(d + n - 1)}" },
+            firsts = t.firsts.take(RECAP_FIRSTS).mapNotNull { cards[it] },
+            firstCount = t.firsts.size,
+            finished = ctx.cardsOnce(finished),
+            weekday = t.weekday?.let { Recaps.WEEKDAYS[it - 1] },
+            partOfDay = t.partOfDay?.let { Recaps.PARTS[it] },
+            loaded = true,
+        ))
+    }.flowOn(Dispatchers.Default)
+
     override suspend fun launchCandidates(id: GameId): List<String> {
         val game = data.games.get(id) ?: return emptyList()
         val platform = ctx.platform(game.platformId) ?: return emptyList()
@@ -2159,6 +2213,10 @@ private fun SortOrder.comparator(): Comparator<io.github.matiyaaa.fuse.data.repo
 }
 
 private const val HOUR_MS = 3_600_000L
+
+/** How many games a Your Year recap shows by time, and of those first played in it. */
+private const val RECAP_GAMES = 10
+private const val RECAP_FIRSTS = 8
 
 /** How many of the week's games its recap names. */
 private const val WEEK_GAMES = 3

@@ -279,6 +279,98 @@ data class PlayTimeReport(
     val totalSeconds: Long get() = trackedSeconds + importedSeconds
 }
 
+/** A month ([month], 1 to 12) or, without one, a whole year of play: what Your Year adds up. */
+@Immutable
+data class RecapPeriod(val year: Int, val month: Int? = null)
+
+/**
+ * A month or a year of play, as Your Year shows it ([FuseStore.LibraryOps.recap]): the time, how
+ * often and on how many days, the months (or days) as bars, the games and systems by time, and its
+ * moments (the longest session, the longest run of days, the games first played and those finished
+ * in the Journal, when the person plays most). From the play Fuse saw on this device.
+ */
+@Immutable
+data class PlayRecap(
+    val period: RecapPeriod,
+    /** "2026", or "October 2026". */
+    val title: String = "",
+    val seconds: Long = 0,
+    val sessions: Int = 0,
+    val days: Int = 0,
+    val gameCount: Int = 0,
+    /** Time in each month of the year, or each day of the month, in order. */
+    val bars: List<Long> = emptyList(),
+    /** A short name under each bar ("J", or a day's number). */
+    val barLabels: List<String> = emptyList(),
+    /** The bar for now, while the period is still going; null for one that is over. */
+    val barNow: Int? = null,
+    val games: List<Pair<GameCard, Long>> = emptyList(),
+    val systems: List<Pair<PlatformCard, Long>> = emptyList(),
+    val longest: RecapLongest? = null,
+    val streakDays: Int = 0,
+    /** "3 Oct to 14 Oct". */
+    val streakWords: String? = null,
+    val firsts: List<GameCard> = emptyList(),
+    val firstCount: Int = 0,
+    /** Games given Beaten or Completed in the Journal in the period, the latest first. */
+    val finished: List<GameCard> = emptyList(),
+    /** "Saturdays". */
+    val weekday: String? = null,
+    /** "evenings". */
+    val partOfDay: String? = null,
+    val loaded: Boolean = false,
+)
+
+/** The longest session of a recap: its game, how long, and the day ("3 Oct"). */
+@Immutable
+data class RecapLongest(val game: GameCard, val seconds: Long, val day: String)
+
+/**
+ * RetroAchievements' achievement of the week ([FuseStore.AchievementOps.week]): the achievement, its
+ * game and system, how many players have it this week, whether the person does, and the game here
+ * it belongs to when the library has it.
+ */
+@Immutable
+data class WeekAchievement(
+    val title: String,
+    val description: String,
+    val points: Int,
+    val game: String,
+    val console: String,
+    val badgeUrl: String?,
+    val gameIconUrl: String?,
+    val unlocks: Int,
+    val players: Int,
+    val earned: Boolean,
+    val localGame: io.github.matiyaaa.fuse.model.GameId?,
+)
+
+/**
+ * One of a game's RetroAchievements leaderboards ([FuseStore.AchievementOps.leaderboards]): the best
+ * score and whose it is, and the person's own score with its place when they have one.
+ */
+@Immutable
+data class GameLeaderboard(
+    val title: String,
+    val description: String,
+    val leader: String?,
+    val best: String?,
+    val myScore: String?,
+    val myRank: Long?,
+)
+
+/** Someone the person follows on RetroAchievements ([FuseStore.AchievementOps.following]): their points, and what they play. */
+@Immutable
+data class FollowedPlayer(
+    val name: String,
+    val points: Long,
+    val followsYou: Boolean,
+    val avatarUrl: String,
+    /** The game they last played, and what it says they are doing ("Exploring Lavender Town"). */
+    val game: String? = null,
+    val presence: String? = null,
+)
+
 @Immutable
 data class AchievementsFeed(
     val user: AchievementUser,

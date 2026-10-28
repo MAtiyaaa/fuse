@@ -50,6 +50,9 @@ data class WeekReport(
 )
 
 /** Library-wide play time. Imported time is kept apart from what Fuse observed. */
+/** One session as a recap reads it: its game, the game's system, and when it ran. */
+data class WindowSession(val game: GameId, val platform: String, val start: Long, val end: Long)
+
 data class PlaytimeTotals(val trackedSeconds: Long, val importedSeconds: Long) {
     val totalSeconds: Long get() = trackedSeconds + importedSeconds
 }
@@ -290,6 +293,21 @@ class PlaySessionRepository(
                 platforms = platforms,
             )
         }.flowOn(dispatcher)
+    }
+
+    /** The sessions that ran at some point in [from] to [until], each with its game's system. */
+    suspend fun inWindow(from: Long, until: Long): List<WindowSession> = withContext(dispatcher) {
+        q.inWindow(from, until).executeAsList().mapNotNull { r -> r.ended_at?.let { WindowSession(GameId(r.game_id), r.platform_id, r.started_at, it) } }
+    }
+
+    /** When each game was first seen played here (its first session's start), by game. */
+    suspend fun firstPlayed(): Map<GameId, Long> = withContext(dispatcher) {
+        q.firstPlayed().executeAsList().mapNotNull { r -> r.first?.let { GameId(r.game_id) to it } }.toMap()
+    }
+
+    /** The first and last moment anything was played here; null when nothing was. */
+    suspend fun playedSpan(): Pair<Long, Long>? = withContext(dispatcher) {
+        q.playedSpan().executeAsOneOrNull()?.let { r -> r.first?.let { f -> r.last?.let { l -> f to l } } }
     }
 
     private fun endLocked(sessionId: Long, now: Long): PlaySession? {

@@ -43,6 +43,19 @@ SELECT * FROM play_session WHERE game_id = ? ORDER BY started_at DESC, id DESC;
 endedAfterWithGame:
 SELECT game_id, started_at, ended_at FROM play_session WHERE ended_at IS NOT NULL AND ended_at > :since;
 
+-- Sessions that ran at some point in [:from, :until), with their game's system (Your Year).
+inWindow:
+SELECT s.game_id, g.platform_id, s.started_at, s.ended_at FROM play_session s JOIN game g ON g.id = s.game_id
+WHERE s.ended_at IS NOT NULL AND s.ended_at > :from AND s.started_at < :until;
+
+-- When each game was first seen played here: its first session's start.
+firstPlayed:
+SELECT game_id, MIN(started_at) AS first FROM play_session WHERE ended_at IS NOT NULL GROUP BY game_id;
+
+-- The first and last moment anything was played here, for which recaps there are.
+playedSpan:
+SELECT MIN(started_at) AS first, MAX(ended_at) AS last FROM play_session WHERE ended_at IS NOT NULL;
+
 -- All play time per system: what Fuse saw plus what was imported.
 secondsByPlatform:
 SELECT platform_id, SUM(tracked_seconds + imported_seconds) AS seconds FROM game

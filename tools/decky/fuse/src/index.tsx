@@ -248,7 +248,7 @@ const FuseOne: VFC<{ s: Status | null }> = ({ s }) => {
       </PanelSectionRow>
       {(one.devices ?? []).slice(0, 6).map((d) => (
         <PanelSectionRow key={d.name}>
-          <Field focusable label={d.name} description={d.platform} />
+          <Field focusable label={d.name} description={d.playing ? `Playing ${d.playing}` : d.platform} />
         </PanelSectionRow>
       ))}
       {t && (moving > 0 || t.queued > 0 || t.failed > 0) && (

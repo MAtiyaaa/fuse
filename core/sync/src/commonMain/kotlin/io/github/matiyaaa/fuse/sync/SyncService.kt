@@ -537,6 +537,12 @@ interface SyncService {
     /** Every game the household's other devices are hosting now, kept up to date as the host says one opens. */
     val together: StateFlow<List<Presence>> get() = NO_TOGETHER
 
+    /**
+     * What the household's other devices are playing now, the latest started first: read as this
+     * device connects and whenever the host says a game started or was left, never asked for on a timer.
+     */
+    val playingNow: StateFlow<List<Presence>> get() = NO_TOGETHER
+
     /** Look at the playing game's save now and send it if it changed (the screen is going off). */
     suspend fun sendWhilePlaying() {}
 

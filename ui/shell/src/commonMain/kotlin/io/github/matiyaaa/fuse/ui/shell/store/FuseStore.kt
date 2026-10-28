@@ -894,6 +894,12 @@ interface LibraryOps {
     /** Play time today, this week, this month and in all, per day, per game and per system. */
     fun playTime(): Flow<PlayTimeReport> = kotlinx.coroutines.flow.flowOf(PlayTimeReport(loaded = true))
 
+    /** [period] added up for Your Year, once (a period still going is as it stands now). */
+    fun recap(period: RecapPeriod): Flow<PlayRecap> = kotlinx.coroutines.flow.flowOf(PlayRecap(period, loaded = true))
+
+    /** The recaps there are: this year and this month so far, last month, and each earlier year anything was played. */
+    suspend fun recapPeriods(): List<RecapPeriod> = emptyList()
+
     /**
      * Files the game under [platform] for good (a rescan keeps it), or back under the system its
      * folder says when null. Its emulator choice goes with the old system.
@@ -1211,6 +1217,22 @@ interface AchievementOps {
     val local: StateFlow<List<LocalGameAchievements>?> get() = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
     fun refresh(force: Boolean = false)
     suspend fun forGame(game: GameId): AchievementState?
+
+    /**
+     * RetroAchievements' achievement of the week, with whether the person has it and the game here it
+     * belongs to; null without RetroAchievements, or when it can't be asked. Asked as the page opens,
+     * at most every few hours.
+     */
+    suspend fun week(): WeekAchievement? = null
+
+    /** The people the person follows on RetroAchievements, with what each last played; asked at most every few minutes. */
+    suspend fun following(): List<FollowedPlayer> = emptyList()
+
+    /**
+     * [game]'s RetroAchievements leaderboards, the ones with the person's own score first; null when
+     * it has no set Fuse knows or RetroAchievements can't be asked. Each is kept a few minutes.
+     */
+    suspend fun leaderboards(game: GameId): List<GameLeaderboard>? = null
     /** Checks a username + key against RetroAchievements and stores them securely on success. */
     suspend fun connect(username: String, apiKey: String): Result<Unit>
     suspend fun disconnect()

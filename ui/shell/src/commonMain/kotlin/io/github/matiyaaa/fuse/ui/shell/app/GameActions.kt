@@ -487,6 +487,10 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         if (!card.isApp) {
             add(MenuAction("runs", "How It Runs Here", FuseIcons.Gauge, detail = "Plays well, with problems, or not at all, as you found it on this device", trailing = Trailing.Chevron, onSelect = { compatSheet(card) }))
         }
+        // Fuse 0.4.6: RetroAchievements' leaderboards, the best of everyone and the person's own.
+        if (!card.isApp && store.achievements.configured.value) {
+            add(MenuAction("boards", "Leaderboards", FuseIcons.Medal, detail = "RetroAchievements' best scores, and yours", trailing = Trailing.Chevron, onSelect = { leaderboardsSheet(card) }))
+        }
         if (!card.isApp && card.platformId.value == "ps3") {
             add(MenuAction("compat", "How It Runs in RPCS3", FuseIcons.Gauge, detail = "From RPCS3's compatibility list. Asks rpcs3.net with the game's title id", trailing = Trailing.Chevron, onSelect = { showCompatibility(card) }))
         }

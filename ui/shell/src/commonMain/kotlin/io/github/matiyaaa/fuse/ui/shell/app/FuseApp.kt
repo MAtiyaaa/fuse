@@ -1065,6 +1065,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
             is Route.ReleaseNotes -> io.github.matiyaaa.fuse.ui.shell.notes.ReleaseNotesScreen(app, route)
             Route.PlayTime -> io.github.matiyaaa.fuse.ui.shell.library.PlayTimeScreen(app)
+            is Route.Recap -> io.github.matiyaaa.fuse.ui.shell.library.RecapScreen(app, route.period)
             Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
             Route.Onboarding -> OnboardingScreen(app)
             is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)

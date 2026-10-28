@@ -27,6 +27,8 @@ export interface Device {
   name: string;
   platform: string;
   lastSeen: number;
+  /** The game it is playing now; absent while it plays nothing (and from an older Fuse). */
+  playing?: string;
 }
 
 export interface Status extends Failure {

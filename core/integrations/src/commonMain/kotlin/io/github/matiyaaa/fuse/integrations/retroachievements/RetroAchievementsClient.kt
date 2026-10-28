@@ -115,6 +115,22 @@ class RetroAchievementsClient(
         "o" to offset.coerceAtLeast(0),
     )
 
+    /** API_GetAchievementOfTheWeek: the achievement RetroAchievements picks for everyone this week. */
+    suspend fun achievementOfTheWeek(): ApiResult<RaAchievementOfTheWeek> =
+        get("GetAchievementOfTheWeek", RaAchievementOfTheWeek.serializer())
+
+    /** API_GetUsersIFollow: the people the key's owner follows; [count] (c) is capped at 500. */
+    suspend fun following(count: Int = 100, offset: Int = 0): ApiResult<RaFollowing> =
+        get("GetUsersIFollow", RaFollowing.serializer(), "c" to count.coerceIn(1, 500), "o" to offset.coerceAtLeast(0))
+
+    /** API_GetGameLeaderboards: [gameId]'s leaderboards, each with its top score; [count] (c) is capped at 500. */
+    suspend fun gameLeaderboards(gameId: Long, count: Int = 100): ApiResult<RaLeaderboards> =
+        get("GetGameLeaderboards", RaLeaderboards.serializer(), "i" to gameId, "c" to count.coerceIn(1, 500))
+
+    /** API_GetUserGameLeaderboards: the leaderboards of [gameId] [user] has a score on, with that score and place. */
+    suspend fun myLeaderboards(gameId: Long, user: String = credentials.username, count: Int = 200): ApiResult<RaLeaderboards> =
+        get("GetUserGameLeaderboards", RaLeaderboards.serializer(), "i" to gameId, "u" to user, "c" to count.coerceIn(1, 500))
+
     /** API_GetGameHashes: every ROM hash RA accepts for [gameId]. */
     suspend fun gameHashes(gameId: Long): ApiResult<List<RaGameHash>> =
         get("GetGameHashes", RaGameHashesResponse.serializer(), "i" to gameId).map { it.results }

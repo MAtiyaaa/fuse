@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -76,12 +77,15 @@ private const val RECENT = "recent"
 private const val PROGRESS = "progress"
 private const val COMPLETED = "completed"
 private const val CONNECT = "connect"
+private const val WEEK = "week"
+private const val PEOPLE = "people"
 
 /**
  * Every achievement in one place: RetroAchievements when it is set up, and what this device keeps
  * for the library's games (PS3, PS4, Vita and Xbox 360 trophies, Steam achievements). One row of
  * recent unlocks and one shelf each of games in progress and completed, mixed by time, each item
- * marked with where it is from. Anything Fuse knows in the library opens that game.
+ * marked with where it is from. Anything Fuse knows in the library opens that game. With
+ * RetroAchievements, the achievement of the week and the people the person follows too.
  */
 @Composable
 fun AchievementsScreen(app: AppState) {
@@ -102,12 +106,19 @@ fun AchievementsScreen(app: AppState) {
         }
     }
     val unified = remember(feed, local) { UnifiedAchievements.of(feed, local.orEmpty()) }
+    // RetroAchievements' week and the people followed: asked as the page opens, each cached for a while.
+    val week by produceState<io.github.matiyaaa.fuse.ui.shell.store.WeekAchievement?>(null, configured) {
+        value = if (configured) runCatching { store.achievements.week() }.getOrNull() else null
+    }
+    val following by produceState(emptyList<io.github.matiyaaa.fuse.ui.shell.store.FollowedPlayer>(), configured) {
+        value = if (configured) runCatching { store.achievements.following() }.getOrDefault(emptyList()) else emptyList()
+    }
     val loading = local == null || (configured && feed == null && !waited && unified.empty)
     if (loading) {
         AchievementsLoading()
         return
     }
-    Achievements(app, unified, configured, raAnswered = feed != null)
+    Achievements(app, unified, configured, raAnswered = feed != null, week = week, following = following)
 }
 
 /** The page's shape while the sets load: the header and a row of cards, shimmering. */
@@ -147,10 +158,19 @@ private fun AchievementsLoading() {
 }
 
 @Composable
-private fun Achievements(app: AppState, all: UnifiedAchievements, configured: Boolean, raAnswered: Boolean) {
+private fun Achievements(
+    app: AppState,
+    all: UnifiedAchievements,
+    configured: Boolean,
+    raAnswered: Boolean,
+    week: io.github.matiyaaa.fuse.ui.shell.store.WeekAchievement?,
+    following: List<io.github.matiyaaa.fuse.ui.shell.store.FollowedPlayer>,
+) {
     val rows = buildList {
         if (all.recent.isNotEmpty()) add(RECENT)
+        if (week != null) add(WEEK)
         if (all.inProgress.isNotEmpty()) add(PROGRESS)
+        if (following.isNotEmpty()) add(PEOPLE)
         if (all.completed.isNotEmpty()) add(COMPLETED)
         // RetroAchievements is offered, never a gate: a quiet row at the end.
         if (!configured || !raAnswered) add(CONNECT)
@@ -159,6 +179,8 @@ private fun Achievements(app: AppState, all: UnifiedAchievements, configured: Bo
         RECENT -> all.recent.size
         PROGRESS -> all.inProgress.size
         COMPLETED -> all.completed.size
+        WEEK -> 1
+        PEOPLE -> following.size
         CONNECT -> 1
         else -> 0
     }
@@ -183,6 +205,8 @@ private fun Achievements(app: AppState, all: UnifiedAchievements, configured: Bo
             RECENT -> all.recent.getOrNull(col)?.let { open(it.gameId, it.game) }
             PROGRESS -> all.inProgress.getOrNull(col)?.let { open(it.gameId, it.state.title) }
             COMPLETED -> all.completed.getOrNull(col)?.let { open(it.gameId, it.state.title) }
+            WEEK -> week?.let { open(it.localGame, it.game) }
+            PEOPLE -> following.getOrNull(col)?.let { app.platform.openUrl("https://retroachievements.org/user/${it.name}") }
             CONNECT -> connect()
         }
     }
@@ -192,6 +216,8 @@ private fun Achievements(app: AppState, all: UnifiedAchievements, configured: Bo
             when (rowKey) {
                 null -> null
                 CONNECT -> Hint(HintButton.CONFIRM, if (configured) "Try again" else "Connect")
+                WEEK -> if (week?.localGame != null) Hint(HintButton.CONFIRM, "Open game") else null
+                PEOPLE -> Hint(HintButton.CONFIRM, "Their profile")
                 else -> Hint(HintButton.CONFIRM, "Open game")
             },
             Hint(HintButton.OPTIONS, "Refresh"),
@@ -254,6 +280,14 @@ private fun Achievements(app: AppState, all: UnifiedAchievements, configured: Bo
                         }
                         COMPLETED -> Section("Completed", sel.column(key), all.completed, m) { i, g ->
                             GameProgressCard(g, i == selectedCol, badge) { sel.row = index; sel.setColumn(key, i); open(g.gameId, g.state.title) }
+                        }
+                        WEEK -> week?.let { w ->
+                            Section("Achievement of the week", 0, listOf(w), m) { _, it ->
+                                WeekCard(it, selectedCol == 0, badge) { sel.row = index; open(it.localGame, it.game) }
+                            }
+                        }
+                        PEOPLE -> Section("People you follow", sel.column(key), following, m) { i, p ->
+                            PersonCard(p, i == selectedCol, badge) { sel.row = index; sel.setColumn(key, i); app.platform.openUrl("https://retroachievements.org/user/${p.name}") }
                         }
                         CONNECT -> ConnectRow(configured, selected = active, modifier = m.padding(horizontal = Space.gutter), onClick = { sel.row = index; connect() })
                     }
@@ -386,6 +420,74 @@ private fun UnlockCard(r: UnlockEntry, selected: Boolean, size: Dp, onClick: () 
                 OriginMark(r.origin)
                 r.worth?.let { Badge(it, color = gradeColor(it) ?: c.accent, filled = false) }
                 if (r.hardcore) Badge("Hardcore", color = c.warning, filled = false)
+            }
+        }
+    }
+}
+
+/**
+ * The achievement of the week: its badge as a tile (in colour once the person has it), what it asks,
+ * its game and system, what it is worth, and how many players have it this week.
+ */
+@Composable
+private fun WeekCard(w: io.github.matiyaaa.fuse.ui.shell.store.WeekAchievement, selected: Boolean, size: Dp, onClick: () -> Unit) {
+    val c = Fuse.colors
+    Row(Modifier.width(size * CARD_WIDTH * 2), verticalAlignment = Alignment.CenterVertically) {
+        Tile(selected = selected, modifier = Modifier.size(size), onClick = onClick) {
+            Box(Modifier.fillMaxSize().background(c.surfaceRaised), contentAlignment = Alignment.Center) {
+                // Without the badge (not asked yet, or offline), the game's art as everywhere else in Fuse.
+                Artwork(w.badgeUrl ?: w.gameIconUrl, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, fallback = {
+                    GeneratedArt(w.game, c.accent, Modifier.fillMaxSize(), slot = ArtSlot.ICON)
+                })
+            }
+        }
+        Spacer(Modifier.width(Space.m))
+        Column(Modifier.weight(1f)) {
+            FText(w.title, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.88f), maxLines = 1)
+            FText(w.description, Fuse.type.caption, color = c.textMuted, maxLines = 2)
+            Spacer(Modifier.height(Space.s))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                Badge("${w.points} points", color = c.accent, filled = false)
+                if (w.earned) Badge("Yours", color = c.success, filled = false)
+                FText(
+                    listOf(w.game, w.console).filter { it.isNotBlank() }.joinToString("  ·  "),
+                    Fuse.type.caption, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false),
+                )
+            }
+            if (w.players > 0) {
+                Spacer(Modifier.height(Space.xxs))
+                FText("${grouped(w.unlocks.toLong())} of ${grouped(w.players.toLong())} players have it this week", Fuse.type.caption, color = c.textFaint, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** Someone the person follows: their picture as a tile, their name and points, and what they last played. */
+@Composable
+private fun PersonCard(p: io.github.matiyaaa.fuse.ui.shell.store.FollowedPlayer, selected: Boolean, size: Dp, onClick: () -> Unit) {
+    val c = Fuse.colors
+    Row(Modifier.width(size * CARD_WIDTH), verticalAlignment = Alignment.CenterVertically) {
+        Tile(selected = selected, modifier = Modifier.size(size), onClick = onClick) {
+            Box(Modifier.fillMaxSize().background(c.surfaceRaised), contentAlignment = Alignment.Center) {
+                Artwork(p.avatarUrl, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, fallback = {
+                    GeneratedArt(p.name, c.accent, Modifier.fillMaxSize(), slot = ArtSlot.ICON)
+                })
+            }
+        }
+        Spacer(Modifier.width(Space.m))
+        Column(Modifier.weight(1f)) {
+            FText(p.name, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.88f), maxLines = 1)
+            FText(
+                "${grouped(p.points)} points" + if (p.followsYou) "  ·  follows you" else "",
+                Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1,
+            )
+            (p.presence ?: p.game)?.let {
+                Spacer(Modifier.height(Space.s))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FuseIcon(FuseIcons.Gamepad, size = Size.iconXS, tint = c.accent)
+                    Spacer(Modifier.width(Space.xs))
+                    FText(it, Fuse.type.caption, color = c.text, maxLines = 2)
+                }
             }
         }
     }

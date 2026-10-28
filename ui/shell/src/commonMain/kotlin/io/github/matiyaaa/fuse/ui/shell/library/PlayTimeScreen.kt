@@ -55,8 +55,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.PlayTimeReport
 
 /**
  * Play time: the week so far beside the last ([io.github.matiyaaa.fuse.ui.shell.home.YourWeekPanel]),
- * today, this month and in all as figures, the last thirty days as bars,
- * and the games of this month and the systems of all time as a list that opens what it names. Only
+ * today, this month and in all as figures, the last thirty days as bars, and as a list that opens
+ * what it names: Your Year's recaps, the games of this month and the systems of all time. Only
  * time Fuse saw counts toward the days; imported time (Steam, RetroAchievements) joins the total.
  */
 @Composable
@@ -66,6 +66,9 @@ fun PlayTimeScreen(app: AppState) {
     val feed by app.store.achievements.feed.collectAsState()
     val week = home.playtime.week
     val weekAchievements = feed?.recent?.count { week.start > 0 && it.earnedAt >= week.start } ?: 0
+    val periods by androidx.compose.runtime.produceState(emptyList<io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod>()) {
+        value = runCatching { app.store.library.recapPeriods() }.getOrDefault(emptyList())
+    }
     val sel = remember { LinearSelection() }
     PageEffect(Unit) {
         app.hero = null
@@ -75,6 +78,14 @@ fun PlayTimeScreen(app: AppState) {
     val longestGame = r.games.maxOfOrNull { it.second }?.coerceAtLeast(1) ?: 1
     val longestSystem = r.systems.maxOfOrNull { it.second }?.coerceAtLeast(1) ?: 1
     val rows = buildList {
+        // Your Year first: this year and this month so far, last month, and each year before.
+        periods.take(RECAPS_SHOWN).forEach { p ->
+            add(MenuAction(
+                "r${p.year}.${p.month ?: 0}", recapName(p, recapNow(periods)), if (p.month == null) FuseIcons.Sparkles else FuseIcons.CalendarDays,
+                detail = recapDetail(p, recapNow(periods)), trailing = Trailing.Chevron,
+                section = "Your year", onSelect = { app.go(Route.Recap(p)) },
+            ))
+        }
         r.games.forEach { (g, seconds) ->
             add(MenuAction(
                 "g${g.id.value}", g.title, null,
@@ -175,6 +186,9 @@ fun PlayTimeScreen(app: AppState) {
         }
     }
 }
+
+/** How many recaps Play time lists; the rest are on each recap's own page. */
+private const val RECAPS_SHOWN = 4
 
 private fun share(part: Long, whole: Long): String {
     if (whole <= 0) return "0%"

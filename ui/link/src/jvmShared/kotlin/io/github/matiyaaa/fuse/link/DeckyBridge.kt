@@ -204,11 +204,14 @@ class DeckyBridge(
                 put("detail", words.detail)
                 put("ok", words.ok)
                 put("profile", svc.activeProfile.value?.name)
+                val playing = svc.playingNow.value.associateBy { it.deviceId }
                 putJsonArray("devices") {
                     for (d in svc.devices.value.filterNot { it.revoked }) add(buildJsonObject {
                         put("name", d.name)
                         put("platform", d.platform)
                         put("lastSeen", d.lastSeen)
+                        // What it is playing now, as the household sees it in Fuse.
+                        playing[d.id]?.title?.takeIf { it.isNotEmpty() }?.let { put("playing", it) }
                     })
                 }
             }

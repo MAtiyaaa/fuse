@@ -90,6 +90,9 @@ sealed interface Route {
 
     /** Where play time went: today, this week, this month, per day, per game and per system. */
     data object PlayTime : Route
+
+    /** Your Year: a month or a year of play on one page ([io.github.matiyaaa.fuse.ui.shell.library.RecapScreen]). */
+    data class Recap(val period: io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod) : Route
     data object Themes : Route
     data object Onboarding : Route
     data class FolderBrowser(val game: GameId) : Route

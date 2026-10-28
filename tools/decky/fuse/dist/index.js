@@ -511,7 +511,7 @@ const FuseOne = ({ s }) => {
         window.SP_REACT.createElement(DFL.PanelSectionRow, null,
             window.SP_REACT.createElement(DFL.Field, { focusable: true, label: one.state ?? "Fuse One", description: one.detail })),
         (one.devices ?? []).slice(0, 6).map((d) => (window.SP_REACT.createElement(DFL.PanelSectionRow, { key: d.name },
-            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: d.name, description: d.platform })))),
+            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: d.name, description: d.playing ? `Playing ${d.playing}` : d.platform })))),
         t && (moving > 0 || t.queued > 0 || t.failed > 0) && (window.SP_REACT.createElement(DFL.PanelSectionRow, null,
             window.SP_REACT.createElement(DFL.Field, { focusable: true, label: moving > 0 ? `${moving} moving` : t.queued > 0 ? `${t.queued} waiting` : "Transfers", description: [t.progress != null ? `${Math.round(t.progress * 100)}%` : null, t.failed > 0 ? `${t.failed} failed` : null].filter(Boolean).join("  ·  ") || undefined })))));
 };

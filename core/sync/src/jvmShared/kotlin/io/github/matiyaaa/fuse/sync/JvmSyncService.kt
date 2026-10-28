@@ -444,6 +444,8 @@ class JvmSyncService(
                         caughtUp = true
                         scope.launch(Dispatchers.IO) { runCatching { convergeAll() } }
                         scope.launch(Dispatchers.IO) { householdConnect() }
+                        // Who is playing what on the others now; after this, the host says when that changes.
+                        scope.launch(Dispatchers.IO) { runCatching { lookForHosted(c) } }
                     }
                     // The wait ends when the device goes to sleep or a game starts: its answer would only wake it again.
                     val page = roundsMayRun.untilAsleep { c.events(since, waitSeconds = 25) } ?: continue
@@ -452,7 +454,11 @@ class JvmSyncService(
                     // A device checking in is no event, so when each was last seen (and so which are
                     // online, and whose games show) is read again now and then: it stayed as it was
                     // when the list was last read, "seen 5:05" on devices online all along.
-                    if (clock() - listsReadAt > LISTS_EVERY_MS) runCatching { refreshLists() }
+                    if (clock() - listsReadAt > LISTS_EVERY_MS) {
+                        runCatching { refreshLists() }
+                        // Someone shown playing whose device went quiet (closed without saying) drops off.
+                        if (_playingNow.value.isNotEmpty()) scope.launch(Dispatchers.IO) { runCatching { lookForHosted(c) } }
+                    }
                     // The household's games didn't come up on the way in (the host didn't answer that
                     // once): asked again, so this device doesn't go without the other devices' games.
                     if (!householdHere.supported.value && clock() - householdTriedAt > HOUSEHOLD_RETRY_MS) scope.launch(Dispatchers.IO) { householdConnect() }
@@ -3003,6 +3009,9 @@ class JvmSyncService(
     private val _together = MutableStateFlow<List<Presence>>(emptyList())
     override val together: StateFlow<List<Presence>> = _together.asStateFlow()
 
+    private val _playingNow = MutableStateFlow<List<Presence>>(emptyList())
+    override val playingNow: StateFlow<List<Presence>> = _playingNow.asStateFlow()
+
     override suspend fun hostNext(query: SaveQuery, hosting: Hosting?) {
         val id = canonical(query).game.id
         // Where the others reach this device: its home network addresses, unless the caller knows better.
@@ -3027,6 +3036,8 @@ class JvmSyncService(
         val me = device?.deviceId
         val now = clock()
         val list = withTimeoutOrNull(PRESENCE_WAIT_MS) { c.presence() } ?: return _together.value
+        // Who is playing what on the others, for their faces on Home and in Fuse One.
+        _playingNow.value = list.filter { it.deviceId != me && it.state == Presence.PLAYING && now - it.at <= PLAYING_ASK_MS }.sortedByDescending { it.since }
         val open = list.filter { it.hosting != null && it.deviceId != me && it.state == Presence.PLAYING && now - it.at <= PLAYING_ASK_MS }
         val before = _together.value.map { it.deviceId to it.game }.toSet()
         _together.value = open

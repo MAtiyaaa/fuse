@@ -122,6 +122,7 @@ object SettingsIndex {
         SettingTopic("media", "Source order", "scraper providers order", group = "media.sources"),
         SettingTopic("inputs", "Controller setup", "controller gamepad buttons mapping remap test guided detect layout xbox nintendo playstation abxy swap confirm back"),
         SettingTopic("inputs", "Controller that moves around Fuse", "multiple controllers second player choose pad"),
+        SettingTopic("inputs", "Same hotkeys in every emulator", "hotkey hotkeys combo quit exit save state load state select start duckstation pcsx2 retroarch shortcut"),
         SettingTopic("inputs", "Stick deadzone", "analog drift joystick", group = "inputs.feel"),
         SettingTopic("inputs", "Repeat delay", "scroll speed held direction", group = "inputs.feel"),
         SettingTopic("inputs", "Vibration", "rumble haptics", group = "inputs.feel"),

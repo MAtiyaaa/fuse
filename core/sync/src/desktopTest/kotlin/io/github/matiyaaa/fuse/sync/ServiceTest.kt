@@ -659,6 +659,34 @@ class ServiceTest {
     }
 
     @Test
+    fun whatTheOthersPlayReachesEachDeviceAsItStartsAndGoesWhenItIsLeft(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (thor, _) = service("AYN Thor", Library(), platform = "ANDROID")
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        thor.connect("127.0.0.1:$port", code).getOrThrow()
+        deck.connect("127.0.0.1:$port", assertNotNull(pc.newPairingCode())).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        thor.switchTo(mo.id).getOrThrow()
+        val tq = SaveQuery(ct, "gba", File(root, "thor/ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        assertTrue(deck.playingNow.value.isEmpty())
+
+        // Played alone, not hosted: the Deck hears of it without asking.
+        val started = System.currentTimeMillis()
+        thor.playing(tq, started)
+        val seen = withTimeout(30_000) { deck.playingNow.first { it.isNotEmpty() } }.single()
+        assertEquals("AYN Thor", seen.deviceName)
+        assertEquals("Pokemon Ruby", seen.title)
+        assertEquals(mo.id, seen.profile)
+        assertTrue(thor.playingNow.value.none { it.deviceName == "AYN Thor" }, "a device never lists itself")
+
+        // Left: gone from the Deck's list too.
+        thor.afterExit(tq, started, System.currentTimeMillis())
+        withTimeout(30_000) { deck.playingNow.first { it.isEmpty() } }
+        pc.stop()
+    }
+
+    @Test
     fun savedTwiceBeforeEitherWentUpIsOneStepNotAFork(): Unit = runBlocking {
         val pcLib = Library()
         val (pc, _) = service("Gaming PC", pcLib)
