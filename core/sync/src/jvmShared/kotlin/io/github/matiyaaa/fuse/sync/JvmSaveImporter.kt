@@ -140,8 +140,12 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
                             if (!SaveSlotFormats.compatible(detected, spot.format)) continue
                             val stem = File(name).nameWithoutExtension.removeSuffix("_1")
                             val serial = q.serial?.filter { it.isLetterOrDigit() }
-                            // A PlayStation save names its game inside it ("BASLUS-00594MGS"), whatever its file is called.
-                            val inner = if (detected == Ps1Card.SINGLE) Ps1Card.saveIn(file.readBytes())?.name?.filter { it.isLetterOrDigit() } else null
+                            // A PlayStation save names its game inside it ("BASLUS-00594MGS", "BASLUS-21050GAME"), whatever its file is called.
+                            val inner = when (detected) {
+                                Ps1Card.SINGLE -> Ps1Card.saveIn(file.readBytes())?.name
+                                Ps2Card.SINGLE -> Ps2Card.saveIn(file.readBytes())?.name
+                                else -> null
+                            }?.filter { it.isLetterOrDigit() }
                             val strong = serial != null && (stem.filter { it.isLetterOrDigit() }.equals(serial, true) || inner?.contains(serial, ignoreCase = true) == true)
                             val exact = TitleMatch.same(stem, q.title) || TitleMatch.same(stem, SaveAdapters.stem(q.romPath))
                             val confidence = if (strong) SaveImportConfidence.TITLE_ID else if (exact) SaveImportConfidence.EXACT_NAME else SaveImportConfidence.MANUAL
@@ -248,6 +252,8 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
 
     private fun canonicalFile(spot: SaveSpot, format: String, name: String): String? = when {
         format == "n64.split" -> "save.${name.substringAfterLast('.').lowercase()}"
+        // Written onto whichever of PCSX2's cards has room: by its own name until then.
+        format == Ps2Card.SINGLE -> File(name).name
         spot.files.size == 1 -> spot.files.single().name
         else -> spot.files.firstOrNull { File(it.path).name.equals(File(name).name, true) }?.name
     }
@@ -260,6 +266,8 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
         // A PlayStation save on its own (MemcardRex, a PS3, an Action Replay): written onto the card.
         "mcs", "psv", "psx", "mcb", "mcx", "pda", "ps1" -> Ps1Card.SINGLE.takeIf { platform == "psx" }
         "ps2" -> "ps2.card".takeIf { platform == "ps2" }
+        // A PlayStation 2 save on its own (EMS and uLaunchELF, an Action Replay Max, a CodeBreaker, a SharkPort or X-Port): written onto the card.
+        "psu", "max", "cbs", "sps", "xps" -> Ps2Card.SINGLE.takeIf { platform == "ps2" }
         "eep", "mpk", "sra", "fla" -> "n64.split".takeIf { platform == "n64" }
         else -> null
     }
@@ -269,7 +277,9 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
         "psx.mcd" -> file.length() == 128L * 1024
         Ps1Card.SINGLE -> file.length() <= MAX_SINGLE && Ps1Card.saveIn(file.readBytes()) != null
         "retroarch.n64" -> file.length() == 0x48800L
-        "ps2.card" -> file.length() in setOf(8L * 1024 * 1024, 8L * 1024 * 1024 + 512 * 1024)
+        // PCSX2's 8,650,752 bytes for 8 MB (pages with their ECC), or a card without it.
+        "ps2.card" -> Ps2Card.isCardSize(file.length())
+        Ps2Card.SINGLE -> file.length() <= Ps2Card.MAX_SAVE && Ps2Card.saveIn(file.readBytes()) != null
         "n64.split" -> file.length() in setOf(512L, 2048L, 32768L, 131072L)
         else -> false
     }

@@ -542,7 +542,13 @@ class SyncDevice(
             require(f.isFile) { "The imported save is no longer available" }
             SaveFile(name, f.inputStream().use { store.put(it) }, f.length())
         }.sortedBy { it.path })
-        return inSlotFormat(slot, source)
+        val incoming = inSlotFormat(slot, source)
+        // One of PCSX2's cards imported whole: its other card stays as it is, never taken for gone.
+        if (format == Ps2Card.FILE_CARD && slot.format == Ps2Card.FILE_CARD) {
+            val others = slot.files.filter { lf -> incoming.files.none { it.path == lf.path } }
+            return incoming.copy(files = (incoming.files + others.map { SaveFile(it.path, it.file.inputStream().use { s -> store.put(s) }, it.file.length()) }).sortedBy { it.path })
+        }
+        return incoming
     }
 
     /**
@@ -1048,10 +1054,59 @@ class SyncDevice(
                 ?: throw IntegrityException("The memory card has no room for this save. Free some blocks on it in the emulator, then import it again")
             return SaveManifest(slot.format, listOf(SaveFile(name, store.put(card), card.size.toLong())))
         }
+        if (manifest.format == Ps2Card.SINGLE && slot.format in Ps2Card.CARDS) return onPs2Card(slot, manifest)
         val bytes = manifest.files.associate { it.path to store.fileOf(it.hash).readBytes() }
         val out = SaveConversions.convert(manifest.format, slot.format, bytes)
             ?: throw IntegrityException("This save couldn't be turned into the shape this emulator reads")
         return SaveManifest(slot.format, out.map { (name, b) -> SaveFile(name, store.put(b), b.size.toLong()) }.sortedBy { it.path })
+    }
+
+    /**
+     * PlayStation 2 saves on their own ([Ps2Card.SINGLE]) onto PCSX2's card in its first slot, or
+     * its second when the first has no room: written into a card file as the console writes one, in
+     * place of an older copy of the same save, or as a folder of a folder card. Every other file of
+     * the cards goes along as it is, so none is taken for gone (the cards as they were are kept
+     * first, as with any import). A card PCSX2 made but never formatted is formatted for it.
+     */
+    private fun onPs2Card(slot: LocalSlot, manifest: SaveManifest): SaveManifest {
+        val now = System.currentTimeMillis()
+        val saves = manifest.files.map { f ->
+            Ps2Card.saveIn(store.fileOf(f.hash).readBytes(), now) ?: throw IntegrityException("${f.path} isn't a PlayStation 2 save Fuse can read")
+        }
+        val here = slot.files.associate { it.path to it.file }
+        fun kept(path: String) = here.getValue(path).let { SaveFile(path, it.inputStream().use { s -> store.put(s) }, it.length()) }
+        for (card in (slot.targets.keys + slot.mounts.keys).sorted().ifEmpty { listOf(SaveConversions.PS2_CARD) }) {
+            val placed: List<SaveFile> = if (card in slot.mounts) {
+                // A folder card: a folder for each save, of its files, in place of one of the same name.
+                val replaced = saves.map { "$card/${it.name}/" }
+                val staying = here.keys.filter { p -> p.startsWith("$card/") && replaced.none { p.startsWith(it) } }
+                val folders = staying.filter { it.count { c -> c == '/' } >= 2 && !it.substringAfterLast('/').startsWith("_pcsx2_") }
+                    .groupBy { it.split('/')[1] }
+                val used = folders.values.sumOf { files -> (files.size + 3) / 2 + files.sumOf { ((here.getValue(it).length() + 1023) / 1024).toInt() } }
+                val dirs = folders.size + saves.size
+                if (used + saves.sumOf { it.clusters } + (dirs + 3) / 2 > PS2_FOLDER_CLUSTERS) continue
+                staying.map(::kept) + saves.flatMap { s -> s.files.map { (e, b) -> SaveFile("$card/${s.name}/${e.name}", store.put(b), b.size.toLong()) } }
+            } else {
+                val file = slot.target(card)
+                val bytes = file?.takeIf { it.isFile }?.let { if (Ps2Card.isCardSize(it.length())) it.readBytes() else null }
+                val base = when {
+                    file == null -> continue
+                    !file.exists() -> Ps2Card.blank(now)
+                    bytes == null -> continue
+                    Ps2Card.isUnformatted(bytes) -> Ps2Card.blank(now)
+                    Ps2Card.isCard(bytes) -> bytes
+                    // Something Fuse can't read as a card is left as it is.
+                    else -> continue
+                }
+                var out = base
+                for (s in saves) out = Ps2Card.write(out, s) ?: break
+                if (saves.any { Ps2Card.read(out, it.name) == null }) continue
+                listOf(SaveFile(card, store.put(out), out.size.toLong()))
+            }
+            val others = here.keys.filter { p -> placed.none { it.path == p } && (card !in slot.mounts || !p.startsWith("$card/")) }.map(::kept)
+            return SaveManifest(slot.format, (placed + others).distinctBy { it.path }.sortedBy { it.path })
+        }
+        throw IntegrityException("PCSX2's memory cards have no room for this save. Free some space on one (PCSX2, Settings, Memory Cards), then import it again")
     }
 
     /**
@@ -1363,3 +1418,6 @@ private const val MODIFIED_FILES = 5_000
 
 /** How long "no such folder" is believed before storage is searched again. */
 private const val EMPTY_FOR_MS = 10 * 60_000L
+
+/** The clusters of 1 KB an 8 MB folder card holds, as PCSX2 counts what fits on one. */
+private const val PS2_FOLDER_CLUSTERS = 8135

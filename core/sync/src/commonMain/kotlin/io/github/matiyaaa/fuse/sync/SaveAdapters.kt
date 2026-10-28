@@ -987,7 +987,8 @@ object SaveSlotFormats {
 object SaveConversions {
     private val pairs = setOf("nds.dsv" to "sram", "sram" to "nds.dsv", "n64.split" to "retroarch.n64", "retroarch.n64" to "n64.split")
 
-    fun canConvert(from: String, to: String): Boolean = (from to to) in pairs || (from == Ps1Card.SINGLE && to in Ps1Card.CARDS)
+    fun canConvert(from: String, to: String): Boolean =
+        (from to to) in pairs || (from == Ps1Card.SINGLE && to in Ps1Card.CARDS) || (from == Ps2Card.SINGLE && to in Ps2Card.CARDS)
 
     /** [files] (name to bytes, names as the save names them) in [to]'s shape; null when it can't be done. */
     fun convert(from: String, to: String, files: Map<String, ByteArray>): Map<String, ByteArray>? = when (from to to) {
@@ -998,8 +999,25 @@ object SaveConversions {
         "retroarch.n64" to "n64.split" -> files["save.srm"]?.let(::splitN64)
         // PlayStation saves on their own, on a card of their own (a card already there is merged
         // with them where the save goes into place: SyncDevice).
-        else -> if (from == Ps1Card.SINGLE && to in Ps1Card.CARDS) onCard(Ps1Card.blank(), files)?.let { mapOf(CARD to it) } else null
+        else -> when {
+            from == Ps1Card.SINGLE && to in Ps1Card.CARDS -> onCard(Ps1Card.blank(), files)?.let { mapOf(CARD to it) }
+            // PlayStation 2 saves on their own, on a card of their own (or a folder card's folders).
+            from == Ps2Card.SINGLE && to in Ps2Card.CARDS -> {
+                val saves = files.entries.sortedBy { it.key }.map { Ps2Card.saveIn(it.value) ?: return null }
+                if (to == Ps2Card.FOLDER_CARD) {
+                    saves.flatMap { s -> s.files.map { (e, b) -> "$PS2_CARD/${s.name}/${e.name}" to b } }.toMap()
+                } else {
+                    var card = Ps2Card.blank()
+                    for (s in saves) card = Ps2Card.write(card, s) ?: return null
+                    mapOf(PS2_CARD to card)
+                }
+            }
+            else -> null
+        }
     }
+
+    /** The name the card in PCSX2's first slot goes by in a save. */
+    const val PS2_CARD = "Mcd001.ps2"
 
     /** The name a card made from saves on their own goes by. */
     const val CARD = "card1.mcd"
