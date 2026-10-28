@@ -179,6 +179,24 @@ internal fun AuditDriver.reachScreens() {
         shoot("another device's game: its options")
     }
 
+    scenario("reach", "library all") {
+        // The Library's All page with RomM and two other devices: the places, then every shelf.
+        useLibrary { it.copy(romm = it.romm.copy(enabled = true)) }
+        show(withReach(libraryStore))
+        libraryTab()
+        waitFor("Recently played")
+        settle(1_400)
+        shoot("All, as it opens", 1_200)
+        for (n in 1..5) {
+            tap(PadButton.DPAD_DOWN)
+            shoot("All, $n ${if (n == 1) "row" else "rows"} down", 1_200)
+        }
+        // Left from a shelf's first game reaches its See all, at the far end.
+        tap(PadButton.DPAD_UP, 4)
+        tap(PadButton.DPAD_LEFT)
+        shoot("a shelf's See all chosen", 1_400)
+    }
+
     scenario("reach", "game info") {
         useLibrary { it.copy(romm = it.romm.copy(enabled = true)) }
         show(withReach(libraryStore))
