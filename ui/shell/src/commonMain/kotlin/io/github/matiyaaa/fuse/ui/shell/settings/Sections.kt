@@ -544,6 +544,10 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 "spotlight", "Spotlight on systems", FuseIcons.Star, p.systemSpotlight,
                 "A system's page names a game of it to try today, with why. From your library alone, on this device",
             ) { v -> app.store.updatePrefs { it.copy(systemSpotlight = v) } })
+            add(toggleRow(
+                "keepplace", "Continue where you left off", FuseIcons.History, p.keepPlace,
+                "A game's page offers Continue from the moment you left it, on any device. DuckStation, PCSX2 and RetroArch keep that moment as you leave",
+            ) { v -> app.store.updatePrefs { it.copy(keepPlace = v) } })
         }
         labelled("Collections") {
             add(toggleRow("collections", "Collections", FuseIcons.LibraryBig, p.collectionsEnabled, "Your own collections and the series Fuse finds. Off hides them everywhere; nothing is deleted") { v ->

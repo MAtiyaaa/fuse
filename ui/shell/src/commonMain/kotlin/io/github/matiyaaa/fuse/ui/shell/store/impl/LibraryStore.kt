@@ -834,14 +834,14 @@ internal class DefaultLibraryOps(
         }
     }
 
-    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, together: io.github.matiyaaa.fuse.ui.shell.store.Together?, via: io.github.matiyaaa.fuse.ui.shell.store.PlayVia, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome {
+    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, together: io.github.matiyaaa.fuse.ui.shell.store.Together?, via: io.github.matiyaaa.fuse.ui.shell.store.PlayVia, resume: Boolean, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome {
         // A game the person plays with a port starts as the port's own game (its saves and time there);
         // on Android, as the port's app attached to it (the time the game's own). From its own system,
         // when it shows in Ports or Android too, it starts with its emulator.
         val plain = emulator == null && discPath == null && together == null && via != io.github.matiyaaa.fuse.ui.shell.store.PlayVia.EMULATOR
         val target = if (plain) portPlay?.invoke(id)?.first ?: id else id
         val asApp = if (plain && target == id) appFor(id, via, null, lastOf = { lastPlay(data.playSessions.sessions(id).first()) })?.first else null
-        return launchGame(target, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage, asApp).also { outcome ->
+        return launchGame(target, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage, asApp, resume).also { outcome ->
             if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
         }
     }
@@ -867,7 +867,7 @@ internal class DefaultLibraryOps(
         class Stopped(val outcome: LaunchOutcome) : PlayResolution
     }
 
-    private suspend fun resolveForPlay(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, asApp: String? = null): PlayResolution {
+    private suspend fun resolveForPlay(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, asApp: String? = null, resume: io.github.matiyaaa.fuse.launch.Resume? = null): PlayResolution {
         fun stop(problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) = PlayResolution.Stopped(LaunchOutcome.Problem(problem))
         var stored = data.games.get(id) ?: return stop(LaunchProblems.gone())
         // Played as the port's app ([asApp]): started as the app, which keeps the game's files itself,
@@ -927,6 +927,7 @@ internal class DefaultLibraryOps(
             display = display,
             displayId = displayId,
             homeDir = ctx.services.emulators.homeDir,
+            resume = resume,
         )
         if (IdFiles.needsContent(game.location)) {
             choice = choice.copy(injectedText = ctx.services.fs.readText(game.location.launchPath, IdFiles.MAX_BYTES))
@@ -984,6 +985,7 @@ internal class DefaultLibraryOps(
         together: io.github.matiyaaa.fuse.ui.shell.store.Together? = null,
         onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit = {},
         asApp: String? = null,
+        resume: Boolean = false,
     ): LaunchOutcome {
         val ready = when (val r = resolveForPlay(id, emulator, discPath, display, asApp)) {
             is PlayResolution.Stopped -> return r.outcome
@@ -1058,6 +1060,14 @@ internal class DefaultLibraryOps(
                         is io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go -> note = note ?: gate.note
                     }
                 }
+                // Continue, now that the newest saves and states are in place: the emulator asked to
+                // carry on from its resume state, where it has one. Never while playing together.
+                if (together == null) keepPlaceFor(game, installedEmulator, usedCore, resolved.adapter?.resumeWay, resume)?.let { r ->
+                    when (val again = resolveForPlay(id, emulator, discPath, display, asApp, resume = r)) {
+                        is PlayResolution.Ready -> resolved = again.plan.resolved
+                        is PlayResolution.Stopped -> Unit
+                    }
+                }
                 onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING)
                 // Hosting: the household hears of it with this device's presence while it is played.
                 val hosting = if (together == io.github.matiyaaa.fuse.ui.shell.store.Together.Host) togetherStore.hosting(installedEmulator) else null
@@ -1084,6 +1094,69 @@ internal class DefaultLibraryOps(
                 }
             }
         }
+    }
+
+    /**
+     * How [game] starts in [emulator] as far as where it was left goes, while Continue is on
+     * ([way] is how the emulator does it): carrying on from its resume state when [resume] asks and
+     * there is one; for RetroArch, which keeps it through its settings, a settings file laid over the
+     * person's for the run that keeps the state as the game is left and loads it only when asked.
+     * Null starts it exactly as before. PCSX2 is asked once to save a state on shutdown, recorded so
+     * turning Continue off puts it back.
+     */
+    private suspend fun keepPlaceFor(game: io.github.matiyaaa.fuse.model.Game, emulator: InstalledEmulator, core: String?, way: io.github.matiyaaa.fuse.launch.ResumeWay?, resume: Boolean): io.github.matiyaaa.fuse.launch.Resume? {
+        val pcsx2 = io.github.matiyaaa.fuse.sync.SaveAdapters.baseId(emulator.id.value) == "pcsx2"
+        if (!ctx.settings.value.library.keepPlace) {
+            // Continue was turned off: what it changed in PCSX2 goes back as it was, before it starts.
+            if (pcsx2) runCatching { nativeSettings.restoreKeepPlace(emulator.id) }
+            return null
+        }
+        if (way == null) return null
+        if (pcsx2) keepPcsx2Place(emulator)
+        val point = if (resume) resumePointOf(game, emulator, core) else null
+        return when (way) {
+            io.github.matiyaaa.fuse.launch.ResumeWay.AUTO_LOAD ->
+                retroArchResumeConfig(load = point != null)?.let { cfg -> io.github.matiyaaa.fuse.launch.Resume(point?.path.orEmpty(), cfg) }
+            else -> point?.let { io.github.matiyaaa.fuse.launch.Resume(it.path) }
+        }
+    }
+
+    /** RetroArch's settings for one run of Continue: the automatic state kept as the game is left, and loaded when [load]. */
+    private fun retroArchResumeConfig(load: Boolean): String? = ctx.services.writeCacheFile(
+        "resume/retroarch-${if (load) "continue" else "fresh"}.cfg",
+        "savestate_auto_save = \"true\"\nsavestate_auto_load = \"$load\"\n",
+    )
+
+    /** PCSX2 keeps no resume state unless asked: Save State On Shutdown, turned on once and recorded as Continue's. */
+    private suspend fun keepPcsx2Place(emulator: InstalledEmulator) {
+        val value = io.github.matiyaaa.fuse.launch.online.OnlineValue(null, "EmuCore", "SaveStateOnShutdown", "true")
+        val now = runCatching { nativeSettings.current(emulator.id, listOf(value)) }.getOrNull() ?: return
+        if (now[value]?.equals("true", ignoreCase = true) == true) return
+        runCatching { nativeSettings.setKeepPlace(emulator.id, listOf(value)) }
+    }
+
+    /** [game]'s resume state on this device, as [emulator]'s saves lay it out. */
+    private suspend fun resumePointOf(game: io.github.matiyaaa.fuse.model.Game, emulator: InstalledEmulator, core: String?): io.github.matiyaaa.fuse.sync.ResumePoint? = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val adapter = io.github.matiyaaa.fuse.sync.SaveAdapters.forEmulator(emulator.id.value) ?: return@withContext null
+        val env = sync?.service?.saveEnvironment ?: return@withContext null
+        val query = plainSaveQuery(game, emulator, coreFor(emulator, game, core))
+        runCatching { io.github.matiyaaa.fuse.sync.ResumePoints.find(adapter.locate(query, env), env) }.getOrNull()
+    }
+
+    override suspend fun resumePoint(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.ResumeInfo? {
+        if (!ctx.settings.value.library.keepPlace) return null
+        val game = data.games.get(id) ?: return null
+        val (resolved, core) = startsWith(game)
+        val emulator = resolved.installed ?: return null
+        if (resolved.adapter?.resumeWay == null) return null
+        val point = resumePointOf(game, emulator, core) ?: return null
+        // Fuse One says which device made the newest state, and when: the moment the game was left.
+        val newest = sync?.service?.let { s ->
+            saveQuery(id, game, emulator, coreFor(emulator, game, core))?.let { q ->
+                runCatching { s.versions(q, io.github.matiyaaa.fuse.sync.SaveKind.STATE) }.getOrNull()?.firstOrNull { it.current }
+            }
+        }
+        return io.github.matiyaaa.fuse.ui.shell.store.ResumeInfo(emulator.name, newest?.at ?: point.modifiedAt, newest?.device)
     }
 
     /** What Fuse Sync needs to find [id]'s saves, with the emulator it would start with now; null when none would. */

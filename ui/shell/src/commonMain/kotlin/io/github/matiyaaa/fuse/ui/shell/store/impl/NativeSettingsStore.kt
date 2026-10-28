@@ -700,15 +700,27 @@ internal class NativeSettingsStore(
      * [Target.keys]), recorded apart from the person's other setting changes (as [TOGETHER]), so
      * [restoreTogether] puts back exactly these.
      */
-    suspend fun setTogether(emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Boolean {
+    suspend fun setTogether(emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Boolean = setRecorded(TOGETHER, emulator, values)
+
+    /**
+     * Gives [emulator]'s files for every game each of [values], recorded as Continue's own
+     * ([KEEP_PLACE]): turning Continue off puts back exactly these ([restoreKeepPlace]), and a
+     * value the person changed in the emulator since stays theirs.
+     */
+    suspend fun setKeepPlace(emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Boolean = setRecorded(KEEP_PLACE, emulator, values)
+
+    /** Puts back what Continue changed in [emulator]'s settings. */
+    suspend fun restoreKeepPlace(emulator: EmulatorId): Boolean = restoreRecorded(KEEP_PLACE, emulator)
+
+    private suspend fun setRecorded(kind: String, emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Boolean {
         val t = target(null, emulator).first ?: return false
         for ((file, these) in values.groupBy { it.file }) {
             val path = file?.let { t.globals[it] } ?: t.globalPath
             val text = t.text(fs.readText(path, MAX_TEXT), path)
-            var records = data.owned.get(TOGETHER, path)
+            var records = data.owned.get(kind, path)
             for (v in these) for ((section, key, value) in t.keys(v.section, v.key, v.value, false, null)) records = SettingsEdit.change(text, records, section, key, value)
             if (!t.writer.write(path, text.toString())) return false
-            data.owned.set(TOGETHER, path, records)
+            data.owned.set(kind, path, records)
         }
         return true
     }
@@ -720,17 +732,19 @@ internal class NativeSettingsStore(
     }
 
     /** Puts back what Play Together changed in [emulator]'s settings; a value changed in the emulator since stays. */
-    suspend fun restoreTogether(emulator: EmulatorId): Boolean {
+    suspend fun restoreTogether(emulator: EmulatorId): Boolean = restoreRecorded(TOGETHER, emulator)
+
+    private suspend fun restoreRecorded(kind: String, emulator: EmulatorId): Boolean {
         val t = target(null, emulator).first ?: return false
         var any = false
         for (path in t.paths) {
-            val records = data.owned.get(TOGETHER, path)
+            val records = data.owned.get(kind, path)
             if (records.isEmpty()) continue
-            val text = fs.readText(path, MAX_TEXT) ?: run { data.owned.set(TOGETHER, path, emptySet()); continue }
+            val text = fs.readText(path, MAX_TEXT) ?: run { data.owned.set(kind, path, emptySet()); continue }
             val file = t.text(text, path)
             SettingsEdit.restore(file, records)
             if (!t.writer.write(path, file.toString())) return false
-            data.owned.set(TOGETHER, path, emptySet())
+            data.owned.set(kind, path, emptySet())
             any = true
         }
         return any
@@ -833,6 +847,9 @@ internal class NativeSettingsStore(
 
         /** The same, for the keys Play Together changed, put back on their own. */
         const val TOGETHER = "emulator.together"
+
+        /** The same, for the keys Continue changed (so its emulators keep a resume state), put back on their own. */
+        const val KEEP_PLACE = "emulator.keepplace"
 
         /** The emulator a system's games are changed in when they don't start in one Fuse knows. */
         val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin", "ps3" to "rpcs3", "switch" to "eden", "3ds" to "azahar", "new-nintendo-3ds" to "azahar", "wiiu" to "cemu", "ps4" to "shadps4", "xbox360" to "xenia", "psvita" to "vita3k", "dc" to "flycast", "model3" to "supermodel")

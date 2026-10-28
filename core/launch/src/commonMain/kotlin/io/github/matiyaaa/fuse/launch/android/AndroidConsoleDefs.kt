@@ -97,6 +97,8 @@ internal object AndroidConsoleDefs {
             // with only a folder URI DuckStation reports the file missing unless it was granted
             // exactly that folder. cue/bin sets and .m3u playlists still use its folder grant.
             modes = listOf(anyFile(intent(extras = listOf(bool("resumeState", false), str("bootPath", DOC)), task = true))),
+            // ES-DE always passes it false; true loads the game's own resume state, as Continue asks.
+            resumeFlag = "resumeState",
             source = esde("DUCKSTATION"), confidence = VERIFIED_ESDE,
             homepage = "https://www.duckstation.org/",
             limitations = listOf(

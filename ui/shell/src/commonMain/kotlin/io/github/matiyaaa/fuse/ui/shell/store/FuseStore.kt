@@ -450,6 +450,12 @@ data class GameQuery(
 enum class GameSet { LIBRARY, MISSING, HIDDEN, REMOVED }
 
 /** One file of a game's saves on this device, as its emulator keeps it. */
+/**
+ * Where a game was left ([LibraryOps.resumePoint]): the emulator that carries on from it, when it
+ * was made, and the device it was made on when Fuse One says (null when only this device knows it).
+ */
+data class ResumeInfo(val emulator: String, val at: Long?, val device: String? = null)
+
 data class LocalSave(
     val name: String,
     val path: String,
@@ -489,6 +495,13 @@ interface LibraryOps {
 
     /** [id]'s saves on this device, with or without any save sync. */
     suspend fun localSaves(id: GameId): LocalSaves = LocalSaves(null, emptyList())
+
+    /**
+     * Where [id] was left, when the emulator it starts in here can carry on from there (Continue):
+     * its resume state on this device (Fuse One puts the newest in place as the game starts), when
+     * it was made and on which device. Null when there is none, or Continue is off.
+     */
+    suspend fun resumePoint(id: GameId): ResumeInfo? = null
 
     /** [old]'s save copied to where [id]'s emulator reads it now, the one there kept aside first; where it was kept. */
     suspend fun useOldSave(id: GameId, old: io.github.matiyaaa.fuse.sync.OldSave): Result<String?> = Result.failure(UnsupportedOperationException())
@@ -549,6 +562,8 @@ interface LibraryOps {
         together: Together? = null,
         /** With its port, or its emulator, as the list it was started from says ([PlayVia]). */
         via: PlayVia = PlayVia.DEFAULT,
+        /** Carry on from where it was left ([resumePoint]), where its emulator can; otherwise it starts as always. */
+        resume: Boolean = false,
         /** Told as the launch moves on: checking the save first (when Fuse Sync or Syncthing does), then starting. */
         onStage: (LaunchStage) -> Unit = {},
     ): LaunchOutcome

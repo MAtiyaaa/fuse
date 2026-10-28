@@ -18,7 +18,8 @@ enum class ShelfStyle { WIDE, ICON, SYSTEM, APP, WIDGETS, COLLECTION }
 sealed interface ShelfItem {
     val key: String
 
-    data class Game(val card: GameCard, val caption: String? = null) : ShelfItem {
+    /** [continues]: on Continue Playing, where confirming it carries on from where it was left. */
+    data class Game(val card: GameCard, val caption: String? = null, val continues: Boolean = false) : ShelfItem {
         override val key = "g${card.id.value}"
     }
 
@@ -132,5 +133,5 @@ fun buildShelves(widgets: List<HomeWidget>, feed: HomeFeed, achievementsOn: Bool
 
 private fun gameShelf(w: HomeWidget, games: List<GameCard>, style: ShelfStyle, caption: ((GameCard) -> String?)? = null): Shelf? =
     games.takeIf { it.isNotEmpty() }?.let { list ->
-        Shelf(w.id, w.kind.title(), style, list.map { ShelfItem.Game(it, caption?.invoke(it)) }, listOf(w))
+        Shelf(w.id, w.kind.title(), style, list.map { ShelfItem.Game(it, caption?.invoke(it), continues = w.kind == WidgetKind.CONTINUE_PLAYING) }, listOf(w))
     }

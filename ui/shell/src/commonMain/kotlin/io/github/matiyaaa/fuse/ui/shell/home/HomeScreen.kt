@@ -216,7 +216,7 @@ fun FlowHome(app: AppState) {
 
     fun activate(i: ShelfItem) {
         when (i) {
-            is ShelfItem.Game -> app.activateGame(i.card)
+            is ShelfItem.Game -> app.activateGame(i.card, resume = i.continues)
             is ShelfItem.System -> app.go(Route.PlatformGames(i.card.platform.id))
             is ShelfItem.App -> app.openApp(i.card)
             is ShelfItem.Collection -> app.go(Route.CollectionGames(i.collection.id, i.collection.name))

@@ -237,6 +237,10 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
         value = if (notHere || !reachState.supported) null else runCatching { app.store.reach.extras(game.id) }.getOrNull()
     }
     val shownCopies = copies?.copies.orEmpty().takeIf { list -> reachState.supported || list.any { it.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.DEVICE } }.orEmpty()
+    // Where it was left, when its emulator here can carry on from there: looked at again after each play.
+    val resumeAt by produceState<io.github.matiyaaa.fuse.ui.shell.store.ResumeInfo?>(null, game.id, game.play.lastPlayedAt, d.emulator.selected?.id) {
+        value = if (notHere || card.isApp || d.unavailable != null || d.missing) null else runCatching { app.store.library.resumePoint(game.id) }.getOrNull()
+    }
 
     // Play first, then what it starts in (the port, when Play starts one from here), then the quick
     // actions, then everything else.
@@ -268,7 +272,10 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
     ) else listOfNotNull(
         // A game Fuse can't reach right now keeps its Play button (pressing it explains why), drawn
         // as not ready, so the page never promises a start it knows won't happen.
-        DetailAction("play", "Play", if (d.unavailable != null) FuseIcons.HardDrive else FuseIcons.Play, "Play", primary = d.unavailable == null && !d.missing) { app.play(card) },
+        // Left somewhere it can carry on from: Continue leads, and starting over is a press beside it.
+        resumeAt?.let { DetailAction("continue", "Continue", FuseIcons.Play, "Continue", primary = true) { app.play(card, resume = true) } },
+        if (resumeAt != null) DetailAction("play", "Start fresh", FuseIcons.RotateCcw, "Start fresh") { app.play(card) }
+        else DetailAction("play", "Play", if (d.unavailable != null) FuseIcons.HardDrive else FuseIcons.Play, "Play", primary = d.unavailable == null && !d.missing) { app.play(card) },
         DetailAction("emu", d.emulator.port ?: d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.port == null && d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
             app.emulatorPicker(card)
         },
@@ -723,7 +730,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                             actions.indices.forEach { button(it, Modifier.align(Alignment.CenterVertically)) }
                         }
                     }
-                    LaunchNote(d, Modifier.reveal(reveal, 3), issues.firstOrNull()?.problem?.title)
+                    LaunchNote(d, Modifier.reveal(reveal, 3), issues.firstOrNull()?.problem?.title, resumeAt)
                 }
                 // Beside the game's logo the cover only says the name a second time; it stands in for a missing logo.
                 layout.cover?.takeIf { d.art.logo == null || !app.store.prefs.value.showLogo }?.let { cover ->
@@ -1369,8 +1376,20 @@ internal fun PictureViewer(shots: List<Any?>, start: Int, onIndex: (Int) -> Unit
  * no emulator yet (a warning), or an emulator that opens a folder or only its own app.
  */
 @Composable
-private fun LaunchNote(d: GameDetail, modifier: Modifier, attention: String? = null) {
+private fun LaunchNote(d: GameDetail, modifier: Modifier, attention: String? = null, resume: io.github.matiyaaa.fuse.ui.shell.store.ResumeInfo? = null) {
     val c = Fuse.colors
+    // Where it was left, in the accent: the moment Continue carries on from, and on which device.
+    if (resume != null && attention == null) {
+        val left = listOfNotNull(
+            resume.at?.let { "Left ${io.github.matiyaaa.fuse.ui.shell.components.agoText(it)}" } ?: "Left mid-game",
+            resume.device?.let { "on $it" },
+        ).joinToString(" ")
+        Row(modifier.padding(top = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            FuseIcon(FuseIcons.History, size = Size.iconS, tint = c.accent)
+            FText("$left. Continue carries on from there in ${resume.emulator}.", Fuse.type.caption, color = c.text, maxLines = 2)
+        }
+        return
+    }
     if (attention != null && d.unavailable == null) {
         Row(modifier.padding(top = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
             FuseIcon(FuseIcons.BadgeAlert, size = Size.iconS, tint = c.warning)

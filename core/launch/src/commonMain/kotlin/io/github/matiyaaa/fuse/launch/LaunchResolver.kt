@@ -39,6 +39,8 @@ data class ScopedLaunchChoice(
     val corePath: String? = null,
     /** Linux: home directory for `~` expansion. */
     val homeDir: String? = null,
+    /** Start from the save state the game was left in, where its emulator can. */
+    val resume: Resume? = null,
 )
 
 /** A disc playlist Fuse should write to its cache. Entries are absolute paths, one per line. */
@@ -305,6 +307,8 @@ class LaunchResolver(
                 generatedPlaylistPath = (t.target as? LaunchTarget.Playlist)?.takeIf { it.generated }?.path,
                 injectedText = choice.injectedText,
                 homeDir = choice.homeDir,
+                // Only for the emulator that keeps the state: another one starts the game as always.
+                resume = choice.resume?.takeIf { c.adapter.resumeWay != null },
             )
             val request = LaunchRequest(game, c.installed, t.target, options)
             val adapter = c.adapter

@@ -66,7 +66,16 @@ data class LinuxEmulatorDef(
     val packageInstall: PackageInstallSpec? = null,
     /** How it installs a console's system software (a `.pup`) from its command line, when it can. */
     val firmwareInstall: PackageInstallSpec? = null,
+    /** How it starts a game from a save state, when its command line can. */
+    val resume: ResumeSpec? = null,
 )
+
+/**
+ * Starting a game from a save state on the command line: [args] go just before the game's file,
+ * with `{STATE}` for the state's path and `{RESUMECFG}` for a settings file Fuse wrote. [source]
+ * names where the flags are documented.
+ */
+data class ResumeSpec(val way: io.github.matiyaaa.fuse.launch.ResumeWay, val args: List<String>, val source: String)
 
 /**
  * A package install from the command line: [args] after the program, with `{FILE}` for the package

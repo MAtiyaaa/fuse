@@ -43,6 +43,7 @@ class AndroidIntentAdapter(
     override val idFileExtensions: Set<String> =
         def.modes.filter { it.idFile }.flatMap { it.extensions.orEmpty() }.toSet()
     override val opensAppOnly: Boolean get() = def.openAppOnlyReason != null
+    override val resumeWay: io.github.matiyaaa.fuse.launch.ResumeWay? get() = def.resumeFlag?.let { io.github.matiyaaa.fuse.launch.ResumeWay.OWN_RESUME }
 
     override fun accepts(target: LaunchTarget, platform: PlatformId): Boolean =
         opensAppOnly || def.modes.select(target, platform) != null
@@ -104,7 +105,9 @@ class AndroidIntentAdapter(
         )
 
         val built = try {
-            buildIntent(spec, values)
+            // A game resumed where it was left: the emulator's own flag for it, turned on.
+            val resumeFlag = def.resumeFlag?.takeIf { request.options.resume != null }
+            buildIntent(if (resumeFlag == null) spec else spec.copy(extras = spec.extras.map { e -> if (e is IntentExtra.Flag && e.key == resumeFlag) e.copy(value = true) else e }), values)
         } catch (e: MissingToken) {
             return unsupported(missingMessage(e.token, target))
         } catch (e: NotANumber) {

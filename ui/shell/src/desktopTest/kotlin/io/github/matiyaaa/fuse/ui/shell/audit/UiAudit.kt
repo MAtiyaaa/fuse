@@ -261,6 +261,12 @@ class UiAudit {
 
     @Test fun rommD() = audit(AuditSize.D) { rommScreens() }
 
+    @Test fun fuse046M() = audit(AuditSize.M) { fuse046Screens() }
+
+    @Test fun fuse046H() = audit(AuditSize.H) { fuse046Screens() }
+
+    @Test fun fuse046V() = audit(AuditSize.V) { fuse046Screens() }
+
     @Test fun reachM() = audit(AuditSize.M) { reachScreens() }
 
     @Test fun reachV() = audit(AuditSize.V) { reachScreens() }

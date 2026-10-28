@@ -569,6 +569,12 @@ data class LibraryPreferences(
     val autoSeries: Boolean = true,
     /** A system's page names a game from it to try today (its spotlight). */
     val systemSpotlight: Boolean = true,
+    /**
+     * Continue where you left off: the emulators that can are asked to keep a resume state as a
+     * game is left (PCSX2's Save State On Shutdown, RetroArch's automatic state, which DuckStation
+     * keeps by itself), and a game's page offers Continue from it beside Start Fresh.
+     */
+    val keepPlace: Boolean = true,
     /** Series the user hid or kept as their own collection, lower case, so Fuse doesn't make them again. */
     val hiddenSeries: List<String> = emptyList(),
     /** Brand colours from the system art pack (opaque ARGB), by platform id. */

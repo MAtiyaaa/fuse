@@ -32,8 +32,8 @@ import kotlinx.coroutines.launch
 internal const val SECOND_SCREEN_VEIL_MS = 900L
 
 /** What confirming a game tile does: play it, or open its page when the user chose that. */
-fun AppState.activateGame(card: GameCard) {
-    if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id, card.via)) else play(card)
+fun AppState.activateGame(card: GameCard, resume: Boolean = false) {
+    if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id, card.via)) else play(card, resume = resume)
 }
 
 /** The hint for confirming on a game tile, following [activateGame]. */
@@ -43,12 +43,12 @@ val AppState.gameConfirmLabel: String get() = if (store.prefs.value.openGamePage
  * Starts a game. The launch veil appears immediately (so pressing Play always responds), the store
  * resolves the emulator and fires the launch, and anything other than a clean start is explained.
  */
-fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null, discPath: String? = null) {
+fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null, discPath: String? = null, resume: Boolean = false) {
     if (launching != null) return
     // Moonlight as its emulator: the game plays on a computer at home and streams here.
     if (emulator == null && discPath == null) streamPickFor(card)?.let { streamInstead(card, it); return }
     // On two screens this may ask which one first; the veil only covers the launch itself.
-    playOnChosenScreen(card) { display -> launch(card, emulator, discPath, display) }
+    playOnChosenScreen(card) { display -> launch(card, emulator, discPath, display, resume = resume) }
 }
 
 /** Starts [card] to be played with others: hosting it here, or joining someone's game ([together]). */
@@ -58,7 +58,7 @@ internal fun AppState.playTogether(card: GameCard, together: io.github.matiyaaa.
     launch(card, null, null, null, together = together)
 }
 
-private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?, skipSaveCheck: Boolean = false, playAnyway: Boolean = false, together: io.github.matiyaaa.fuse.ui.shell.store.Together? = null) {
+private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?, skipSaveCheck: Boolean = false, playAnyway: Boolean = false, together: io.github.matiyaaa.fuse.ui.shell.store.Together? = null, resume: Boolean = false) {
     if (launching != null) return
     // The veil shows the room the game was lit by, with its own cover beside the title.
     val system = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }
@@ -85,10 +85,11 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
         }
     }
     job = scope.launch {
-        val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway, together, card.via) { stage ->
+        val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway, together, card.via, resume) { stage ->
             launching = when (stage) {
                 io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE -> launching?.copy(status = "Checking your save", cancel = callOff)
-                io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING -> launching?.copy(status = null, cancel = null)
+                // Carrying on: said while the emulator opens, so the person knows where it will land.
+                io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING -> launching?.copy(status = if (resume) "Carrying on where you left off" else null, cancel = null)
             }
         }
         when (outcome) {
@@ -108,35 +109,35 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
             is LaunchOutcome.Problem -> {
                 // A package that isn't installed yet installs now, then plays: no detour through its page.
                 if (!skipSaveCheck && outcome.problem.actions.any { it is io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.InstallContent }) {
-                    installThenPlay(card) { launching = null; launch(card, emulator, discPath, display, together = together) }
+                    installThenPlay(card) { launching = null; launch(card, emulator, discPath, display, together = together, resume = resume) }
                     return@launch
                 }
                 launching = null
-                showProblem(outcome.problem, card, retry = { launch(card, emulator, discPath, display, together = together) })
+                showProblem(outcome.problem, card, retry = { launch(card, emulator, discPath, display, together = together, resume = resume) })
             }
             // Both sides played since they last synced: the person picks, then the game starts.
             is LaunchOutcome.SaveConflict -> {
                 launching = null
-                saveConflict = io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictSpec(outcome.conflict) { launch(card, emulator, discPath, display, skipSaveCheck = true, together = together) }
+                saveConflict = io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictSpec(outcome.conflict) { launch(card, emulator, discPath, display, skipSaveCheck = true, together = together, resume = resume) }
             }
             // Another device is on this game, or still sending its save: wait for it, or play here.
             is LaunchOutcome.SyncBusy -> {
                 launching = null
-                syncBusy(card, outcome.busy, play = { launch(card, emulator, discPath, display, playAnyway = true, together = together) }, retry = { launch(card, emulator, discPath, display, together = together) })
+                syncBusy(card, outcome.busy, play = { launch(card, emulator, discPath, display, playAnyway = true, together = together, resume = resume) }, retry = { launch(card, emulator, discPath, display, together = together, resume = resume) })
             }
             is LaunchOutcome.SyncWaiting -> {
                 launching = null
-                syncWaiting(card, outcome.waiting, play = { launch(card, emulator, discPath, display, playAnyway = true, together = together) }, retry = { launch(card, emulator, discPath, display, together = together) })
+                syncWaiting(card, outcome.waiting, play = { launch(card, emulator, discPath, display, playAnyway = true, together = together, resume = resume) }, retry = { launch(card, emulator, discPath, display, together = together, resume = resume) })
             }
             // This device's save and RomM's both changed: which one to play with, then the game starts.
             is LaunchOutcome.RommSaveConflict -> {
                 launching = null
-                rommSaveConflict(card, outcome.conflict) { launch(card, emulator, discPath, display, together = together) }
+                rommSaveConflict(card, outcome.conflict) { launch(card, emulator, discPath, display, together = together, resume = resume) }
             }
             // Syncthing kept two versions of the save: which one to play with, then the game starts.
             is LaunchOutcome.SyncthingConflict -> {
                 launching = null
-                syncthingConflict(card, outcome.conflicts) { launch(card, emulator, discPath, display, skipSaveCheck = true, together = together) }
+                syncthingConflict(card, outcome.conflicts) { launch(card, emulator, discPath, display, skipSaveCheck = true, together = together, resume = resume) }
             }
         }
     }

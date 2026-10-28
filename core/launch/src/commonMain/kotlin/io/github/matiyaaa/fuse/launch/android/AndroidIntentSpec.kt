@@ -78,6 +78,11 @@ data class AndroidEmulatorDef(
     val usesRetroArchCores: Boolean = false,
     val installHint: String? = null,
     val supersededBy: Set<String> = emptySet(),
+    /**
+     * The boolean extra that starts a game from the resume state the emulator keeps for it (one of
+     * its [modes]' extras, off unless the person continues), when it has one.
+     */
+    val resumeFlag: String? = null,
 ) {
     /** Every distinct package this entry can be installed as. */
     val packages: List<String> get() = apps.map { it.pkg }.distinct()

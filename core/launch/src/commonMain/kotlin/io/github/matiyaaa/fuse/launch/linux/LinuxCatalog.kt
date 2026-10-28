@@ -86,6 +86,16 @@ object LinuxCatalog {
 
     private const val STEAM_RETROARCH_APP = "1118310"
 
+    /**
+     * RetroArch loads a game's automatic state (`<content>.state.auto`) when `savestate_auto_load`
+     * is on, and `--appendconfig` (retroarch.c, RA_OPT_APPENDCONFIG) lays a settings file of Fuse's
+     * over the person's for one run, so Continue turns it on without touching their settings.
+     */
+    private val RETROARCH_RESUME = ResumeSpec(
+        io.github.matiyaaa.fuse.launch.ResumeWay.AUTO_LOAD, listOf("--appendconfig", "{RESUMECFG}"),
+        "RetroArch retroarch.c (--appendconfig) and configuration.c (savestate_auto_load)",
+    )
+
     val defs: List<LinuxEmulatorDef> = listOf(
         LinuxEmulatorDef(
             id = "linux.retroarch", name = "RetroArch",
@@ -98,6 +108,7 @@ object LinuxCatalog {
             capabilities = caps(playlists = true),
             limitations = listOf("The core must be installed (Online Updater, or your distribution's libretro packages)."),
             usesRetroArchCores = true,
+            resume = RETROARCH_RESUME,
         ),
         LinuxEmulatorDef(
             id = "linux.retroarch-steam", name = "RetroArch (Steam)",
@@ -125,6 +136,8 @@ object LinuxCatalog {
             detection = detect(bin = listOf("pcsx2-qt", "pcsx2"), flatpak = listOf("net.pcsx2.PCSX2"), appImage = listOf("*pcsx2*.appimage")),
             modes = listOf(file("-batch", "{ROM}")),
             source = esde("PCSX2"), confidence = VERIFIED_ESDE, homepage = "https://pcsx2.net/",
+            // pcsx2-qt/QtHost.cpp, ParseCommandLineArgs: `-statefile <filename>` loads that state once the game boots.
+            resume = ResumeSpec(io.github.matiyaaa.fuse.launch.ResumeWay.STATE_FILE, listOf("-statefile", "{STATE}"), "PCSX2 pcsx2-qt/QtHost.cpp ParseCommandLineArgs (-statefile)"),
         ),
         LinuxEmulatorDef(
             id = "linux.play", name = "Play!", platforms = platforms("ps2"),
@@ -141,6 +154,9 @@ object LinuxCatalog {
             modes = listOf(file("-batch", "{ROM}")),
             source = esde("DUCKSTATION"), confidence = VERIFIED_ESDE, homepage = "https://www.duckstation.org/",
             capabilities = caps(playlists = true),
+            // duckstation-qt/qthost.cpp, ParseCommandLineParametersAndInitializeConfig: `-resume` with a
+            // boot file loads that game's resume state (<serial>_resume.sav, which Fuse One keeps in step).
+            resume = ResumeSpec(io.github.matiyaaa.fuse.launch.ResumeWay.OWN_RESUME, listOf("-resume"), "DuckStation duckstation-qt/qthost.cpp ParseCommandLineParametersAndInitializeConfig (-resume)"),
         ),
         LinuxEmulatorDef(
             id = "linux.ppsspp", name = "PPSSPP", platforms = platforms("psp"),
