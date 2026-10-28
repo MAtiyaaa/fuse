@@ -130,6 +130,7 @@ internal fun TransferCard(t: TransferItem, live: TransferLive, modifier: Modifie
             io.github.matiyaaa.fuse.transfer.WaitReason.POWER -> "Waiting for a charger"
             io.github.matiyaaa.fuse.transfer.WaitReason.QUIET -> "Waiting for quiet hours to end"
             io.github.matiyaaa.fuse.transfer.WaitReason.DEVICE -> "Waiting for ${t.waitingFor ?: "the other device"}"
+            io.github.matiyaaa.fuse.transfer.WaitReason.LATER -> "For later, once it's charging on Wi-Fi"
             null -> "Waiting"
         }
         TransferStatus.PAUSED -> "Paused"

@@ -145,26 +145,33 @@ class TransferManager(
      * Queues a transfer and returns its id. The same [TransferItem.key] already queued, running,
      * waiting or paused is that transfer: its id comes back and nothing is queued twice.
      */
-    override suspend fun enqueue(item: TransferItem): String {
-        val id = mutex.withLock {
-            val existing = _items.value.firstOrNull { it.key == item.key && !it.status.finished }
-            if (existing != null) return@withLock existing.id
+    override suspend fun enqueue(item: TransferItem): String = enqueueAll(listOf(item)).single()
+
+    /** Queues [items] in order, written once: a whole collection asked for together is one write, not one each. */
+    override suspend fun enqueueAll(items: List<TransferItem>): List<String> {
+        if (items.isEmpty()) return emptyList()
+        val ids = mutex.withLock {
             val now = clock()
-            val fresh = item.copy(
-                id = item.id.ifEmpty { newId() },
-                order = TransferScheduler.endOrder(_items.value),
-                createdAt = now,
-                status = TransferStatus.QUEUED,
-                doneBytes = 0,
-                error = null,
-            )
-            // An earlier finished one with the same key leaves the list: this is the same thing again.
-            _items.value = _items.value.filterNot { it.key == item.key } + fresh
-            persist()
-            fresh.id
+            items.map { item ->
+                val existing = _items.value.firstOrNull { it.key == item.key && !it.status.finished }
+                if (existing != null) return@map existing.id
+                // Held from the start (on mobile data, kept for later) it says why, rather than "queued".
+                val fresh = placed(
+                    item.copy(
+                        id = item.id.ifEmpty { newId() },
+                        order = TransferScheduler.endOrder(_items.value),
+                        createdAt = now,
+                        doneBytes = 0,
+                        error = null,
+                    ),
+                )
+                // An earlier finished one with the same key leaves the list: this is the same thing again.
+                _items.value = _items.value.filterNot { it.key == item.key } + fresh
+                fresh.id
+            }.also { persist() }
         }
         kick()
-        return id
+        return ids
     }
 
     override fun pause(id: String) = scope.launch {
@@ -180,7 +187,7 @@ class TransferManager(
         update { list ->
             list.map {
                 if (it.id == id && (it.status == TransferStatus.PAUSED || it.status == TransferStatus.WAITING || it.status == TransferStatus.FAILED)) {
-                    it.copy(status = TransferStatus.QUEUED, waiting = null, waitingFor = null, retryAt = null, error = null, attempts = 0, lostConnection = false)
+                    placed(it.copy(waitingFor = null, retryAt = null, error = null, attempts = 0, lostConnection = false))
                 } else {
                     it
                 }
@@ -199,8 +206,16 @@ class TransferManager(
     }
 
     override fun resumeAll() = scope.launch {
-        update { list -> list.map { if (it.status == TransferStatus.PAUSED) it.copy(status = TransferStatus.QUEUED) else it } }
+        update { list -> list.map { if (it.status == TransferStatus.PAUSED) placed(it) else it } }
         kick()
+    }
+
+    override fun setLater(id: String, later: Boolean) = scope.launch {
+        val item = _items.value.firstOrNull { it.id == id } ?: return@launch
+        if (item.status.finished || item.later == later) return@launch
+        update { list -> list.map { if (it.id == id) it.copy(later = later) else it } }
+        // Kept for later steps aside now unless it is the time; let go, it takes its turn.
+        hold()
     }
 
     /** Stops [id] for good: what it left half done is removed. */
@@ -246,10 +261,7 @@ class TransferManager(
             job != null
         }.toSet()
         // Back in the queue, or waiting for what holds its direction now (a game being played).
-        fun again(t: TransferItem): TransferItem {
-            val reason = held(t.direction)
-            return t.copy(status = if (reason == null) TransferStatus.QUEUED else TransferStatus.WAITING, waiting = reason, phase = null, retryAt = null)
-        }
+        fun again(t: TransferItem): TransferItem = placed(t.copy(retryAt = null))
         update { list ->
             list.map { t ->
                 when {
@@ -299,6 +311,12 @@ class TransferManager(
 
     private fun held(direction: TransferDirection): WaitReason? = _settings.value.held(direction, _conditions.value)
 
+    private fun held(item: TransferItem): WaitReason? = _settings.value.held(item, _conditions.value)
+
+    /** [t] back in the queue, or waiting with the reason that holds it now. */
+    private fun placed(t: TransferItem): TransferItem = held(t)?.let { reason -> t.copy(status = TransferStatus.WAITING, waiting = reason, phase = null) }
+        ?: t.copy(status = TransferStatus.QUEUED, waiting = null, phase = null)
+
     private fun applyConditions() {
         // The rates first, at once: a transfer started right after a new limit is set moves at that limit.
         val s = _settings.value
@@ -306,21 +324,30 @@ class TransferManager(
         for (d in TransferDirection.entries) {
             buckets.getValue(d).rate = if (_conditions.value.playing && s.whilePlaying(d) == WhilePlaying.REDUCED) TransferSettings.REDUCED_RATE else 0L
         }
-        scope.launch {
-            // Held directions: running transfers step aside (keeping what they did) and wait.
-            for (d in TransferDirection.entries) {
-                val reason = held(d)
-                if (reason != null) {
-                    val ids = _items.value.filter { it.direction == d && it.status == TransferStatus.ACTIVE }.map { it.id }
-                    ids.forEach { jobs.remove(it)?.cancel(Held()) }
-                    // Those already held say why now (Wi-Fi back, but still in quiet hours).
-                    update { list -> list.map { if (it.direction == d && (it.status == TransferStatus.ACTIVE || it.status == TransferStatus.QUEUED || (it.status == TransferStatus.WAITING && it.waiting in TransferConditions.CONDITIONS))) it.copy(status = TransferStatus.WAITING, waiting = reason, phase = null) else it } }
-                } else {
-                    update { list -> list.map { if (it.direction == d && it.status == TransferStatus.WAITING && it.waiting in TransferConditions.CONDITIONS) it.copy(status = TransferStatus.QUEUED, waiting = null) else it } }
+        scope.launch { hold() }
+    }
+
+    /**
+     * Each transfer as the conditions say now: a held one that runs steps aside (keeping what it
+     * did) and waits; one already held says why now (Wi-Fi back, but still in quiet hours); one no
+     * longer held goes back in the queue.
+     */
+    private suspend fun hold() {
+        _items.value.filter { it.status == TransferStatus.ACTIVE && held(it) != null }.forEach { jobs.remove(it.id)?.cancel(Held()) }
+        update { list ->
+            list.map { t ->
+                val stands = t.status == TransferStatus.ACTIVE || t.status == TransferStatus.QUEUED ||
+                    (t.status == TransferStatus.WAITING && t.waiting in TransferConditions.CONDITIONS)
+                val reason = held(t)
+                when {
+                    !stands -> t
+                    reason != null -> t.copy(status = TransferStatus.WAITING, waiting = reason, phase = null)
+                    t.status == TransferStatus.WAITING -> t.copy(status = TransferStatus.QUEUED, waiting = null)
+                    else -> t
                 }
             }
-            kick()
         }
+        kick()
     }
 
     /** Starts whatever may start now, and wakes again when a wait is over. */
@@ -328,7 +355,7 @@ class TransferManager(
         scope.launch {
             val toStart = mutex.withLock {
                 val now = clock()
-                val ids = TransferScheduler.next(_items.value, _settings.value, now, ::held).filter { handlers[_items.value.first { t -> t.id == it }.source] != null && !jobs.containsKey(it) }
+                val ids = TransferScheduler.next(_items.value, _settings.value, now, !_conditions.value.rightForLater) { held(it) }.filter { handlers[_items.value.first { t -> t.id == it }.source] != null && !jobs.containsKey(it) }
                 if (ids.isNotEmpty()) {
                     _items.value = _items.value.map { if (it.id in ids) it.copy(status = TransferStatus.ACTIVE, phase = TransferPhase.STARTING, waiting = null, waitingFor = null, retryAt = null, startedAt = it.startedAt ?: now) else it }
                     persist()
@@ -423,6 +450,14 @@ class TransferManager(
         override suspend fun throttle(bytes: Int) {
             overall.take(bytes)
             buckets.getValue(item.direction).take(bytes)
+        }
+
+        // Only the ones ahead of it in the queue: two that start together never both give way.
+        override fun reserved(): Long = _items.value.filter {
+            it.id != item.id && it.status == TransferStatus.ACTIVE && !it.upload && it.order < item.order && it.place?.volume?.id == item.place?.volume?.id
+        }.sumOf { t ->
+            val live = lives[t.id]?.value
+            ((live?.totalBytes ?: t.totalBytes ?: 0) - (live?.doneBytes ?: t.doneBytes)).coerceAtLeast(0)
         }
     }
 

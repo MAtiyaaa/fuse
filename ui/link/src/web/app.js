@@ -2100,7 +2100,7 @@ function updateTransfers() {
     return;
   }
   slot.hidden = false;
-  const key = JSON.stringify([items.map((i) => [i.title, !!i.upload, i.state]), num(t.queued), !!t.paused, num(t.failed)]);
+  const key = JSON.stringify([items.map((i) => [i.title, !!i.upload, i.state, !!i.later]), num(t.queued), !!t.paused, num(t.failed)]);
   keyed(slot, key, () => transfersSection(slot, t, items));
   (slot._rows || []).forEach((r, i) => {
     const it = items[i];
@@ -2111,7 +2111,9 @@ function updateTransfers() {
 }
 
 function transferWords(it) {
-  const state = { active: it.upload ? 'Uploading' : 'Downloading', queued: 'Waiting', waiting: 'Waiting', paused: 'Paused', failed: 'Stopped' }[it.state] || '';
+  // Kept for later: it goes once the device is charging on Wi-Fi.
+  const state = it.later && it.state === 'waiting' ? 'For later, once charging on Wi-Fi'
+    : { active: it.upload ? 'Uploading' : 'Downloading', queued: 'Waiting', waiting: 'Waiting', paused: 'Paused', failed: 'Stopped' }[it.state] || '';
   // Nothing in yet (one still waiting its turn): only how big it is.
   const size = num(it.total) > 0 ? (num(it.done) > 0 ? `${fmtBytes(it.done)} of ${fmtBytes(it.total)}` : fmtBytes(it.total)) : '';
   return [state, size].filter(Boolean).join(' \u00B7 ');

@@ -114,6 +114,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.folderPolicyPicker
 import io.github.matiyaaa.fuse.ui.shell.romm.rommDownload
+import io.github.matiyaaa.fuse.ui.shell.romm.rommDownloadLater
 import io.github.matiyaaa.fuse.ui.shell.store.rommOnly
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.GallerySpec
@@ -276,6 +277,10 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                 app.rommDownload(remote, game.displayTitle, io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.Everything)
             }
         },
+        // Kept for when the device is charging on Wi-Fi: a big game never costs the battery.
+        DetailAction("later", null, FuseIcons.PlugZap, "Download later, once charging on Wi-Fi") {
+            app.rommDownloadLater(remote, game.displayTitle)
+        }.takeIf { romm?.transfer == null },
         DetailAction("send", null, FuseIcons.Share, "Send to another device") { app.sendPicker(game.id, game.displayTitle) }.takeIf { canSend },
     ) else listOfNotNull(
         // A game Fuse can't reach right now keeps its Play button (pressing it explains why), drawn

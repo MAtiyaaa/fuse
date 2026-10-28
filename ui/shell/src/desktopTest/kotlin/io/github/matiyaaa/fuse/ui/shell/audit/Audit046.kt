@@ -51,6 +51,99 @@ internal fun AuditDriver.fuse046Screens() {
         settle(1_500)
         shoot("the week's achievement and the people you follow")
     }
+    scenario("romm", "collections and Download All") {
+        useLibrary { it.copy(romm = it.romm.copy(enabled = true, configured = true)) }
+        val base = libraryStore
+        val romm = AuditRomm(base)
+        show(object : FuseStore by base { override val romm: io.github.matiyaaa.fuse.ui.shell.store.RommOps = romm })
+        libraryTab()
+        waitFor("Connected")
+        settle(900)
+        // The sources lead the All page, where it opens: RomM is the second.
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        waitFor("games on RomM")
+        shoot("every game on RomM, its collections first", 1_500)
+        tap(PadButton.A)
+        waitFor("Download All")
+        shoot("a collection's page, with Download All beside its name", 1_500)
+        tap(PadButton.DPAD_UP)
+        settle(400)
+        shoot("Download All chosen", 900)
+        tap(PadButton.A)
+        waitFor("Download Later")
+        shoot("what it takes and where it goes, now or later", 1_200)
+        tap(PadButton.B)
+        romm.tight = true
+        settle(400)
+        tap(PadButton.A)
+        waitFor("Download What Fits")
+        shoot("not all of it fits: what fits, or make room", 1_200)
+        tap(PadButton.B)
+    }
+    scenario("downloads", "kept for later") {
+        useLibrary { it.copy(romm = it.romm.copy(enabled = true, configured = true)) }
+        val base = libraryStore
+        val gb = 1L shl 30
+        val down = io.github.matiyaaa.fuse.transfer.TransferItem(
+            "d1", "romm:rom:7", "romm", io.github.matiyaaa.fuse.transfer.TransferDirection.DOWNLOAD, io.github.matiyaaa.fuse.transfer.TransferKind.GAME,
+            "Velvet Orbit", platform = "dc", target = "SD card  ·  ROMs/dc", totalBytes = 4 * gb, doneBytes = 2 * gb,
+            status = io.github.matiyaaa.fuse.transfer.TransferStatus.ACTIVE, phase = io.github.matiyaaa.fuse.transfer.TransferPhase.TRANSFERRING,
+        )
+        val later = down.copy(
+            id = "d2", key = "romm:rom:8", title = "Hollow Meridian", platform = "psx", totalBytes = 1_400L shl 20, doneBytes = 0,
+            status = io.github.matiyaaa.fuse.transfer.TransferStatus.WAITING, waiting = io.github.matiyaaa.fuse.transfer.WaitReason.LATER, phase = null, later = true, order = 1,
+        )
+        val begun = later.copy(id = "d3", key = "romm:rom:9", title = "Lantern Coast", platform = "gba", totalBytes = 32L shl 20, doneBytes = 13L shl 20, order = 2)
+        val queued = down.copy(id = "d4", key = "romm:rom:10", title = "Ember Tactics", platform = "snes", totalBytes = 4L shl 20, doneBytes = 0, status = io.github.matiyaaa.fuse.transfer.TransferStatus.QUEUED, phase = null, order = 3)
+        val waitingActions = listOf(io.github.matiyaaa.fuse.ui.shell.store.TransferAction.NOW, io.github.matiyaaa.fuse.ui.shell.store.TransferAction.PAUSE, io.github.matiyaaa.fuse.ui.shell.store.TransferAction.CANCEL, io.github.matiyaaa.fuse.ui.shell.store.TransferAction.MOVE_TO_TOP)
+        val rows = kotlinx.coroutines.flow.MutableStateFlow(
+            listOf(
+                io.github.matiyaaa.fuse.ui.shell.store.TransferRow(down, listOf(io.github.matiyaaa.fuse.ui.shell.store.TransferAction.PAUSE, io.github.matiyaaa.fuse.ui.shell.store.TransferAction.LATER, io.github.matiyaaa.fuse.ui.shell.store.TransferAction.CANCEL)),
+                io.github.matiyaaa.fuse.ui.shell.store.TransferRow(later, waitingActions),
+                io.github.matiyaaa.fuse.ui.shell.store.TransferRow(begun, waitingActions),
+                io.github.matiyaaa.fuse.ui.shell.store.TransferRow(queued, listOf(io.github.matiyaaa.fuse.ui.shell.store.TransferAction.PAUSE, io.github.matiyaaa.fuse.ui.shell.store.TransferAction.LATER, io.github.matiyaaa.fuse.ui.shell.store.TransferAction.CANCEL)),
+            ),
+        )
+        val live = mapOf("d1" to io.github.matiyaaa.fuse.transfer.TransferLive(2 * gb + (300L shl 20), 4 * gb, 24L shl 20, 74), "d3" to io.github.matiyaaa.fuse.transfer.TransferLive(13L shl 20, 32L shl 20))
+        val ops = object : io.github.matiyaaa.fuse.ui.shell.store.TransfersOps {
+            override val rows = rows
+            override val summary = kotlinx.coroutines.flow.MutableStateFlow(io.github.matiyaaa.fuse.transfer.TransferSummary(activeDownloads = 1, queued = 1, waiting = 2, later = 2))
+            override val settings = kotlinx.coroutines.flow.MutableStateFlow(io.github.matiyaaa.fuse.transfer.TransferSettings())
+            override fun live(id: String) = kotlinx.coroutines.flow.MutableStateFlow(live[id] ?: io.github.matiyaaa.fuse.transfer.TransferLive(0, rows.value.firstOrNull { it.item.id == id }?.item?.totalBytes))
+            override fun act(id: String, action: io.github.matiyaaa.fuse.ui.shell.store.TransferAction) = Unit
+            override fun pauseAll() = Unit
+            override fun resumeAll() = Unit
+            override fun clearFinished() = Unit
+        }
+        val romm = AuditRomm(base)
+        show(object : FuseStore by base { override val transfers = ops; override val romm: io.github.matiyaaa.fuse.ui.shell.store.RommOps = romm })
+        libraryTab()
+        waitFor("Connected")
+        settle(900)
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        waitFor("games on RomM")
+        // A game on its way (the fourth): its options lead to Downloads.
+        tap(PadButton.DPAD_DOWN)
+        if (size == AuditSize.V) {
+            tap(PadButton.DPAD_DOWN)
+            tap(PadButton.DPAD_RIGHT)
+        } else {
+            tap(PadButton.DPAD_RIGHT, 3)
+        }
+        tap(PadButton.X)
+        tapText("See in Downloads")
+        waitFor("for later")
+        settle(900)
+        shoot("two kept for later, one begun, beside one moving", 1_200)
+        focusHint("Download Now")
+        shoot("one kept for later chosen: confirm sends it now", 900)
+        tap(PadButton.X)
+        waitFor("Takes its turn now")
+        shoot("its options", 900)
+        tap(PadButton.B)
+    }
     scenario("storage", "make room") {
         useLibrary()
         val base = libraryStore

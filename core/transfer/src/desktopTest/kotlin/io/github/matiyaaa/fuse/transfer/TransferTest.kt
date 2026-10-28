@@ -574,6 +574,98 @@ class TransferTest {
     }
 
     @Test
+    fun `kept for later means charging, on Wi-Fi, with no game running, and only once the device said so`() {
+        val later = item("l").copy(later = true)
+        val now = item("n")
+        val right = TransferConditions(powerKnown = true, battery = 40, charging = true)
+        assertNull(TransferSettings().held(later, right))
+        // Not before the device has said how its power stands: a guess would start it on a battery.
+        assertEquals(WaitReason.LATER, TransferSettings().held(later, right.copy(powerKnown = false)))
+        assertEquals(WaitReason.LATER, TransferSettings().held(later, right.copy(charging = false)))
+        assertEquals(WaitReason.LATER, TransferSettings().held(later, right.copy(unmetered = false)))
+        assertEquals(WaitReason.LATER, TransferSettings().held(later, right.copy(playing = true)))
+        // A computer without a battery is always on its power.
+        assertNull(TransferSettings().held(later, TransferConditions(powerKnown = true, battery = null)))
+        // The person's own rules still come first, and hold the rest as before.
+        assertEquals(WaitReason.QUIET, TransferSettings(quietFrom = 0, quietTo = 60).held(later, right.copy(minute = 30)))
+        assertNull(TransferSettings().held(now, right.copy(charging = false)))
+        // The queue starts none of them while it isn't the time.
+        assertEquals(listOf("n"), TransferScheduler.next(listOf(later, now), TransferSettings(), 0, laterWaits = true))
+        assertEquals(listOf("l", "n"), TransferScheduler.next(listOf(later, now), TransferSettings(), 0, laterWaits = false))
+    }
+
+    @Test
+    fun `a download kept for later waits for the charger, and goes at once when asked`() = runBlocking<Unit> {
+        val m = manager()
+        m.conditions(TransferConditions(powerKnown = true, battery = 70, charging = false))
+        delay(50)
+        m.register(FileHandler(Server()))
+        val id = m.enqueue(download("Later.bin").copy(later = true))
+        assertEquals(WaitReason.LATER, m.awaitStatus(id, TransferStatus.WAITING).waiting)
+        assertEquals(1, withTimeout(5_000) { m.summary.first { it.later == 1 } }.later)
+        delay(200)
+        assertFalse(File(root, "games/Later.bin").exists())
+        // Plugged in: it goes by itself.
+        m.conditions(TransferConditions(powerKnown = true, battery = 70, charging = true))
+        m.awaitStatus(id, TransferStatus.DONE)
+
+        // Another, sent now instead: it no longer waits.
+        m.conditions(TransferConditions(powerKnown = true, battery = 70, charging = false))
+        delay(50)
+        val second = m.enqueue(download("Now.bin").copy(later = true))
+        m.awaitStatus(second, TransferStatus.WAITING)
+        m.setLater(second, false).join()
+        m.awaitStatus(second, TransferStatus.DONE)
+        assertFalse(m.items.value.first { it.id == second }.later)
+    }
+
+    @Test
+    fun `a running download kept for later steps aside, keeping what it did`() = runBlocking<Unit> {
+        val m = manager()
+        m.conditions(TransferConditions(powerKnown = true, battery = 70, charging = false))
+        m.configure(TransferSettings(bandwidthLimit = 100_000))
+        m.register(FileHandler(Server()))
+        val id = m.enqueue(download("Aside.bin"))
+        m.awaitStatus(id, TransferStatus.ACTIVE)
+        delay(400)
+        m.setLater(id, true).join()
+        val waiting = m.awaitStatus(id, TransferStatus.WAITING)
+        assertEquals(WaitReason.LATER, waiting.waiting)
+        assertTrue(File(root, "games/.Aside.bin.fuse-part").length() > 0, "what arrived is kept")
+        m.configure(TransferSettings())
+        m.conditions(TransferConditions(powerKnown = true, battery = 70, charging = true))
+        m.awaitStatus(id, TransferStatus.DONE)
+        assertContentEquals(payload, File(root, "games/Aside.bin").readBytes())
+    }
+
+    @Test
+    fun `a download sees the room the downloads ahead of it to the same drive will take`() = runBlocking<Unit> {
+        val m = manager()
+        val seen = java.util.concurrent.ConcurrentHashMap<String, Long>()
+        val release = kotlinx.coroutines.CompletableDeferred<Unit>()
+        m.register(object : TransferHandler {
+            override val source = "test"
+            override suspend fun run(item: TransferItem, io: TransferIo) {
+                io.progress(100, item.totalBytes)
+                seen[item.title] = io.reserved()
+                release.await()
+            }
+        })
+        val sd = VolumeRef("sd", "SD card", VolumeKind.SD_CARD, true, "", 0)
+        fun on(name: String, volume: VolumeRef?, size: Long) = download(name, TransferPlace(File(root, name).path, volume)).copy(totalBytes = size)
+        m.enqueue(on("First", sd, 1_000))
+        m.enqueue(on("Elsewhere", null, 5_000))
+        m.enqueue(on("Second", sd, 2_000))
+        withTimeout(5_000) { while (seen.size < 3) delay(10) }
+        // Nothing ahead of the first; the second leaves room for the first's 900 bytes still to come.
+        assertEquals(0L, seen["First"])
+        assertEquals(900L, seen["Second"])
+        // Another drive's download takes none of it.
+        assertEquals(0L, seen["Elsewhere"])
+        release.complete(Unit)
+    }
+
+    @Test
     fun `many at once respect the limit`() = runBlocking<Unit> {
         val m = manager()
         m.configure(TransferSettings(maxDownloads = 2, bandwidthLimit = 2_000_000))

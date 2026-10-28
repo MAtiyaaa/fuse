@@ -68,6 +68,9 @@ import io.github.matiyaaa.fuse.ui.shell.store.RommNotOnServer
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorChoice
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
+import io.github.matiyaaa.fuse.ui.shell.store.RommBatch
+import io.github.matiyaaa.fuse.ui.shell.store.RommBatchPlan
+import io.github.matiyaaa.fuse.ui.shell.store.RommBatchResult
 import io.github.matiyaaa.fuse.ui.shell.store.RommCollectionCard
 import io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat
 import io.github.matiyaaa.fuse.ui.shell.store.RommGame
@@ -1387,15 +1390,81 @@ internal class DefaultRommOps(
 
     // ------------------------------------------------------------------ downloads
 
-    override suspend fun download(romId: Long, what: RommDownloadWhat): String? = withContext(Dispatchers.Default) {
-        if (!settings.enabled) return@withContext "Turn on RomM in Settings, Addons, RomM."
-        val listed = mirror.withFiles(clientFor(server), server, romId) ?: return@withContext "That game isn't in your RomM library any more."
+    override suspend fun download(romId: Long, what: RommDownloadWhat): String? = queue(romId, what, later = false)
+
+    override suspend fun downloadLater(romId: Long): String? = queue(romId, RommDownloadWhat.Game, later = true)
+
+    override suspend fun batchPlan(romIds: List<Long>): RommBatchPlan = withContext(Dispatchers.Default) {
+        if (!settings.enabled) return@withContext RommBatchPlan()
+        val m = matches.value
+        val pending = transfers.items.value.filter { !it.status.finished && !it.upload }
+        val coming = pending.filter { it.source == ROMM_SOURCE }.mapTo(HashSet()) { it.key }
+        val byId = mirror.roms(server, romIds.distinct()).associateBy { it.id }
+        val wanted = romIds.distinct().mapNotNull { byId[it] }.filter { it.id !in m && keyOf(it.id) !in coming }
+        val volumes = engine.drives.volumes.value
+        // Each system's folder once: a collection is mostly a few systems.
+        val folders = HashMap<String, String?>()
+        val freeAt = HashMap<String?, Long?>()
+        var unplaced = 0
+        val games = wanted.mapNotNull { r ->
+            val folder = folders.getOrPut(r.platformSlug) { ctx.platforms.resolveFolder(r.platformSlug)?.let { p -> systemFolder(p, r)?.first } }
+            if (folder == null) {
+                unplaced++
+                return@mapNotNull null
+            }
+            val drive = TransferPlaces.of(folder, volumes, ctx.now()).volume
+            if (drive?.id !in freeAt) freeAt[drive?.id] = runCatching { ctx.services.fs.freeSpace(folder) }.getOrNull()?.takeIf { it > 0 }
+            RommBatch.Game(r.id, r.sizeBytes, drive?.id, drive?.label ?: "This device")
+        }
+        // What is already on its way to each drive takes its room first.
+        val ahead = pending.groupBy { it.place?.volume?.id }.mapValues { (_, list) -> list.sumOf { ((it.totalBytes ?: 0) - it.doneBytes).coerceAtLeast(0) } }
+        RommBatch.plan(games, freeAt, ahead, unplaced)
+    }
+
+    override suspend fun downloadMany(romIds: List<Long>, later: Boolean): RommBatchResult {
+        var queued = 0
+        var failed = 0
+        var problem: String? = null
+        // A few at a time into the queue, each run written once: Downloads keeps one file of them all.
+        for (chunk in romIds.take(RommBatch.MOST).chunked(BATCH_CHUNK)) {
+            val ready = ArrayList<TransferItem>()
+            for (id in chunk) when (val p = prepare(id, RommDownloadWhat.Game, later)) {
+                is Prepared.Ready -> ready += p.item
+                is Prepared.Refused -> {
+                    failed++
+                    problem = problem ?: p.why
+                }
+            }
+            transfers.enqueueAll(ready)
+            queued += ready.size
+        }
+        return RommBatchResult(queued, failed, problem)
+    }
+
+    private suspend fun queue(romId: Long, what: RommDownloadWhat, later: Boolean): String? = when (val p = prepare(romId, what, later)) {
+        is Prepared.Ready -> {
+            transfers.enqueue(p.item)
+            null
+        }
+        is Prepared.Refused -> p.why
+    }
+
+    /** What a download of [romId] would be, or why there is none. */
+    private sealed interface Prepared {
+        class Ready(val item: TransferItem) : Prepared
+        class Refused(val why: String) : Prepared
+    }
+
+    private suspend fun prepare(romId: Long, what: RommDownloadWhat, later: Boolean): Prepared = withContext(Dispatchers.Default) {
+        fun no(why: String) = Prepared.Refused(why)
+        if (!settings.enabled) return@withContext no("Turn on RomM in Settings, Addons, RomM.")
+        val listed = mirror.withFiles(clientFor(server), server, romId) ?: return@withContext no("That game isn't in your RomM library any more.")
         // RomM didn't list its files (a PS4 package, a folder it hasn't scanned yet): the whole game, by its own name.
         val r = if (listed.files.isNotEmpty() || listed.fsName.isBlank()) listed else listed.copy(
             files = listOf(RommFile(id = 0, name = if (listed.multi && !listed.fsName.endsWith(".zip")) listed.fsName + ".zip" else listed.fsName, sizeBytes = listed.sizeBytes)),
         )
-        if (r.files.isEmpty()) return@withContext "RomM has no file for this game to send."
-        val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@withContext "Fuse doesn't know RomM's system \"${r.platformSlug}\", so it can't tell where this goes."
+        if (r.files.isEmpty()) return@withContext no("RomM has no file for this game to send.")
+        val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@withContext no("Fuse doesn't know RomM's system \"${r.platformSlug}\", so it can't tell where this goes.")
         val game = matches.value[romId]?.first
         val here = game?.let { localNames(it) }.orEmpty()
         val parts = RommContent.parts(r)
@@ -1407,13 +1476,13 @@ internal class DefaultRommOps(
             RommDownloadWhat.Dlc -> r.files.filter { it.kind == ContentKind.DLC }
             is RommDownloadWhat.Files -> r.files.filter { it.id in what.ids }
         }.filter { game == null || it.name.lowercase() !in here || what is RommDownloadWhat.Files }
-        if (files.isEmpty()) return@withContext if (game != null) "Everything of this is already here." else "RomM has no files for this game."
+        if (files.isEmpty()) return@withContext no(if (game != null) "Everything of this is already here." else "RomM has no files for this game.")
         // Where it goes: the game's own folder when Fuse has it, else the system's folder Fuse knows.
         val existing = game?.let { ctx.data.games.get(it) }
         val existingDir = existing?.location?.takeIf { it.kind == LocationKind.FOLDER }?.path
         val folder = existing?.location?.path?.let { if (existingDir != null) FsPath.parent(it) else FsPath.parent(it) }
             ?: systemFolder(platform, r)?.first
-            ?: return@withContext "Choose where games go first: Settings, Addons, RomM, Library."
+            ?: return@withContext no("Choose where games go first: Settings, Addons, RomM, Library.")
         val placement = RommPlacement.layout(r, files, folder, existingDir)
         val newFolder = existingDir == null && placement.gamePath != files.singleOrNull()?.let { placement.files[it.id] } && !fileExists(placement.gamePath)
         val placeRoot = placement.gamePath.takeIf { newFolder || existingDir != null } ?: folder
@@ -1431,7 +1500,7 @@ internal class DefaultRommOps(
             newFolder = newFolder, platform = platform.id.value,
         )
         val drive = TransferPlaces.of(placeRoot, volumes, ctx.now())
-        transfers.enqueue(
+        Prepared.Ready(
             TransferItem(
                 id = "", key = keyOf(r.id) + (if (label.isNotEmpty()) ":" + files.joinToString(",") { it.id.toString() } else ""),
                 source = ROMM_SOURCE, direction = TransferDirection.DOWNLOAD,
@@ -1439,10 +1508,9 @@ internal class DefaultRommOps(
                 title = r.name, detail = label, platform = platform.id.value,
                 art = TransferArt(logo = r.logo?.let { rommArtCache?.modelKey(server, it) }, cover = r.cover?.let { rommArtCache?.modelKey(server, it) }),
                 place = drive, target = "${drive.volume?.label ?: "This device"}  ·  ${shortPath(folder)}",
-                totalBytes = files.sumOf { it.sizeBytes }, payload = job.encode(),
+                totalBytes = files.sumOf { it.sizeBytes }, later = later, payload = job.encode(),
             ),
         )
-        null
     }
 
     private suspend fun fileExists(path: String) = runCatching { ctx.services.fs.stat(path) != null }.getOrDefault(false)
@@ -1674,6 +1742,9 @@ internal class DefaultRommOps(
 
         /** Library games not on RomM shown on the tab's shelf (the rest are counted). */
         private const val NOT_ON_SERVER_SHOWN = 60
+
+        /** Games of a batch put in the queue together. */
+        private const val BATCH_CHUNK = 25
 
         /** How long a burst of art arriving waits before the lists are drawn again. */
         private const val REDRAW_MS = 4_000L

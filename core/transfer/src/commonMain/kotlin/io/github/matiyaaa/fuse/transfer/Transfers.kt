@@ -42,6 +42,12 @@ interface TransferIo {
 
     /** Waits until [bytes] more may move, under the bandwidth limit and the while-playing rule. */
     suspend fun throttle(bytes: Int)
+
+    /**
+     * Bytes the downloads running ahead of this one to the same drive have still to write: the room
+     * they will take, so two downloads that each fit alone never both start on a drive with room for one.
+     */
+    fun reserved(): Long = 0
 }
 
 /**
@@ -71,6 +77,9 @@ interface Transfers {
     fun woke() {}
     fun live(id: String): StateFlow<TransferLive>
     suspend fun enqueue(item: TransferItem): String
+
+    /** Queues [items] in order, kept together in one write; their ids, as [enqueue] gives each. */
+    suspend fun enqueueAll(items: List<TransferItem>): List<String> = items.map { enqueue(it) }
     fun pause(id: String): Job
     fun resume(id: String): Job
     fun retry(id: String): Job
@@ -80,6 +89,9 @@ interface Transfers {
     fun moveUp(id: String): Job
     fun moveDown(id: String): Job
     fun moveToTop(id: String): Job
+
+    /** Keeps [id] for later (it waits for a charger and Wi-Fi, with no game running), or lets it go now. */
+    fun setLater(id: String, later: Boolean): Job
     fun clearFinished(): Job
     fun remove(id: String): Job
 }

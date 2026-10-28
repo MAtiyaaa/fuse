@@ -192,6 +192,7 @@ internal class LinkApi(
                         put("title", t.title)
                         put("upload", t.upload)
                         put("state", t.status.name.lowercase())
+                        put("later", t.later)
                         put("done", done)
                         put("total", total)
                         put("progress", total?.takeIf { it > 0 }?.let { (done.toDouble() / it).coerceIn(0.0, 1.0) })

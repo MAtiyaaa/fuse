@@ -22,6 +22,12 @@ enum class TransferAction(val label: String) {
 
     /** Opens where the transfer really runs (Cartridge, the Store's app page). */
     OPEN("Open"),
+
+    /** Keeps a download for when the device is charging on Wi-Fi with no game running. */
+    LATER("Download Later"),
+
+    /** Lets a download kept for later go now. */
+    NOW("Download Now"),
 }
 
 /**

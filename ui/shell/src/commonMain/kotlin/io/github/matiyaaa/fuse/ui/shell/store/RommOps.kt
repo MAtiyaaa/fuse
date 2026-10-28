@@ -137,6 +137,73 @@ data class RommGameView(
     val missingDiscs: List<RommPartView> get() = missing.filter { it.kind == ContentKind.GAME && it.label.startsWith("Disc") }
 }
 
+/** One drive a batch of RomM downloads lands on: how many games, how much, and the room there. */
+@Immutable
+data class RommBatchDrive(
+    val label: String,
+    val games: Int,
+    val bytes: Long,
+    /** Free there once the downloads already on their way to it are in; null when the drive can't say. */
+    val free: Long?,
+) {
+    val fits: Boolean get() = free == null || bytes + RommBatch.SPARE <= free
+}
+
+/** What downloading a run of RomM games would take ([RommOps.batchPlan]). */
+@Immutable
+data class RommBatchPlan(
+    /** The games to download, in order: those here or already on their way are left out. */
+    val romIds: List<Long> = emptyList(),
+    val bytes: Long = 0,
+    val drives: List<RommBatchDrive> = emptyList(),
+    /** Of [romIds], those that fit, in order, taking each drive's room as it goes. */
+    val fitting: List<Long> = romIds,
+    val fittingBytes: Long = bytes,
+    /** Games Fuse can't place: a system it doesn't know, or no folder chosen for games yet. */
+    val unplaced: Int = 0,
+) {
+    val fits: Boolean get() = drives.all { it.fits }
+}
+
+/** What [RommOps.downloadMany] queued: how many went, how many didn't, and the first reason why. */
+data class RommBatchResult(val queued: Int, val failed: Int, val problem: String? = null)
+
+/** The arithmetic of a batch: which games fit where, beside what is already coming. Pure, so it is tested. */
+object RommBatch {
+    /** Room kept free on a drive beyond what the games take (as each download keeps for itself). */
+    const val SPARE = 64L * 1024 * 1024
+
+    /**
+     * The most games one batch queues. Downloads keeps its whole list in one file, written as
+     * transfers move: a few hundred keep that small, and the rest can follow once these are in.
+     */
+    const val MOST = 200
+
+    /** One game of a batch: its size and the drive it lands on (by id, null for the only one). */
+    data class Game(val romId: Long, val bytes: Long, val drive: String?, val label: String)
+
+    /** [games] (in order) onto their drives, with [free] room on each and [coming] bytes already on their way to it. */
+    fun plan(games: List<Game>, free: Map<String?, Long?>, coming: Map<String?, Long>, unplaced: Int = 0): RommBatchPlan {
+        val left = free.mapValues { (drive, f) -> f?.let { (it - (coming[drive] ?: 0)).coerceAtLeast(0) } }
+        val used = HashMap<String?, Long>()
+        val fitting = ArrayList<Long>()
+        var fittingBytes = 0L
+        for (g in games) {
+            val room = left[g.drive]
+            val after = (used[g.drive] ?: 0) + g.bytes
+            if (room == null || after + SPARE <= room) {
+                used[g.drive] = after
+                fitting += g.romId
+                fittingBytes += g.bytes
+            }
+        }
+        val drives = games.groupBy { it.drive }.map { (drive, on) ->
+            RommBatchDrive(on.first().label, on.size, on.sumOf { it.bytes }, left[drive])
+        }.sortedByDescending { it.bytes }
+        return RommBatchPlan(games.map { it.romId }, games.sumOf { it.bytes }, drives, fitting, fittingBytes, unplaced)
+    }
+}
+
 /** What to download of a RomM game. */
 sealed interface RommDownloadWhat {
     data object Game : RommDownloadWhat
@@ -308,6 +375,19 @@ interface RommOps {
 
     /** Queues a download; null when it was queued, else why not. */
     suspend fun download(romId: Long, what: RommDownloadWhat = RommDownloadWhat.Game): String?
+
+    /** Queues RomM game [romId] kept for later: it waits for a charger and Wi-Fi, with no game running. Null when queued, else why not. */
+    suspend fun downloadLater(romId: Long): String? = "RomM isn't available here."
+
+    /**
+     * What downloading the games of [romIds] that aren't here (or on their way) would take, before
+     * anything is queued: how much, onto which drives, and whether it fits beside what is already
+     * coming to each.
+     */
+    suspend fun batchPlan(romIds: List<Long>): RommBatchPlan = RommBatchPlan()
+
+    /** Queues each of [romIds] in order, kept for later when [later]; how many went, and why the first that didn't. */
+    suspend fun downloadMany(romIds: List<Long>, later: Boolean): RommBatchResult = RommBatchResult(0, romIds.size, "RomM isn't available here.")
 
     suspend fun uploadPlan(game: GameId): RommUploadPlan?
 

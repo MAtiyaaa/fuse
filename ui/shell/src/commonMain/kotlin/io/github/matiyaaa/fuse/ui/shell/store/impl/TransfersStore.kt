@@ -144,18 +144,35 @@ internal class DefaultTransfersOps(
     @kotlin.concurrent.Volatile private var lastMinute: Int? = null
     @kotlin.concurrent.Volatile private var battery: Int? = null
     @kotlin.concurrent.Volatile private var charging = false
+    /** The device has said how its power stands: until then, downloads kept for later don't guess. */
+    @kotlin.concurrent.Volatile private var powerKnown = false
 
     fun conditions(playing: Boolean) {
         lastPlaying = playing
         lastUnmetered = ctx.services.unmetered()
         lastMinute = minuteNow()
-        engine.conditions(TransferConditions(playing = playing, unmetered = lastUnmetered, battery = battery, charging = charging, minute = lastMinute))
+        engine.conditions(TransferConditions(playing = playing, unmetered = lastUnmetered, battery = battery, charging = charging, minute = lastMinute, powerKnown = powerKnown))
     }
 
+    private var noBattery: kotlinx.coroutines.Job? = null
+
     override fun power(batteryPercent: Int?, charging: Boolean) {
-        if (batteryPercent == battery && charging == this.charging) return
+        if (powerKnown && batteryPercent == battery && charging == this.charging) return
         battery = batteryPercent
         this.charging = charging
+        // No battery said: the first look, before a device that has one has read it, says the same
+        // as a computer without one. Taken as none only once nothing else has come for a moment.
+        if (batteryPercent != null || powerKnown) {
+            powerKnown = true
+        } else if (noBattery == null) {
+            noBattery = ctx.scope.launch {
+                kotlinx.coroutines.delay(NO_BATTERY_MS)
+                if (!powerKnown) {
+                    powerKnown = true
+                    conditions(lastPlaying)
+                }
+            }
+        }
         conditions(lastPlaying)
     }
 
@@ -195,6 +212,8 @@ internal class DefaultTransfersOps(
                 TransferAction.MOVE_TO_TOP -> engine.moveToTop(id)
                 TransferAction.REMOVE -> engine.remove(id)
                 TransferAction.OPEN -> Unit
+                TransferAction.LATER -> engine.setLater(id, true)
+                TransferAction.NOW -> engine.setLater(id, false)
             }
         }
     }
@@ -211,19 +230,29 @@ internal class DefaultTransfersOps(
         engine.clearFinished()
     }
 
-    private fun actionsFor(t: TransferItem): List<TransferAction> = when (t.status) {
-        TransferStatus.ACTIVE -> listOf(TransferAction.PAUSE, TransferAction.CANCEL, TransferAction.MOVE_TO_TOP)
-        // Waiting on the network: tried again now when asked, rather than paused and resumed.
-        TransferStatus.WAITING -> listOfNotNull(
-            TransferAction.PAUSE,
-            TransferAction.RETRY.takeIf { t.waiting == io.github.matiyaaa.fuse.transfer.WaitReason.NETWORK || t.waiting == io.github.matiyaaa.fuse.transfer.WaitReason.DEVICE },
-            TransferAction.CANCEL,
-            TransferAction.MOVE_TO_TOP,
-        )
-        TransferStatus.QUEUED -> listOf(TransferAction.PAUSE, TransferAction.MOVE_UP, TransferAction.MOVE_DOWN, TransferAction.MOVE_TO_TOP, TransferAction.CANCEL)
-        TransferStatus.PAUSED -> listOf(TransferAction.RESUME, TransferAction.MOVE_TO_TOP, TransferAction.CANCEL)
-        TransferStatus.FAILED -> listOfNotNull(TransferAction.RETRY, TransferAction.CANCEL, TransferAction.REMOVE)
-        TransferStatus.DONE, TransferStatus.CANCELLED -> listOf(TransferAction.REMOVE)
+    private fun actionsFor(t: TransferItem): List<TransferAction> {
+        // A download kept for later can go now; any other still to come can wait for the charger.
+        val timing = if (t.upload || t.status.finished || t.status == TransferStatus.PAUSED) null else if (t.later) TransferAction.NOW else TransferAction.LATER
+        return when (t.status) {
+            TransferStatus.ACTIVE -> listOfNotNull(TransferAction.PAUSE, timing, TransferAction.CANCEL, TransferAction.MOVE_TO_TOP)
+            // Waiting on the network: tried again now when asked, rather than paused and resumed.
+            // Kept for later: sent now is the obvious thing, so it leads.
+            TransferStatus.WAITING -> if (t.waiting == io.github.matiyaaa.fuse.transfer.WaitReason.LATER) {
+                listOf(TransferAction.NOW, TransferAction.PAUSE, TransferAction.CANCEL, TransferAction.MOVE_TO_TOP)
+            } else {
+                listOfNotNull(
+                    TransferAction.PAUSE,
+                    TransferAction.RETRY.takeIf { t.waiting == io.github.matiyaaa.fuse.transfer.WaitReason.NETWORK || t.waiting == io.github.matiyaaa.fuse.transfer.WaitReason.DEVICE },
+                    timing,
+                    TransferAction.CANCEL,
+                    TransferAction.MOVE_TO_TOP,
+                )
+            }
+            TransferStatus.QUEUED -> listOfNotNull(TransferAction.PAUSE, timing, TransferAction.MOVE_UP, TransferAction.MOVE_DOWN, TransferAction.MOVE_TO_TOP, TransferAction.CANCEL)
+            TransferStatus.PAUSED -> listOf(TransferAction.RESUME, TransferAction.MOVE_TO_TOP, TransferAction.CANCEL)
+            TransferStatus.FAILED -> listOfNotNull(TransferAction.RETRY, TransferAction.CANCEL, TransferAction.REMOVE)
+            TransferStatus.DONE, TransferStatus.CANCELLED -> listOf(TransferAction.REMOVE)
+        }
     }
 
     // ------------------------------------------------------------------ mirrored sources
@@ -350,6 +379,9 @@ internal class DefaultTransfersOps(
 
         /** How late that look may run before it means the device slept (a busy game makes it a little late). */
         const val SLEPT_SLACK_MS = 30_000L
+
+        /** How long a first "no battery" waits for the real reading before it is believed. */
+        const val NO_BATTERY_MS = 5_000L
 
         /** Every summary row the Downloads button turns into counts. */
         fun summaryOf(rows: List<TransferRow>, live: (String) -> TransferLive?): TransferSummary = TransferScheduler.summary(rows.map { it.item }, live)

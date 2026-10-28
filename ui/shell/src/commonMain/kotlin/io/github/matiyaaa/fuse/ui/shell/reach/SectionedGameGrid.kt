@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.focus.glideTo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -74,6 +79,8 @@ fun SectionedGameGrid(
     tag: String,
     /** The room while no game is chosen (a system's page shows the system's). */
     room: io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource? = null,
+    /** What the page itself offers (Download All), beside its title: up from the first row reaches them. */
+    actions: List<io.github.matiyaaa.fuse.ui.shell.downloads.TopAction> = emptyList(),
     title: @Composable () -> Unit,
 ) {
     val shown = sections.filter { it.items.isNotEmpty() }
@@ -83,12 +90,21 @@ fun SectionedGameGrid(
     val focused = app.focusZone == FocusZone.CONTENT && !app.overlayOpen
     val tile = LocalTileMetrics.current.icon
     val chosen = shown.getOrNull(sel.section)?.items?.getOrNull(sel.index)
-    PageEffect(focused) {
-        if (focused) app.hints = listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.BACK, "Back"))
+    // On the page's own actions rather than a game (always, with no games to be on): [action] is the one chosen.
+    var onActions by remember { mutableStateOf(false) }
+    var picked by remember { mutableIntStateOf(0) }
+    val action = picked.coerceIn(0, (actions.size - 1).coerceAtLeast(0))
+    val atActions = actions.isNotEmpty() && (onActions || shown.isEmpty())
+    PageEffect(focused, atActions, actions.getOrNull(action)?.label) {
+        if (focused) app.hints = if (atActions) {
+            listOfNotNull(Hint(HintButton.CONFIRM, actions.getOrNull(action)?.label ?: "Choose"), Hint(HintButton.DPAD, "Choose").takeIf { actions.size > 1 }, Hint(HintButton.BACK, "Back"))
+        } else {
+            listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.BACK, "Back"))
+        }
     }
     val systems by app.store.library.platforms.collectAsState()
-    PageEffect(focused, chosen?.card?.id, chosen?.card?.art, room) {
-        val c = chosen?.card
+    PageEffect(focused, chosen?.card?.id, chosen?.card?.art, room, atActions) {
+        val c = chosen?.card?.takeIf { !atActions }
         if (focused) app.hero = c?.room(systems.firstOrNull { it.platform.id == c.shownPlatform }) ?: room
     }
     BoxWithConstraints(Modifier.fillMaxSize().testTag(tag)) {
@@ -96,8 +112,20 @@ fun SectionedGameGrid(
         val usable = maxWidth - Space.gutter * 2
         val columns = ((usable + gap) / (tile + gap)).toInt().coerceAtLeast(2)
         InputLayer(enabled = focused) { e ->
+            if (atActions) return@InputLayer when (e.action) {
+                NavAction.LEFT -> if (action > 0) { picked = action - 1; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.RIGHT -> if (action < actions.lastIndex) { picked = action + 1; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.DOWN -> if (shown.isNotEmpty()) { onActions = false; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.UP -> NavResult.BLOCKED
+                NavAction.SELECT -> { actions.getOrNull(action)?.run?.invoke(); NavResult.ACTIVATED }
+                else -> NavResult.IGNORED
+            }
             when (e.action) {
-                NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> sel.move(e.action, sizes, columns)
+                NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
+                    val moved = sel.move(e.action, sizes, columns)
+                    // Up from the first row: the page's own actions.
+                    if (moved == NavResult.IGNORED && e.action == NavAction.UP && actions.isNotEmpty()) { onActions = true; NavResult.MOVED } else moved
+                }
                 NavAction.SELECT -> { chosen?.open?.invoke(); NavResult.ACTIVATED }
                 NavAction.CONTEXT -> { chosen?.options?.invoke(); NavResult.ACTIVATED }
                 else -> NavResult.IGNORED
@@ -113,7 +141,11 @@ fun SectionedGameGrid(
             }
             0
         }
-        LaunchedEffect(sel.section, sel.index, columns) {
+        LaunchedEffect(sel.section, sel.index, columns, atActions) {
+            if (atActions) {
+                grid.glideTo(0)
+                return@LaunchedEffect
+            }
             val first = shown.getOrNull(sel.section)?.let { sel.index < columns } ?: true
             // The chosen row keeps the line above in view: its heading, on the first row of a section.
             val target = if (sel.section == 0 && first) 0 else if (first) position - sel.index - 1 else position - (sel.index % columns) - columns
@@ -127,7 +159,34 @@ fun SectionedGameGrid(
             horizontalArrangement = Arrangement.spacedBy(gap),
             verticalArrangement = Arrangement.spacedBy(gap),
         ) {
-            item("title", span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(bottom = Space.s)) { title() } }
+            item("title", span = { GridItemSpan(maxLineSpan) }) {
+                val pills: @Composable () -> Unit = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                        actions.forEachIndexed { i, a ->
+                            val chosenHere = focused && atActions && i == action
+                            io.github.matiyaaa.fuse.ui.shell.downloads.ActionPill(a, chosenHere, label = this@BoxWithConstraints.maxWidth >= 720.dp || chosenHere || actions.size == 1) {
+                                picked = i
+                                a.run()
+                            }
+                        }
+                    }
+                }
+                // Beside the title where there is room; under it on a phone held upright, so the name stays whole.
+                if (actions.isNotEmpty() && this@BoxWithConstraints.maxWidth < NARROW) {
+                    Column(Modifier.fillMaxWidth().padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                        title()
+                        pills()
+                    }
+                } else {
+                    Row(Modifier.fillMaxWidth().padding(bottom = Space.s), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) { title() }
+                        if (actions.isNotEmpty()) {
+                            Spacer(Modifier.width(Space.s))
+                            pills()
+                        }
+                    }
+                }
+            }
             if (loading) {
                 item("wait", span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(Space.xxl), contentAlignment = Alignment.Center) { Spinner(size = 24.dp, color = Fuse.colors.textMuted) } }
             } else if (shown.isEmpty()) {
@@ -139,7 +198,7 @@ fun SectionedGameGrid(
                     if (shown.size > 1 || sec.key != "main") SectionHeading(sec, Modifier.padding(top = if (s == 0) 0.dp else Space.l))
                 }
                 itemsIndexed(sec.items, key = { _, it -> "${sec.key}:${it.key}" }) { i, item ->
-                    item.tile(focused && sel.section == s && sel.index == i, tile, { sel.select(s, i); item.open() }, { sel.select(s, i); item.options() })
+                    item.tile(focused && !atActions && sel.section == s && sel.index == i, tile, { onActions = false; sel.select(s, i); item.open() }, { onActions = false; sel.select(s, i); item.options() })
                 }
             }
         }
@@ -159,3 +218,6 @@ private fun SectionHeading(sec: GameSection, modifier: Modifier) {
         }
     }
 }
+
+/** Narrower than this, the page's actions go under its title rather than beside it. */
+private val NARROW = 600.dp
