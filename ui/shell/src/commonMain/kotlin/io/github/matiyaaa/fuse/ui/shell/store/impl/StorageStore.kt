@@ -28,12 +28,37 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/** Make Room: games not played for this long can go; at most so many are looked into, and so many offered. */
+private const val QUIET_MS = 90L * 24 * 60 * 60 * 1000
+private const val ROOM_LOOKED_AT = 60
+private const val ROOM_SHOWN = 24
+private const val COPIES_WAIT_MS = 2_000L
+
 internal class DefaultStorageOps(
     private val ctx: StoreContext,
     private val drives: Drives,
     private val sources: io.github.matiyaaa.fuse.ui.shell.store.SourceOps? = null,
+    /** Every copy of a game, here, on RomM and on the household's devices (the Fuse Library's). */
+    private val copiesOf: (GameId) -> kotlinx.coroutines.flow.Flow<io.github.matiyaaa.fuse.ui.shell.store.GameCopies?> = { kotlinx.coroutines.flow.flowOf(null) },
 ) : StorageOps {
     private val state = MutableStateFlow<StorageUsage?>(null)
+
+    override suspend fun roomToMake(): List<io.github.matiyaaa.fuse.ui.shell.store.RoomSuggestion> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        val usage = state.value ?: return@withContext emptyList()
+        val now = ctx.now()
+        val playing = ctx.data.playSessions.openSession().first()?.gameId
+        // Quiet for a while and nobody's favourite, the largest first; only so many are looked into.
+        val quiet = usage.games.filter { g ->
+            !g.lastKnown && g.bytes > 0 && !g.card.favorite && g.card.id != playing && (g.card.lastPlayedAt ?: 0L) < now - QUIET_MS
+        }.sortedByDescending { it.bytes }.take(ROOM_LOOKED_AT)
+        quiet.mapNotNull { g ->
+            val copies = kotlinx.coroutines.withTimeoutOrNull(COPIES_WAIT_MS) { copiesOf(g.card.id).first() } ?: return@mapNotNull null
+            // Only a copy whose files are the same as these, so what comes back is this very game.
+            val kept = copies.copies.firstOrNull { it.place != io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE && it.check == io.github.matiyaaa.fuse.ui.shell.store.CopyCheck.VERIFIED }
+                ?: return@mapNotNull null
+            io.github.matiyaaa.fuse.ui.shell.store.RoomSuggestion(g, if (kept.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.ROMM) "RomM" else kept.name, g.card.lastPlayedAt)
+        }.take(ROOM_SHOWN)
+    }
 
     override suspend fun cacheBytes(): Long? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
         // Walked folder by folder; a cache too large to walk quickly is reported as unknown, not guessed.

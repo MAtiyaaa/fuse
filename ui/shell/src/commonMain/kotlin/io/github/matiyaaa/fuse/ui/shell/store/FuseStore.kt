@@ -324,6 +324,13 @@ interface StorageOps {
     /** Connected drives games can be moved to, each with its games folder when it has one. */
     suspend fun moveTargets(): List<MoveTarget> = emptyList()
 
+    /**
+     * Games that can go to make room, largest first: none a favourite or played in the last three
+     * months, each with an identical copy (checked by its files) on RomM or another device, so it
+     * comes back in a press. Their saves stay where the emulators keep them.
+     */
+    suspend fun roomToMake(): List<RoomSuggestion> = emptyList()
+
     /** What Fuse's own art and caches take (the system may clear them), or null when it can't tell. */
     suspend fun cacheBytes(): Long? = null
 
@@ -434,6 +441,12 @@ data class GameSize(
 )
 
 data class DeleteReport(val deleted: Int, val freedBytes: Long, val failed: List<String>)
+
+/**
+ * A game that can go to make room ([StorageOps.roomToMake]): what it takes, where an identical copy
+ * is kept (RomM, or another device by name), and when it was last played (null for never).
+ */
+data class RoomSuggestion(val game: GameSize, val keptOn: String, val lastPlayedAt: Long?)
 
 data class GameQuery(
     val platform: PlatformId? = null,

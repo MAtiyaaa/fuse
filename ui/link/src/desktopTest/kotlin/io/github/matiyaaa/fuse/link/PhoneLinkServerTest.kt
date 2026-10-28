@@ -141,6 +141,25 @@ class PhoneLinkServerTest {
         assertEquals(400, http(port, "PUT", "/api/games/$id/favorite", """{"favorite":"maybe"}""", cookie = cookie).status)
         assertEquals(404, http(port, "PUT", "/api/games/999999/favorite", """{"favorite":true}""", cookie = cookie).status)
         assertEquals(200, http(port, "POST", "/api/rescan", cookie = cookie).status)
+
+        // The Journal, written on the phone: a status, a rating and a note, each kept on the device.
+        assertTrue("\"journal\":{" in http(port, "GET", "/api/games/$id", cookie = cookie).body)
+        val marked = http(port, "PUT", "/api/games/$id/journal", """{"status":"BEATEN","rating":9,"note":"  The last boss took a week.  "}""", cookie = cookie)
+        assertEquals(200, marked.status, marked.body)
+        val journal = store.library.game(io.github.matiyaaa.fuse.model.GameId(id.toLong())).first()!!.game.journal
+        assertEquals(io.github.matiyaaa.fuse.model.PlayStatus.BEATEN, journal.status)
+        assertEquals(9, journal.rating)
+        assertEquals("The last boss took a week.", journal.note)
+        // What isn't sent stays; a status of null takes it out; nonsense is refused.
+        assertEquals(200, http(port, "PUT", "/api/games/$id/journal", """{"status":null}""", cookie = cookie).status)
+        val after = store.library.game(io.github.matiyaaa.fuse.model.GameId(id.toLong())).first()!!.game.journal
+        assertEquals(null, after.status)
+        assertEquals(9, after.rating)
+        assertEquals(400, http(port, "PUT", "/api/games/$id/journal", """{"status":"WON"}""", cookie = cookie).status)
+        assertEquals(400, http(port, "PUT", "/api/games/$id/journal", """{"rating":11}""", cookie = cookie).status)
+        // No game running here, and this device can't close one: said so, nothing else happens.
+        assertTrue("\"canQuit\":false" in http(port, "GET", "/api/now", cookie = cookie).body)
+        assertTrue("error" in http(port, "POST", "/api/playing/quit", cookie = cookie).body)
         val shown = async { io.github.matiyaaa.fuse.ui.shell.app.ExternalRequests.requests.first() }
         kotlinx.coroutines.yield()
         assertEquals(200, http(port, "POST", "/api/games/$id/open", cookie = cookie).status)

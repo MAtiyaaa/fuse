@@ -123,6 +123,10 @@ internal class LinkApi(
         return buildJsonObject {
             put("playing", home.playtime.currentGame?.let { summary(it) } ?: JsonNull)
             put("playingSince", home.playtime.currentSince)
+            // Whether the phone can ask the game to close (on a computer that can).
+            put("canQuit", home.playtime.currentGame != null && store.library.canQuitPlaying)
+            // Up next: the games the Journal says are wanted, the latest first.
+            putJsonArray("upNext") { home.upNext.take(UP_NEXT_SHOWN).forEach { add(summary(it)) } }
             put("cartridge", buildJsonObject {
                 put("enabled", prefs.cartridgeEnabled)
                 if (!prefs.cartridgeEnabled) return@buildJsonObject
@@ -228,6 +232,37 @@ internal class LinkApi(
         return Reply(buildJsonObject { put("ok", true); put("favorite", favorite) })
     }
 
+    /**
+     * [id]'s Journal changed as [body] says: any of `status` (a PlayStatus name, or null for none),
+     * `rating` (0 to 10, halves of five stars) and `note`; what isn't there stays as it is.
+     */
+    suspend fun setJournal(id: Long, body: JsonElement?): Reply {
+        val o = body as? JsonObject ?: return Reply(error("Say what to change."), HttpStatusCode.BadRequest)
+        val d = store.library.game(GameId(id)).first() ?: return notFound()
+        var j = d.game.journal
+        if ("status" in o) {
+            val s = (o["status"] as? JsonPrimitive)?.contentOrNull
+            j = j.copy(status = if (s == null) null else io.github.matiyaaa.fuse.model.PlayStatus.of(s) ?: return Reply(error("There is no such status."), HttpStatusCode.BadRequest))
+        }
+        if ("rating" in o) {
+            val r = (o["rating"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()?.takeIf { it in 0..io.github.matiyaaa.fuse.model.GameJournal.MOST_RATING }
+                ?: return Reply(error("A rating is 0 to 10."), HttpStatusCode.BadRequest)
+            j = j.copy(rating = r)
+        }
+        if ("note" in o) {
+            val n = (o["note"] as? JsonPrimitive)?.contentOrNull?.trim()?.take(io.github.matiyaaa.fuse.model.GameJournal.LONGEST_NOTE)
+            j = j.copy(note = n?.ifEmpty { null })
+        }
+        store.library.setJournal(GameId(id), j)
+        return Reply(buildJsonObject { put("ok", true) })
+    }
+
+    /** Asks the game being played on the device to close, as its own window would; never by force. */
+    suspend fun quitPlaying(): Reply {
+        if (!store.library.canQuitPlaying) return Reply(error("$deviceName can't close games from here. Close it in the game."))
+        return if (store.library.quitPlaying()) Reply(buildJsonObject { put("ok", true) }) else Reply(error("No game is running on $deviceName."))
+    }
+
     fun pauseTransfers(pause: Boolean): Reply {
         if (pause) store.transfers.pauseAll() else store.transfers.resumeAll()
         return Reply(buildJsonObject { put("ok", true) })
@@ -317,6 +352,13 @@ internal class LinkApi(
             put("logo", url(d.art.logo))
             put("favorite", g.favorite)
             put("lastPlayedAt", g.play.lastPlayedAt)
+            // Where the person is with it: best written on a phone's keyboard.
+            put("journal", buildJsonObject {
+                put("status", g.journal.status?.name)
+                put("statusAt", g.journal.statusAt)
+                put("rating", g.journal.rating)
+                put("note", g.journal.note)
+            })
             put("description", g.metadata.description)
             put("developer", g.metadata.developer)
             put("publisher", g.metadata.publisher)
@@ -552,3 +594,6 @@ internal class BoundedMap<K, V>(private val capacity: Int) {
         while (map.size > capacity) map.remove(map.keys.first())
     }
 }
+
+/** How many of the Journal's wanted games the phone's Now shows. */
+private const val UP_NEXT_SHOWN = 8

@@ -1993,16 +1993,18 @@ function renderNow() {
   if (!nowUI) {
     nowUI = {
       playing: h('section.section', { 'aria-label': 'Playing now' }),
+      upNext: h('section.section', { 'aria-label': 'Up next' }),
       transfers: h('section.section', { 'aria-label': 'Downloads' }),
       cart: h('section.section', { 'aria-label': 'Cartridge downloads' }),
       fill: h('section.section', { 'aria-label': 'Art fill' }),
       fillCard: createFillCard(),
     };
     nowUI.fill.append(sectionHead('Art fill'), nowUI.fillCard.el);
-    E.nowBody.replaceChildren(nowUI.playing, nowUI.transfers, nowUI.cart, nowUI.fill);
+    E.nowBody.replaceChildren(nowUI.playing, nowUI.upNext, nowUI.transfers, nowUI.cart, nowUI.fill);
     arriving = true;
   }
   updatePlaying();
+  updateUpNext();
   updateTransfers();
   updateCartridge();
   updateFillViews();
@@ -2014,9 +2016,45 @@ function updatePlaying() {
   const n = S.now || {};
   const g = n.playing && typeof n.playing === 'object' ? n.playing : null;
   const key = g
-    ? JSON.stringify([g.id, g.title, g.cover, g.hero, g.system, g.systemName, g.year, n.playingSince, S.systems.length])
+    ? JSON.stringify([g.id, g.title, g.cover, g.hero, g.system, g.systemName, g.year, n.playingSince, S.systems.length, !!n.canQuit])
     : `none|${deviceName()}`;
-  keyed(nowUI.playing, key, () => (g ? playingCard(g, n.playingSince) : playingEmpty()));
+  keyed(nowUI.playing, key, () => (g ? [playingCard(g, n.playingSince), n.canQuit ? playingActions(g) : null].filter(Boolean) : playingEmpty()));
+}
+
+/** Up next: the games the Journal says are wanted, as tiles in a row; nothing while there are none. */
+function updateUpNext() {
+  const slot = nowUI.upNext;
+  const list = (S.now && Array.isArray(S.now.upNext) ? S.now.upNext : []).filter((g) => g && typeof g === 'object');
+  slot.hidden = !list.length;
+  keyed(slot, JSON.stringify([list.map((g) => [g.id, g.title, g.cover]), S.systems.length]), () =>
+    list.length ? [sectionHead('Up next'), h('div.shelf', list.map((g) => tile(g, true)))] : null);
+}
+
+/** Closing the game from the phone: asked first, then the device asks the game to close as its window would. */
+function playingActions(g) {
+  const quit = btn('Quit the game', {
+    icon: 'power', kind: 'danger', size: 'sm',
+    onClick: async (b) => {
+      const ok = await confirmDialog({
+        title: `Quit ${g.title || 'the game'}?`,
+        text: `It closes on ${deviceName()} as when you close its window, and Fuse sends its saves as it ends. Anything not saved in the game is lost.`,
+        confirm: 'Quit', danger: true,
+      });
+      if (!ok) return;
+      setBusy(b, true);
+      try {
+        const r = await api('/api/playing/quit', { method: 'POST' });
+        if (r && r.error) throw new Error(r.error);
+        toast('Closing the game', 'success');
+        refreshNow();
+      } catch (e) {
+        toast(e.message || "Couldn't reach the device", 'error');
+      } finally {
+        setBusy(b, false);
+      }
+    },
+  });
+  return h('div.dl-actions', quit);
 }
 
 function playingCard(g, since) {
@@ -2821,6 +2859,8 @@ function gameSections(d) {
     stat('clock', 'Play time', fmtMinutes(d.playMinutes)),
     stat('history', 'Last played', d.lastPlayedAt ? fmtAgo(d.lastPlayedAt) : 'Never')));
 
+  if (d.journal && typeof d.journal === 'object') out.push(journalSection(d));
+
   // About
   const aboutKids = [];
   const description = typeof d.description === 'string' ? d.description.trim() : '';
@@ -2860,6 +2900,77 @@ function gameSections(d) {
     artCard(d),
     fillGameBlock(d)));
   return out;
+}
+
+/** The Journal's statuses in its own order, each with the mark Fuse gives it on the device. */
+const STATUSES = [
+  ['PLAYING', 'Playing', 'joystick'],
+  ['WANT', 'Want to play', 'bookmark'],
+  ['PAUSED', 'On hold', 'circle-pause'],
+  ['BEATEN', 'Beaten', 'flag'],
+  ['COMPLETED', 'Completed', 'crown'],
+  ['DROPPED', 'Dropped', 'circle-slash'],
+];
+
+/**
+ * The game's Journal, as on the device: where the person is with it, their rating in half stars,
+ * and their note, written on the phone's own keyboard. Each change is kept on the device at once.
+ */
+function journalSection(d) {
+  const j = d.journal;
+  const status = STATUSES.find((s) => s[0] === j.status);
+  async function save(change, done, b) {
+    if (b) setBusy(b, true);
+    try {
+      const r = await api(gamePath(d.id, '/journal'), { method: 'PUT', body: change });
+      if (r && r.error) throw new Error(r.error);
+      d.journal = Object.assign({}, j, change, 'status' in change ? { statusAt: change.status ? nowMs() : null } : {});
+      toast(done, 'success');
+      renderGame();
+    } catch (e) {
+      if (b) setBusy(b, false);
+      if (e.status !== 401) toast(e.message || "Couldn't reach the device", 'error');
+    }
+  }
+  // A status chosen again is taken back off: the Journal then holds no status for it.
+  const statuses = h('div.journal-statuses', { role: 'group', 'aria-label': 'Where you are with it' },
+    STATUSES.map(([id, label, ic]) => {
+      const on = j.status === id;
+      const b = h('button.chip', { type: 'button', 'aria-pressed': String(on) }, icon(ic), label);
+      b.addEventListener('click', () => save({ status: on ? null : id }, on ? 'Taken out of your Journal' : `${label}, kept in your Journal`));
+      return b;
+    }));
+  // A star once gives it whole, again gives half of it, a third time clears the rating.
+  const rating = num(j.rating);
+  const stars = h('div.stars', { role: 'group', 'aria-label': rating ? `Your rating: ${rating / 2} of 5 stars` : 'Not rated' },
+    [1, 2, 3, 4, 5].map((n) => {
+      const fill = rating >= n * 2 ? ' is-full' : rating === n * 2 - 1 ? ' is-half' : '';
+      const b = h('button', { type: 'button', class: 'star' + fill, 'aria-label': `${n} ${n === 1 ? 'star' : 'stars'}` }, icon('star'));
+      b.addEventListener('click', () => {
+        const next = rating === n * 2 ? n * 2 - 1 : rating === n * 2 - 1 ? 0 : n * 2;
+        save({ rating: next }, next ? `Rated ${next / 2} ${next === 2 ? 'star' : 'stars'}` : 'Rating cleared');
+      });
+      return b;
+    }));
+  const note = h('textarea', { rows: '3', maxlength: '2000', 'aria-label': 'Your note', placeholder: 'Where you left off, what to try next, what you thought' });
+  note.value = j.note || '';
+  const saveNote = btn('Save note', {
+    kind: 'primary', size: 'sm', icon: 'check',
+    onClick: (b) => save({ note: note.value }, note.value.trim() ? 'Note kept' : 'Note cleared', b),
+  });
+  saveNote.disabled = true;
+  note.addEventListener('input', () => { saveNote.disabled = note.value === (j.note || ''); });
+  const set = status && j.statusAt ? fmtAgo(j.statusAt) : '';
+  const since = set ? `Set ${set.charAt(0).toLowerCase()}${set.slice(1)}` : null;
+  return h('section.g-section', sectionHead('Journal'),
+    h('div.card.journal',
+      cardHead(status ? status[2] : 'notebook-pen', status ? status[1] : 'Not in your Journal', since || 'Where you are with it, a rating and a note.'),
+      statuses,
+      h('div.journal-row', h('span.field-label', 'Your rating'), stars),
+      h('div.journal-row',
+        h('span.field-label', 'Your note'),
+        h('div.input.is-area', note),
+        h('div.edit-actions', h('span.spacer'), saveNote))));
 }
 
 function searchAsCard(d) {
