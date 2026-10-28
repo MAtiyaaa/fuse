@@ -210,14 +210,21 @@ interface RommOps {
     suspend fun sendWaitingSaves(): Int = 0
 
     /**
-     * Sends the person's changes to games from RomM (favourites, hidden games, play sessions, the
-     * trophies earned in emulators, in a note of the person's own) from now on, or stops. Turning
-     * it on fails, saying why, when the sign-in may not (pair again).
+     * Sends the person's changes to games from RomM (favourites, hidden games, the Journal, play
+     * sessions, the trophies earned in emulators, in a note of the person's own) from now on, or
+     * stops; while on, marks made in RomM itself come into the Journal too. Turning it on fails,
+     * saying why, when the sign-in may not (pair again).
      */
     suspend fun setSendChanges(on: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException())
 
     /** Sends the changes waiting to go to RomM now; how many went. */
     suspend fun sendChangesNow(): Int = 0
+
+    /**
+     * Brings [game]'s marks in RomM (its status and rating) into its Journal, when RomM's are newer:
+     * asked as its page opens, at most every few minutes per game, and only while changes go both ways.
+     */
+    suspend fun freshenMarks(game: io.github.matiyaaa.fuse.model.GameId) {}
 
     /**
      * Keeps a Cloudflare Access service token for the outside address's host (it goes with requests

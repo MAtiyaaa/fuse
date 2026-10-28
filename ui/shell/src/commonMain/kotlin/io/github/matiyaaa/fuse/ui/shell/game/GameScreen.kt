@@ -82,6 +82,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ProgressRing
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.Skeleton
 import io.github.matiyaaa.fuse.ui.designsystem.components.SkeletonText
+import io.github.matiyaaa.fuse.ui.designsystem.components.Stars
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
@@ -121,6 +122,9 @@ import io.github.matiyaaa.fuse.ui.shell.app.collectionPicker
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorPicker
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.gameRoom
+import io.github.matiyaaa.fuse.ui.shell.app.journalSheet
+import io.github.matiyaaa.fuse.ui.shell.app.statusIcon
+import io.github.matiyaaa.fuse.ui.shell.app.statusSince
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 import io.github.matiyaaa.fuse.ui.shell.app.showProblem
@@ -131,6 +135,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
+import io.github.matiyaaa.fuse.ui.shell.store.JournalWords
 import io.github.matiyaaa.fuse.ui.shell.store.householdOnly
 import io.github.matiyaaa.fuse.ui.shell.reach.copyMenu
 import io.github.matiyaaa.fuse.ui.shell.reach.reachDownload
@@ -161,7 +166,7 @@ private sealed interface GameLoad {
 }
 
 /** The cards at the foot of the page, in the order they sit (and the selection walks them). */
-private enum class InfoCard { STARTS, PLAY, EXTRAS, FILE }
+private enum class InfoCard { STARTS, PLAY, JOURNAL, EXTRAS, FILE }
 
 /**
  * Game Info: a store page for a game you already own. The room stays lit by the art you selected,
@@ -222,6 +227,9 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
     val rommFlow = remember(game.id) { if (remote != null) app.store.romm.forRom(remote) else app.store.romm.forGame(game.id) }
     val romm by rommFlow.collectAsState(initial = null)
     val rommButtons = remember(romm, remote) { rommButtonsOf(romm, remote != null) }
+    // Its status and rating as RomM has them, when they were changed there (at most every few minutes).
+    val onRomm = remote == null && romm != null
+    LaunchedEffect(game.id, onRomm) { if (onRomm) runCatching { app.store.romm.freshenMarks(game.id) } }
     // The Fuse Library: every copy of this game (here, on the household's other devices, on RomM).
     val household = game.id.householdOnly != null
     val notHere = remote != null || household
@@ -300,6 +308,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
         DetailAction("fav", null, if (game.favorite) FuseIcons.HeartFilled else FuseIcons.Heart, if (game.favorite) "Remove from favourites" else "Add to favourites") {
             app.scope.launch { app.store.library.setFavorite(game.id, !game.favorite) }
         },
+        // The Journal: its status's mark once it has one, so where you are with it shows at the top.
+        DetailAction(
+            "journal", null, game.journal.status?.let(::statusIcon) ?: FuseIcons.NotebookPen,
+            game.journal.status?.let { "Journal: ${JournalWords.label(it)}" } ?: "Journal",
+        ) { app.journalSheet(game.id, game.displayTitle, game.journal) },
         // Collections, sending it and its media are in Options (More, or X), not a row of round buttons.
         DetailAction("more", null, FuseIcons.More, "Options") { app.openContextMenu(app.gameMenu(card, fromDetail = true)) },
     )
@@ -311,6 +324,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
         // A game not here yet has no play time, extras or file of its own to show.
         if (!notHere) {
             add(InfoCard.PLAY)
+            add(InfoCard.JOURNAL)
             if (game.content.isNotEmpty()) add(InfoCard.EXTRAS)
             add(InfoCard.FILE)
         }
@@ -496,6 +510,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
             InfoCard.STARTS -> app.emulatorPicker(card)
             InfoCard.FILE -> showCopy()
             InfoCard.PLAY -> app.go(Route.PlayTime)
+            InfoCard.JOURNAL -> app.journalSheet(game.id, game.displayTitle, game.journal)
             InfoCard.EXTRAS -> app.readManual(game.displayTitle, game.content)
         }
     }
@@ -525,6 +540,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
             InfoCard.STARTS -> "Choose emulator"
             InfoCard.FILE -> "This copy"
             InfoCard.PLAY -> "All play time"
+            InfoCard.JOURNAL -> "Journal"
             else -> null
         }
     }
@@ -701,12 +717,13 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                                 a.icon, selected = selected,
                                 tint = when {
                                     a.id == "fav" && game.favorite -> c.accent
+                                    a.id == "journal" && game.journal.status != null -> c.accent
                                     a.id == "content" && io.github.matiyaaa.fuse.library.content.ContentState.MISSING_LICENCE in contentStates -> c.warning
                                     a.id == "health" -> c.warning
                                     else -> c.text
                                 },
                                 contentDescription = a.name,
-                                selectedTint = if (a.id == "fav" && game.favorite) c.accent else null,
+                                selectedTint = if ((a.id == "fav" && game.favorite) || (a.id == "journal" && game.journal.status != null)) c.accent else null,
                                 modifier = m,
                                 onClick = tap,
                             )
@@ -902,6 +919,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                             when (info) {
                                 InfoCard.STARTS -> StartsCard(d, selected, tap, m)
                                 InfoCard.PLAY -> PlayCard(d, selected, tap, m)
+                                InfoCard.JOURNAL -> JournalCard(d, selected, tap, m)
                                 InfoCard.EXTRAS -> ExtrasCard(d, selected, tap, m)
                                 InfoCard.FILE -> FileCard(d, size, disc, selected, tap, m)
                             }
@@ -1519,6 +1537,39 @@ private fun PlayCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, modi
     }
 }
 
+/**
+ * The person's Journal for it: where they are with it and since when, their stars and a glimpse of
+ * their note; with nothing in it yet, what it is for. Confirming it opens the Journal.
+ */
+@Composable
+private fun JournalCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val c = Fuse.colors
+    val j = d.game.journal
+    InfoPanel("Journal", FuseIcons.NotebookPen, selected, onClick, modifier, actionable = true) {
+        if (j.isEmpty) {
+            FText("Nothing yet", Fuse.type.titleSmall, maxLines = 1)
+            FText("Say where you are with it, rate it, or keep a note of your own", Fuse.type.caption, color = c.textMuted, maxLines = 2)
+            return@InfoPanel
+        }
+        val s = j.status
+        if (s != null) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                FuseIcon(statusIcon(s), size = Size.iconS, tint = c.accent)
+                FText(JournalWords.label(s), Fuse.type.titleSmall, maxLines = 1)
+            }
+            j.statusAt?.let { at ->
+                FText(statusSince(s, at, kotlin.time.Clock.System.now().toEpochMilliseconds()), Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            }
+        } else {
+            FText("No status", Fuse.type.titleSmall, color = c.textMuted, maxLines = 1)
+        }
+        if (j.rating > 0) Stars(j.rating, Modifier.padding(top = Space.s), size = Size.iconS)
+        JournalWords.glimpse(j, NOTE_GLIMPSE)?.let {
+            FText("\u201C$it\u201D", Fuse.type.caption, color = c.textMuted, maxLines = 3, modifier = Modifier.padding(top = Space.s))
+        }
+    }
+}
+
 /** Updates, DLC and other extras found next to the game, with what the emulator does with them. */
 @Composable
 private fun ExtrasCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
@@ -1821,6 +1872,9 @@ internal fun playersLabel(players: String): String? {
 }
 
 /** How many detail cards share a line: four make two even lines rather than three and one. */
+/** The most of a note the Journal card shows. */
+private const val NOTE_GLIMPSE = 120
+
 private fun detailsPerLine(cards: Int, fits: Int): Int = (if (cards == 4 && fits == 3) 2 else fits.coerceAtMost(cards)).coerceAtLeast(1)
 
 /** Systems whose games can come as packages that Fuse installs into the emulator. */

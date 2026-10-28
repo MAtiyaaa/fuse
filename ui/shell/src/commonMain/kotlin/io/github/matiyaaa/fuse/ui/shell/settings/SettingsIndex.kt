@@ -172,6 +172,7 @@ object SettingsIndex {
         SettingTopic("library", "Steam achievements of", "steam account achievements user", steam = true),
         SettingTopic("library", "Selecting a game", "open game page launch directly press a"),
         SettingTopic("library", "Spotlight on systems", "systems featured highlight"),
+        SettingTopic("library", "Bring in your history", "move in import es-de emulationstation retroarch pegasus steam batocera favourites play time collections migrate"),
         SettingTopic("library", "Continue where you left off", "resume save state continue suspend quick resume pick up"),
         SettingTopic("library", "Display names", "names clean titles rename tidy"),
         SettingTopic("systems", "System art", "system logos art pack art book next"),

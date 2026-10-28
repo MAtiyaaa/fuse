@@ -242,6 +242,9 @@ internal class StoreContext(
             unavailable = away?.let { Unavailable(it.driveLabel, it.state) },
             customTitle = summary.titles.custom != null,
             pinned = summary.pinned,
+            status = summary.status,
+            statusAt = summary.statusAt,
+            rating = summary.rating,
         )
     }
 

@@ -97,6 +97,7 @@ internal fun BoardFace(kind: WidgetKind, size: BoardSize, feed: HomeFeed, cartri
     when (kind) {
         WidgetKind.CONTINUE_PLAYING -> ContinueFace(feed, face)
         WidgetKind.FAVORITES, WidgetKind.RECENTLY_PLAYED, WidgetKind.RECENTLY_ADDED, WidgetKind.PINNED_GAMES, WidgetKind.FOR_YOU,
+        WidgetKind.UP_NEXT,
         -> GameCarousel(kind, boardGames(kind, feed), feed, face)
         // One game, large, with why it is in the spotlight today.
         WidgetKind.SPOTLIGHT -> GamesFace(kind, boardGames(kind, feed), face) { g -> feed.reasons[g.id] ?: g.platformShort }
@@ -132,6 +133,7 @@ internal fun boardGames(kind: WidgetKind, feed: HomeFeed): List<GameCard> = when
     WidgetKind.CONTINUE_PLAYING -> feed.continuePlaying
     WidgetKind.RECENTLY_PLAYED -> feed.recentlyPlayed
     WidgetKind.FAVORITES -> feed.favorites
+    WidgetKind.UP_NEXT -> feed.upNext
     WidgetKind.RECENTLY_ADDED -> feed.recentlyAdded
     WidgetKind.PINNED_GAMES -> feed.pinnedGames
     WidgetKind.MOST_PLAYED -> feed.mostPlayed
@@ -249,12 +251,16 @@ private fun ArtLabel(kind: WidgetKind) {
 private fun emptyGamesNote(kind: WidgetKind): String = when (kind) {
     WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED -> "Games you play show here"
     WidgetKind.FAVORITES -> "Add favourites from a game's options"
+    WidgetKind.UP_NEXT -> UP_NEXT_EMPTY
     WidgetKind.PINNED_GAMES -> "Pin games from their options"
     WidgetKind.RECENTLY_ADDED -> "New games show here after a scan"
     WidgetKind.CURRENT_GAME -> "Nothing is running"
     WidgetKind.FOR_YOU, WidgetKind.SPOTLIGHT -> emptySuggestionNote(kind)
     else -> "Nothing here yet"
 }
+
+/** What Up Next says while no game is wanted: how one gets there. */
+internal const val UP_NEXT_EMPTY = "Choose Want to play in a game's Journal"
 
 /** What a suggestion widget says before the library has anything to suggest. */
 internal fun emptySuggestionNote(kind: WidgetKind): String =

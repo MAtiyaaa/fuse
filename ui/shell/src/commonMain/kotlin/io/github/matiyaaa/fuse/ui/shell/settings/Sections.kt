@@ -46,6 +46,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.shell.app.rescanAndReport
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.moveInSheet
+import io.github.matiyaaa.fuse.ui.shell.app.moveInUndo
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorSignInSheet
 import io.github.matiyaaa.fuse.ui.shell.app.addToSteam
 import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
@@ -429,6 +431,7 @@ private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.CONTINUE_PLAYING -> FuseIcons.CirclePlay
     WidgetKind.RECENTLY_PLAYED -> FuseIcons.History
     WidgetKind.FAVORITES -> FuseIcons.Heart
+    WidgetKind.UP_NEXT -> FuseIcons.Bookmark
     WidgetKind.RECENTLY_ADDED -> FuseIcons.Sparkles
     WidgetKind.PINNED_GAMES -> FuseIcons.Pin
     WidgetKind.PINNED_APPS -> FuseIcons.Smartphone
@@ -461,6 +464,8 @@ fun libraryRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val sources by app.store.sources.sources.collectAsState()
     val scan by app.store.sources.scan.collectAsState()
+    // When the last move in was, while it can still be put back; looked at again as moves come and go.
+    val lastMoveIn by androidx.compose.runtime.produceState<Long?>(null, app.choice) { value = runCatching { app.store.library.lastMoveIn() }.getOrNull() }
     return buildList {
         labelled("Game folders") {
             for (s in sources) {
@@ -484,6 +489,21 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 trailing = Trailing.Chevron,
                 onSelect = { app.addGame() },
             ))
+        }
+        labelled("Moving in") {
+            add(MenuAction(
+                "movein", "Bring in your history", FuseIcons.Import,
+                detail = "Favourites, play time, finished games and collections from ES-DE, RetroArch, Pegasus or Steam",
+                trailing = Trailing.Chevron,
+                onSelect = { app.moveInSheet() },
+            ))
+            lastMoveIn?.let { at ->
+                add(MenuAction(
+                    "movein.undo", "Put back the last move in", FuseIcons.Undo,
+                    detail = "Brought in ${io.github.matiyaaa.fuse.ui.shell.reach.dayText(at, kotlin.time.Clock.System.now().toEpochMilliseconds())}. Every game and collection goes back as it was",
+                    onSelect = { app.moveInUndo() },
+                ))
+            }
         }
         labelled("Browsing") {
             add(app.choiceRow(

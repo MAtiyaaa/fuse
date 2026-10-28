@@ -79,6 +79,10 @@ class GameRepository(
 
     fun observePinned(): Flow<List<GameSummary>> = q.pinned().summaries()
 
+    /** The games the person gave one of [statuses] in the Journal (any status when empty), the latest set first. */
+    fun observeJournal(statuses: Collection<io.github.matiyaaa.fuse.model.PlayStatus> = emptyList()): Flow<List<GameSummary>> =
+        q.withStatus(statuses.ifEmpty { io.github.matiyaaa.fuse.model.PlayStatus.entries }.map { it.name }).summaries()
+
     /** Games played within the last [days] days (window fixed at subscription), most recent first. */
     fun observeContinuePlaying(days: Int = 14, limit: Int = 20): Flow<List<GameSummary>> =
         q.playedSince(clock() - days * DAY_MS, limit.toLong()).summaries()
@@ -120,6 +124,9 @@ class GameRepository(
                 franchise = meta?.franchise?.trim()?.ifEmpty { null },
                 rating = meta?.rating,
                 players = mostPlayers(meta?.players),
+                status = io.github.matiyaaa.fuse.model.PlayStatus.of(r.play_status),
+                statusAt = r.status_at,
+                stars = r.rating.toInt(),
             )
         }
     }.flowOn(dispatcher)
@@ -238,6 +245,49 @@ class GameRepository(
     suspend fun setHidden(id: GameId, hidden: Boolean) = write { q.setHidden(hidden.toDb(), clock(), id.value) }
 
     suspend fun setPinned(id: GameId, pinned: Boolean) = write { q.setPinned(pinned.toDb(), clock(), id.value) }
+
+    /** Every game with what moving in matches it by: its system, files and Steam id. */
+    suspend fun moveInRows(): List<MoveInRow> = withContext(dispatcher) {
+        q.moveInRows().executeAsList().map { MoveInRow(GameId(it.id), it.platform_id, it.path, it.launch_path, it.steam_app_id) }
+    }
+
+    /** What moving in may change of each of [ids], as it is now. */
+    suspend fun playState(ids: Collection<GameId>): List<PlayState> = withContext(dispatcher) {
+        ids.map { it.value }.distinct().chunked(io.github.matiyaaa.fuse.data.SQL_CHUNK).flatMap { chunk ->
+            q.moveInState(chunk).executeAsList().map { r ->
+                PlayState(
+                    GameId(r.id), r.favorite != 0L, r.hidden != 0L, r.imported_seconds, r.imported_source, r.last_played_at,
+                    io.github.matiyaaa.fuse.model.GameJournal(io.github.matiyaaa.fuse.model.PlayStatus.of(r.play_status), r.status_at, r.rating.toInt(), r.note),
+                )
+            }
+        }
+    }
+
+    /** Puts each game's [states] back exactly as they were read ([playState]). */
+    suspend fun restorePlayState(states: Collection<PlayState>) = withContext(dispatcher) {
+        db.transaction {
+            for (s in states) {
+                q.restoreMoveIn(
+                    favorite = s.favorite.toDb(), hidden = s.hidden.toDb(), seconds = s.importedSeconds, source = s.importedSource,
+                    lastPlayedAt = s.lastPlayedAt, status = s.journal.status?.name, statusAt = s.journal.statusAt,
+                    rating = s.journal.rating.toLong(), note = s.journal.note, now = clock(), id = s.id.value,
+                )
+            }
+        }
+    }
+
+    /** Moves [id]'s last played forward to [at], never back. */
+    suspend fun playedBy(id: GameId, at: Long) = write { q.playedBy(at, clock(), id.value) }
+
+    /**
+     * Writes [journal] for [id] as it is: a status keeps the time it was set (the time now when it
+     * changes and none is given), the rating stays within 0..10 and the note within its length.
+     */
+    suspend fun setJournal(id: GameId, journal: io.github.matiyaaa.fuse.model.GameJournal) = write {
+        val note = journal.note?.trim()?.take(io.github.matiyaaa.fuse.model.GameJournal.LONGEST_NOTE)?.takeIf(String::isNotEmpty)
+        val statusAt = if (journal.status == null) null else journal.statusAt ?: clock()
+        q.setJournal(journal.status?.name, statusAt, journal.rating.coerceIn(0, io.github.matiyaaa.fuse.model.GameJournal.MOST_RATING).toLong(), note, clock(), id.value)
+    }
 
     /** Sets the user's display title, or clears it with null/blank. Files are never renamed. */
     suspend fun rename(id: GameId, customTitle: String?) = updateTitles(id) {

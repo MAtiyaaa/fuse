@@ -210,6 +210,8 @@ data class RommRom(
     val multi: Boolean = false,
     val createdAt: Long = 0,
     val updatedAt: Long = 0,
+    /** The signed-in person's own marks on it (status, rating), when they made any; read, never kept in the mirror. */
+    val marks: RommMarks? = null,
 ) {
     /** The files that make the game playable (not manuals, soundtracks or screenshots). */
     val playable: List<RommFile> get() = files.filter { it.kind.holdsGameData }

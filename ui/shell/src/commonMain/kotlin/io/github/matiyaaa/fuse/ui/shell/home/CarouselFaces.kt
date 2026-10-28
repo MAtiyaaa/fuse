@@ -166,6 +166,11 @@ private fun gameLine(kind: WidgetKind, g: GameCard, feed: HomeFeed): String = wh
     WidgetKind.FOR_YOU -> feed.reasons[g.id] ?: g.platformShort
     WidgetKind.RECENTLY_ADDED -> "Added ${agoText(g.addedAt)}"
     WidgetKind.RECENTLY_PLAYED -> g.lastPlayedAt?.let { "Played ${agoText(it)}" } ?: g.platformShort
+    // How long it has waited on the list, beside its system.
+    WidgetKind.UP_NEXT -> listOfNotNull(
+        g.platformShort,
+        g.statusAt?.let { io.github.matiyaaa.fuse.ui.shell.app.statusSince(io.github.matiyaaa.fuse.model.PlayStatus.WANT, it, kotlin.time.Clock.System.now().toEpochMilliseconds()) },
+    ).joinToString("  ·  ")
     WidgetKind.FAVORITES, WidgetKind.PINNED_GAMES -> listOfNotNull(
         g.platformShort,
         g.playSeconds.takeIf { it >= 60 }?.let { "${playtimeText(it)} played" },
@@ -176,6 +181,7 @@ private fun gameLine(kind: WidgetKind, g: GameCard, feed: HomeFeed): String = wh
 private fun emptyGamesText(kind: WidgetKind): String = when (kind) {
     WidgetKind.RECENTLY_PLAYED -> "Games you play show here"
     WidgetKind.FAVORITES -> "Add favourites from a game's options"
+    WidgetKind.UP_NEXT -> UP_NEXT_EMPTY
     WidgetKind.PINNED_GAMES -> "Pin games from their options"
     WidgetKind.RECENTLY_ADDED -> "New games show here after a scan"
     WidgetKind.FOR_YOU -> emptySuggestionNote(kind)

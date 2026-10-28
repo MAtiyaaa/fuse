@@ -8,7 +8,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 
 /** What a mirror sync did. */
-data class MirrorResult(val added: Int, val changed: Int, val removed: Int, val total: Int, val full: Boolean)
+data class MirrorResult(
+    val added: Int,
+    val changed: Int,
+    val removed: Int,
+    val total: Int,
+    val full: Boolean,
+    /** The person's own marks on the games read this time (status, rating), by game. */
+    val marks: Map<Long, RommMarks> = emptyMap(),
+)
 
 /** How far a sync has come, for the person: what it is on, and counts when known. */
 data class MirrorProgress(val label: String, val done: Int, val total: Int?)
@@ -68,6 +76,7 @@ class RommMirror(
         var added = 0
         var changed = 0
         var newest = since
+        val marks = HashMap<Long, RommMarks>()
         var offset = resume?.first ?: 0
         var total: Int? = null
         var size = pageSize
@@ -87,6 +96,7 @@ class RommMirror(
                     write(server, r, started, markNew = !firstEver && before == null, keepFiles = before?.files_json)
                     if (before != null) changed++ else added++
                     if (r.updatedAt > newest) newest = r.updatedAt
+                    r.marks?.let { marks[r.id] = it }
                 }
                 if (!incremental) putCursor(server, offset + page.items.size, started)
             }
@@ -128,7 +138,7 @@ class RommMirror(
             db.kvCacheQueries.put(NS, "upTo:$server", maxOf(newest, since).toString(), clock(), null)
             db.kvCacheQueries.delete(NS, "cursor:$server")
         }
-        MirrorResult(added, changed, removed, q.romCount(server).executeAsOne().toInt(), full = !incremental)
+        MirrorResult(added, changed, removed, q.romCount(server).executeAsOne().toInt(), full = !incremental, marks = marks)
     }
 
     /** Where an unfinished read of the whole library got to (games done, when it started), if one did. */

@@ -36,6 +36,8 @@ import io.github.matiyaaa.fuse.romm.ROMM_SOURCE
 import io.github.matiyaaa.fuse.romm.ROMM_UPLOAD_SOURCE
 import io.github.matiyaaa.fuse.romm.RommBios
 import io.github.matiyaaa.fuse.romm.RommClient
+import io.github.matiyaaa.fuse.romm.RommJournal
+import io.github.matiyaaa.fuse.romm.RommMarks
 import io.github.matiyaaa.fuse.romm.RommContent
 import io.github.matiyaaa.fuse.romm.RommCredential
 import io.github.matiyaaa.fuse.romm.RommDeviceCode
@@ -472,6 +474,7 @@ internal class DefaultRommOps(
             val result = mirror.sync(c, server, full = full) { p -> _state.update { it.copy(syncing = p) } }
             _state.update { it.copy(syncing = null, syncedAt = ctx.now(), games = result.total, route = c.route, problem = null) }
             rematch()
+            takeMarks(result.marks)
             mirrorRevision.update { it + 1 }
             publishLists()
             fillUnmatched(mirror.all(server))
@@ -693,7 +696,7 @@ internal class DefaultRommOps(
     /** Whether [c]'s server has the part of RomM [w] goes to ([RommClient.detect]). */
     private fun takes(c: RommClient, w: RommWrite): Boolean = when (w) {
         is RommWrite.Played -> c.capabilities.playSessions
-        is RommWrite.Hidden -> c.capabilities.userProps
+        is RommWrite.Hidden, is RommWrite.Journal -> c.capabilities.userProps
         is RommWrite.Trophies -> c.capabilities.notes
         is RommWrite.Favourite -> c.capabilities.collectionRoms
     }
@@ -705,6 +708,7 @@ internal class DefaultRommOps(
     private suspend fun send(c: RommClient, batch: List<RommWrite>, key: String): Boolean = when (val w = batch.first()) {
         is RommWrite.Played -> true.also { c.playSessions(batch.filterIsInstance<RommWrite.Played>().map { it.session }) }
         is RommWrite.Hidden -> true.also { c.setHidden(w.romId, w.on) }
+        is RommWrite.Journal -> true.also { c.setMarks(w.romId, RommJournal.marks(io.github.matiyaaa.fuse.model.PlayStatus.of(w.status), w.rating)) }
         is RommWrite.Trophies -> trophyNote(c, w.romId, w.game)
         is RommWrite.Favourite -> true.also {
             try {
@@ -716,6 +720,49 @@ internal class DefaultRommOps(
                 c.collectionRoms(favouritesOf(c, key), listOf(w.romId), into = w.on)
             }
         }
+    }
+
+    // ------------------------------------------------------------------ the Journal
+
+    /** When each game's marks were last asked for, so a page opened again soon doesn't ask again. */
+    private val markLooks = HashMap<Long, Long>()
+
+    override suspend fun freshenMarks(game: GameId) {
+        if (!settings.enabled || !settings.sendChanges) return
+        val c = client ?: return
+        if (_state.value.link != RommLink.ONLINE || !c.capabilities.userProps) return
+        val romId = romOf(game) ?: ctx.data.games.get(game)?.links?.rommRomId ?: return
+        val now = ctx.now()
+        val look = trophyLock.withLock {
+            val last = markLooks[romId]
+            if (last != null && now - last < TROPHY_LOOK_MS) false else true.also { markLooks[romId] = now }
+        }
+        if (!look) return
+        val marks = runCatching { c.rom(romId)?.marks }.getOrNull() ?: return
+        takeMarks(mapOf(romId to marks), mapOf(romId to game))
+    }
+
+    /**
+     * The person's marks in RomM brought into the Journal of the games they belong to here, while
+     * changes go both ways ([settings] sendChanges): a mark RomM changed after the status here was
+     * set wins (made in RomM's own pages, or another app), and a change made here that still waits
+     * to go to RomM is never undone by what RomM said before it.
+     */
+    private suspend fun takeMarks(marks: Map<Long, RommMarks>, games: Map<Long, GameId> = emptyMap()) {
+        if (marks.isEmpty() || !settings.sendChanges) return
+        val waiting = changesLock.withLock { loadChanges(server) }.filterIsInstance<RommWrite.Journal>().mapTo(HashSet()) { it.romId }
+        var took = false
+        for ((romId, m) in marks) {
+            if (romId in waiting) continue
+            val game = games[romId] ?: gameOf(romId) ?: continue
+            val here = ctx.data.games.get(game)?.journal ?: continue
+            val status = RommJournal.statusOf(m)
+            if (status == here.status && m.rating == here.rating) continue
+            if (m.updatedAt <= (here.statusAt ?: 0)) continue
+            ctx.data.games.setJournal(game, here.copy(status = status, statusAt = if (status != here.status) m.updatedAt else here.statusAt, rating = m.rating))
+            took = true
+        }
+        if (took) ctx.userChanged()
     }
 
     // ------------------------------------------------------------------ trophies

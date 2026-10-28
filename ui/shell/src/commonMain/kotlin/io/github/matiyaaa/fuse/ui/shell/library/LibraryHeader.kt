@@ -138,6 +138,9 @@ internal fun LibraryHeader(
                         LibraryButton.ADD_GAMES -> "Add or remove games" to FuseIcons.ListPlus
                         LibraryButton.EMULATOR -> "No emulator installed" to FuseIcons.Warning
                         LibraryButton.FILTERS -> "Smart filters" to FuseIcons.Wand
+                        LibraryButton.STATUS -> state.statuses.singleOrNull().let { one ->
+                            (one?.let(io.github.matiyaaa.fuse.ui.shell.store.JournalWords::shelf) ?: "Every status") to (one?.let { io.github.matiyaaa.fuse.ui.shell.app.statusIcon(it) } ?: FuseIcons.ListChecks)
+                        }
                         LibraryButton.SYSTEM -> (system?.platform?.shortName ?: "All systems") to FuseIcons.Filter
                         LibraryButton.SORT -> sortLabel(sort) to FuseIcons.Sort
                     }
@@ -145,6 +148,7 @@ internal fun LibraryHeader(
                         button == LibraryButton.EMULATOR -> ToolTone.WARNING
                         button == LibraryButton.SPOTLIGHT -> ToolTone.ON
                         button == LibraryButton.SYSTEM && system != null -> ToolTone.ON
+                        button == LibraryButton.STATUS && state.statuses.isNotEmpty() -> ToolTone.ON
                         button == LibraryButton.FILTERS && state.segment.smart != null -> ToolTone.ON
                         else -> ToolTone.PLAIN
                     }

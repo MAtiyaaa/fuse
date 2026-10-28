@@ -115,8 +115,8 @@ data class SessionEntry(
 /**
  * What a profile knows about one game, made to merge: play time is a counter per device (each
  * device only ever adds to its own, so 30 minutes on one and 20 on another offline are 50 once
- * they meet), sessions are a set, Last Played is the latest, and favourite, hidden and pinned are
- * last-writer-wins registers.
+ * they meet), sessions are a set, Last Played is the latest, and favourite, hidden, pinned and the
+ * Journal (status, rating, note) are last-writer-wins registers.
  */
 @Serializable
 data class GameRecord(
@@ -141,6 +141,14 @@ data class GameRecord(
      * keeps its own, and these only say where one was earned.
      */
     val trophies: Map<String, TrophyUnlock> = emptyMap(),
+    /** Where the person is with it, by [io.github.matiyaaa.fuse.model.PlayStatus] name (the Journal). */
+    val status: Lww<String?>? = null,
+    /** When [status] was set: the latest any device saw, which is the one [status] holds. */
+    val statusAt: Long? = null,
+    /** Out of ten; 0 is not rated. */
+    val rating: Lww<Int>? = null,
+    /** The person's own note on it. */
+    val note: Lww<String?>? = null,
 ) {
     val totalSeconds: Long get() = playSeconds.values.sum()
 
@@ -159,6 +167,10 @@ data class GameRecord(
             emulator = emulator.mergeWith(other.emulator),
             name = other.name ?: name,
             trophies = (trophies.keys + other.trophies.keys).associateWith { k -> TrophyUnlock.earlier(trophies[k], other.trophies[k])!! },
+            status = status.mergeWith(other.status),
+            statusAt = listOfNotNull(statusAt, other.statusAt).maxOrNull(),
+            rating = rating.mergeWith(other.rating),
+            note = note.mergeWith(other.note),
         )
     }
 
@@ -263,7 +275,10 @@ data class ProfileMeta(
         fun <T> Lww<T>?.re(): Lww<T>? = this?.copy(at = at)
         return ProfileMeta(
             games = games.mapValues { (_, g) ->
-                g.copy(favorite = g.favorite.re(), hidden = g.hidden.re(), pinned = g.pinned.re(), continueDismissed = g.continueDismissed.re(), title = g.title.re(), emulator = g.emulator.re())
+                g.copy(
+                    favorite = g.favorite.re(), hidden = g.hidden.re(), pinned = g.pinned.re(), continueDismissed = g.continueDismissed.re(),
+                    title = g.title.re(), emulator = g.emulator.re(), status = g.status.re(), rating = g.rating.re(), note = g.note.re(),
+                )
             },
             collections = collections.mapValues { (_, c) ->
                 c.copy(name = c.name.copy(at = at), deleted = c.deleted.re(), members = c.members.mapValues { (_, m) -> m.copy(at = at) }, order = c.order.re())
@@ -286,6 +301,7 @@ fun ProfileMeta.latestRevision(): Hlc {
     games.values.forEach { game ->
         observe(game.favorite?.at); observe(game.hidden?.at); observe(game.pinned?.at)
         observe(game.continueDismissed?.at); observe(game.title?.at); observe(game.emulator?.at)
+        observe(game.status?.at); observe(game.rating?.at); observe(game.note?.at)
     }
     collections.values.forEach { collection ->
         observe(collection.name.at); observe(collection.deleted?.at); observe(collection.order?.at)

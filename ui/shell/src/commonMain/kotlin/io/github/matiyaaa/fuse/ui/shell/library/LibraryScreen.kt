@@ -163,6 +163,7 @@ import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -187,6 +188,8 @@ enum class LibrarySegment(val label: String, val set: GameSet, val smart: SmartF
     INSTALLED("Installed", GameSet.LIBRARY),
     FAVORITES("Favourites", GameSet.LIBRARY),
     RECENT("Recently played", GameSet.LIBRARY),
+    /** The games the person put in their Journal, in its order; shown once it has one. */
+    JOURNAL("Journal", GameSet.LIBRARY),
     UNPLAYED(SmartFilter.UNPLAYED),
     BARELY(SmartFilter.BARELY),
     DUSTY(SmartFilter.DUSTY),
@@ -215,9 +218,10 @@ internal fun smartIcon(f: SmartFilter): ImageVector = when (f) {
 
 /**
  * The buttons at the end of the Library header. [EMULATOR] only shows on a system that has no
- * emulator, and leads to its settings. [FILTERS] opens Smart filters.
+ * emulator, and leads to its settings. [FILTERS] opens Smart filters. [STATUS] narrows the Journal
+ * to one of its lists.
  */
-enum class LibraryButton { SPOTLIGHT, COLLECTIONS, ADD_GAMES, EMULATOR, FILTERS, SYSTEM, SORT }
+enum class LibraryButton { SPOTLIGHT, COLLECTIONS, ADD_GAMES, EMULATOR, FILTERS, STATUS, SYSTEM, SORT }
 
 /** Remembered per library view: which game was selected (by id, so re-sorting keeps it), and where focus was. */
 @Stable
@@ -235,6 +239,8 @@ class LibraryViewState {
     var headerIndex by mutableIntStateOf(0)
     var layoutOverride by mutableStateOf<LibraryLayout?>(null)
     var showHidden by mutableStateOf(false)
+    /** The Journal narrowed to these statuses, or every one when empty. */
+    var statuses by mutableStateOf<Set<io.github.matiyaaa.fuse.model.PlayStatus>>(emptySet())
 
     /**
      * Selects [index] of [list] and remembers that game. Only the user's own moves pin a game, so a
@@ -290,7 +296,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         } else {
             val base = store.library.counts(GameQuery(platform = state.system))
             val all = if (state.showHidden) store.library.counts(GameQuery(platform = state.system, includeHidden = true)) else base
-            combine(base, all, store.romm.systems, store.reach.state) { b, a, romm, household ->
+            val journal = store.library.journalCounts(state.system)
+            combine(base, all, store.romm.systems, store.reach.state, journal) { b, a, romm, household, j ->
                 // All counts every game once: this device's, then what RomM and the household's other
                 // devices have that this device doesn't.
                 val onRomm = romm.filter { state.system == null || it.platform == state.system }.sumOf { (it.games - it.installed).coerceAtLeast(0) }
@@ -300,6 +307,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                     LibrarySegment.INSTALLED to a.total,
                     LibrarySegment.FAVORITES to b.favorites,
                     LibrarySegment.RECENT to b.played,
+                    LibrarySegment.JOURNAL to j.values.sum(),
                 )
             }
         }
@@ -313,6 +321,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         when {
             // A smart filter has a tab while pinned, or while it is open.
             s.smart != null -> s.smart in pinned || state.segment == s
+            // The Journal once it has a game, or while it is open.
+            s == LibrarySegment.JOURNAL -> (viewCounts[s] ?: 0) > 0 || state.segment == s
             s.set == GameSet.LIBRARY -> true
             else -> (extraCounts[s] ?: 0) > 0 || state.segment == s
         }
@@ -331,9 +341,10 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         if (scope == LibraryScope.All && collectionsOn) add(LibraryButton.COLLECTIONS)
         if (ownCollection != null) add(LibraryButton.ADD_GAMES)
         if (systemCard != null && !systemCard.emulatorInstalled) add(LibraryButton.EMULATOR)
-        // All is shelves, each in its own order; Recently played is always newest first.
-        val browsing = scope == LibraryScope.All && (state.segment == LibrarySegment.EVERYWHERE || state.segment == LibrarySegment.RECENT)
+        // All is shelves, each in its own order; Recently played is always newest first, the Journal in its own order.
+        val browsing = scope == LibraryScope.All && (state.segment == LibrarySegment.EVERYWHERE || state.segment == LibrarySegment.RECENT || state.segment == LibrarySegment.JOURNAL)
         if (scope == LibraryScope.All) add(LibraryButton.FILTERS)
+        if (scope == LibraryScope.All && state.segment == LibrarySegment.JOURNAL) add(LibraryButton.STATUS)
         if (scope == LibraryScope.All && state.segment != LibrarySegment.EVERYWHERE) add(LibraryButton.SYSTEM)
         if (!browsing) add(LibraryButton.SORT)
         // How games are drawn is a setting (Settings, Library, and each system's settings), not a toolbar button.
@@ -346,6 +357,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             LibrarySegment.INSTALLED -> GameQuery(platform = state.system, sort = sort, includeHidden = state.showHidden)
             LibrarySegment.FAVORITES -> GameQuery(platform = state.system, favoritesOnly = true, sort = sort)
             LibrarySegment.RECENT -> GameQuery(platform = state.system, sort = SortOrder.RECENTLY_PLAYED)
+            LibrarySegment.JOURNAL -> GameQuery(platform = state.system, journal = state.statuses)
             else -> GameQuery(platform = state.system, sort = sort, set = segment.set)
         }
         is LibraryScope.OfPlatform -> GameQuery(platform = scope.platform, sort = sort, includeHidden = state.showHidden)
@@ -494,6 +506,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             LibraryButton.ADD_GAMES -> ownCollection?.let { app.addGamesPicker(it.id, it.name) }
             LibraryButton.EMULATOR -> platformId?.let { app.go(Route.PlatformSettings(it)) }
             LibraryButton.FILTERS -> openFilters?.invoke()
+            LibraryButton.STATUS -> app.scope.launch { app.choice = statusPicker(app, state, store.library.journalCounts(state.system).first()) }
             LibraryButton.SYSTEM -> app.choice = systemPicker(app, state, platforms.withRomm(store.romm.systems.value))
             LibraryButton.SORT -> app.choice = sortPicker(app, sort)
         }
@@ -875,6 +888,32 @@ private fun systemPicker(app: AppState, state: LibraryViewState, platforms: List
                 detail = listOfNotNull(gamesText(p.gameCount), p.platform.manufacturer).joinToString("  ·  "),
                 trailing = Trailing.Check(state.system == p.platform.id),
                 onSelect = { pick(p.platform.id) },
+            )
+        },
+    )
+}
+
+/** Narrows the Journal to one of its lists (Playing, Up next, Beaten...), each with how many games it holds. */
+private fun statusPicker(app: AppState, state: LibraryViewState, counts: Map<io.github.matiyaaa.fuse.model.PlayStatus, Int>): ChoiceSpec {
+    fun pick(statuses: Set<io.github.matiyaaa.fuse.model.PlayStatus>) {
+        state.statuses = statuses
+        state.grid.index = 0
+        state.selectedId = null
+        state.inHeader = false
+        app.choice = null
+    }
+    return ChoiceSpec(
+        title = "Show from your Journal",
+        icon = FuseIcons.NotebookPen,
+        message = "Every game you gave a status, or one list of them.",
+        options = listOf(
+            MenuAction("status.all", "Every status", FuseIcons.ListChecks, detail = gamesText(counts.values.sum()), trailing = Trailing.Check(state.statuses.isEmpty()), onSelect = { pick(emptySet()) }),
+        ) + io.github.matiyaaa.fuse.ui.shell.store.JournalWords.order.filterNotNull().filter { (counts[it] ?: 0) > 0 || it in state.statuses }.map { s ->
+            MenuAction(
+                "status.${s.name}", io.github.matiyaaa.fuse.ui.shell.store.JournalWords.shelf(s), io.github.matiyaaa.fuse.ui.shell.app.statusIcon(s),
+                detail = gamesText(counts[s] ?: 0),
+                trailing = Trailing.Check(state.statuses == setOf(s)),
+                onSelect = { pick(setOf(s)) },
             )
         },
     )
@@ -1456,6 +1495,7 @@ private fun LibraryEmpty(
         LibraryScope.All -> when (segment) {
             LibrarySegment.FAVORITES -> Triple(FuseIcons.Heart, "No favourites yet", "Choose Add to Favourites in a game's options.")
             LibrarySegment.RECENT -> Triple(FuseIcons.History, "Nothing played yet", "Games you play show up here, newest first.")
+            LibrarySegment.JOURNAL -> Triple(FuseIcons.NotebookPen, "Your Journal is empty", "Open a game and choose Journal to say where you are with it: playing, up next, beaten.")
             LibrarySegment.MISSING -> Triple(FuseIcons.CheckCheck, "Nothing is missing", "Games whose files disappear are listed here, so you can find them again or let Fuse forget them.")
             LibrarySegment.HIDDEN -> Triple(FuseIcons.EyeOff, "No hidden games", "Games you hide from their options wait here.")
             LibrarySegment.REMOVED -> Triple(FuseIcons.Undo, "Nothing removed", "Games you remove from Fuse wait here, in case you want them back.")

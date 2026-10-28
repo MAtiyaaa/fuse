@@ -402,6 +402,7 @@ internal class DefaultLibraryOps(
             storage.onStart { emit(null) },
             picks.onStart { emit(HomePicks()) },
             seriesArt.onStart { emit(emptyMap()) },
+            ctx.cards(data.games.observeJournal(listOf(io.github.matiyaaa.fuse.model.PlayStatus.WANT))),
         ),
     ) { v ->
         val p = v[12] as HomePicks
@@ -411,6 +412,7 @@ internal class DefaultLibraryOps(
             recentlyPlayed = v[1] as List<GameCard>,
             recentlyAdded = v[2] as List<GameCard>,
             favorites = v[3] as List<GameCard>,
+            upNext = v[14] as List<GameCard>,
             pinnedGames = v[4] as List<GameCard>,
             mostPlayed = v[5] as List<GameCard>,
             systems = v[6] as List<PlatformCard>,
@@ -509,6 +511,11 @@ internal class DefaultLibraryOps(
             }
             return listed.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) }
         }
+        query.journal?.let { statuses ->
+            return games.observeJournal(statuses).map { list ->
+                list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(JOURNAL_ORDER)
+            }
+        }
         val summaries = when {
             query.collection != null -> data.collections.observeGames(CollectionKey.Manual(query.collection))
             query.favoritesOnly -> games.observeFavorites()
@@ -526,6 +533,21 @@ internal class DefaultLibraryOps(
             list.filter { smart.matches(it.id, it.lastPlayedAt, it.totalSeconds, it.addedAt, now, together) }
         }.distinctUntilChanged()
     }
+
+    private val moveInWork by lazy { MoveInWork(ctx) }
+
+    override suspend fun moveInLook() = moveInWork.look()
+
+    override suspend fun moveIn(sources: Set<io.github.matiyaaa.fuse.library.movein.MoveInSource>) = moveInWork.bringIn(sources)
+
+    override suspend fun undoMoveIn() = moveInWork.undo()
+
+    override suspend fun lastMoveIn() = moveInWork.last()
+
+    override fun journalCounts(platform: PlatformId?): Flow<Map<io.github.matiyaaa.fuse.model.PlayStatus, Int>> =
+        data.games.observeJournal().map { list ->
+            list.filter { platform == null || it.platformId == platform }.mapNotNull { it.status }.groupingBy { it }.eachCount()
+        }.distinctUntilChanged().flowOn(Dispatchers.Default)
 
     override fun smartCounts(platform: PlatformId?): Flow<Map<io.github.matiyaaa.fuse.ui.shell.store.SmartFilter, Int>> =
         combine(summaries(GameQuery(platform = platform)), together, hourly) { list, together, _ ->
@@ -1474,6 +1496,17 @@ internal class DefaultLibraryOps(
         rommChange?.invoke(id) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Favourite(romId, favorite) }
     }
 
+    override suspend fun setJournal(id: GameId, journal: io.github.matiyaaa.fuse.model.GameJournal) {
+        val before = data.games.get(id)?.journal ?: return
+        // A status set again keeps when it was first set; a new one is set now.
+        val statusAt = if (journal.status == before.status) before.statusAt else null
+        data.games.setJournal(id, journal.copy(statusAt = statusAt))
+        ctx.userChanged()
+        if (journal.status != before.status || journal.rating != before.rating) {
+            rommChange?.invoke(id) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Journal(romId, journal.status?.name, journal.rating) }
+        }
+    }
+
     override suspend fun setHidden(id: GameId, hidden: Boolean) = data.games.setHidden(id, hidden).also {
         ctx.userChanged()
         rommChange?.invoke(id) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Hidden(romId, hidden) }
@@ -2104,6 +2137,11 @@ private const val LIST_KEEP_MS = 30_000L
 /** Lists of games shared at most at once. */
 private const val MAX_SHARED_LISTS = 24
 
+/** The Journal's order: what is being played, then what is wanted, on hold and done with; each the latest set first. */
+private val JOURNAL_ORDER: Comparator<io.github.matiyaaa.fuse.data.repo.GameSummary> = compareBy<io.github.matiyaaa.fuse.data.repo.GameSummary> {
+    io.github.matiyaaa.fuse.ui.shell.store.JournalWords.order.indexOf(it.status)
+}.thenByDescending { it.statusAt ?: 0 }.thenBy { it.sortKey }
+
 /** Home's suggestions, the day's spotlight, and why each is there. */
 private data class HomePicks(
     val forYou: List<GameCard> = emptyList(),
@@ -2114,7 +2152,7 @@ private data class HomePicks(
 private fun io.github.matiyaaa.fuse.data.repo.RecommendationRow.toRecGame() = RecGame(
     key = id, platform = platformId.value, title = title, favorite = favorite, lastPlayedAt = lastPlayedAt,
     playSeconds = playSeconds, sessions = sessions, addedAt = addedAt, year = year, genres = genres,
-    developer = developer, franchise = franchise, rating = rating,
+    developer = developer, franchise = franchise, rating = rating, status = status, statusAt = statusAt, stars = stars,
 )
 
 /** Systems whose disc images say their serial in SYSTEM.CNF. */

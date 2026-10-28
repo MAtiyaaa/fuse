@@ -40,6 +40,27 @@ class RecommenderTest {
     }
 
     @Test
+    fun theJournalLeads() {
+        val want = g("Earthbound", rating = 60).copy(status = io.github.matiyaaa.fuse.model.PlayStatus.WANT, statusAt = now - 40 * day)
+        val beaten = g("Chrono Trigger", favorite = true, playedDaysAgo = 100, hours = 30.0).copy(status = io.github.matiyaaa.fuse.model.PlayStatus.BEATEN)
+        val dropped = g("Bad Game", rating = 95).copy(status = io.github.matiyaaa.fuse.model.PlayStatus.DROPPED)
+        val r = Recommender.recommend(listOf(want, beaten, dropped, g("Tetris", rating = 85)), now)
+        // What the person wants to play next comes first, with how long it has waited.
+        assertEquals("Earthbound", r.first().key)
+        assertEquals(RecKind.UP_NEXT, r.first().kind)
+        assertEquals("On your Up Next list for 5 weeks", r.first().reason)
+        // Done with, whatever its time or rating: never suggested again.
+        assertTrue(r.none { it.key == "Chrono Trigger" || it.key == "Bad Game" })
+    }
+
+    @Test
+    fun theirOwnStarsLeadToMoreOfTheSame() {
+        val loved = g("Super Mario World", developer = "Nintendo EAD", playedDaysAgo = 200, hours = 0.2).copy(stars = 10)
+        val r = Recommender.recommend(listOf(loved, g("Yoshi's Island", developer = "Nintendo EAD")), now)
+        assertEquals(RecKind.SAME_MAKER, r.single { it.key == "Yoshi's Island" }.kind)
+    }
+
+    @Test
     fun gamesPlayedLatelyAreLeftToContinuePlaying() {
         val r = Recommender.recommend(listOf(g("Chrono Trigger", favorite = true, playedDaysAgo = 3, hours = 10.0)), now)
         assertTrue(r.none { it.key == "Chrono Trigger" })

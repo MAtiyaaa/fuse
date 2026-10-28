@@ -444,7 +444,30 @@ data class GameQuery(
     val set: GameSet = GameSet.LIBRARY,
     /** Only the library's games in this list (Unplayed, Play together...). */
     val smart: SmartFilter? = null,
+    /**
+     * Only games in the Journal with one of these statuses (any status when empty), in the Journal's
+     * order: playing first, then wanted, on hold and the ones done with, each the latest set first.
+     */
+    val journal: Set<io.github.matiyaaa.fuse.model.PlayStatus>? = null,
 )
+
+/** A launcher found to move in from: where it keeps its files, and what it would bring here. */
+data class MoveInView(val source: io.github.matiyaaa.fuse.library.movein.MoveInSource, val where: String, val report: MoveInReport)
+
+/**
+ * What moving in brings, or brought: the games it changes, and of them how many become favourites,
+ * are hidden, gain play time or a last played, and gain a status or a rating; and the collections.
+ */
+data class MoveInReport(
+    val games: Int = 0,
+    val favourites: Int = 0,
+    val hidden: Int = 0,
+    val timed: Int = 0,
+    val journal: Int = 0,
+    val collections: Int = 0,
+) {
+    val isEmpty: Boolean get() = games == 0 && collections == 0
+}
 
 /** Which games a [GameQuery] lists: the library, or games whose files are gone, hidden or removed. */
 enum class GameSet { LIBRARY, MISSING, HIDDEN, REMOVED }
@@ -599,6 +622,31 @@ interface LibraryOps {
     fun onPause()
 
     suspend fun setFavorite(id: GameId, favorite: Boolean)
+
+    /**
+     * [id]'s Journal as [journal] says: where the person is with it (when it was set comes along as
+     * it changes), their rating and their note. A game from RomM takes it there too while changes go.
+     */
+    suspend fun setJournal(id: GameId, journal: io.github.matiyaaa.fuse.model.GameJournal) {}
+
+    /** The launchers found on this device that the person could move in from, each with what it would bring here. */
+    suspend fun moveInLook(): List<MoveInView> = emptyList()
+
+    /**
+     * Brings in what [sources] say about the games here: favourites, hidden games, play time and
+     * last played, completed games and ratings into the Journal, and collections. Nothing set in
+     * Fuse is undone, and all of it can be put back with [undoMoveIn].
+     */
+    suspend fun moveIn(sources: Set<io.github.matiyaaa.fuse.library.movein.MoveInSource>): MoveInReport = MoveInReport()
+
+    /** Puts back what the last move in changed; false when there is none to put back. */
+    suspend fun undoMoveIn(): Boolean = false
+
+    /** When the last move in that can still be put back was made, or null. */
+    suspend fun lastMoveIn(): Long? = null
+
+    /** How many of the library's games (of [platform], or every system) the Journal has with each status. */
+    fun journalCounts(platform: PlatformId?): Flow<Map<io.github.matiyaaa.fuse.model.PlayStatus, Int>> = kotlinx.coroutines.flow.flowOf(emptyMap())
     suspend fun setHidden(id: GameId, hidden: Boolean)
     suspend fun setPinned(id: GameId, pinned: Boolean)
     suspend fun rename(id: GameId, title: String?)

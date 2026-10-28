@@ -4,7 +4,8 @@ gamesForBackup:
 SELECT g.id, g.platform_id, g.platform_scanned, g.path, s.path AS source_path, g.title_custom, g.title_metadata,
     g.use_cleaned, g.metadata_json, g.release_year, g.favorite, g.hidden, g.pinned, g.removed_at, g.emulator_override,
     g.platform_override, g.folder_policy_override, g.tracked_seconds, g.imported_seconds, g.imported_source,
-    g.session_count, g.last_played_at, g.ra_game_id, g.sgdb_game_id, g.igdb_id, g.romm_rom_id, g.steam_app_id
+    g.session_count, g.last_played_at, g.ra_game_id, g.sgdb_game_id, g.igdb_id, g.romm_rom_id, g.steam_app_id,
+    g.play_status, g.status_at, g.rating, g.note
 FROM game g LEFT JOIN library_source s ON s.id = g.source_id;
 
 endedSessions:

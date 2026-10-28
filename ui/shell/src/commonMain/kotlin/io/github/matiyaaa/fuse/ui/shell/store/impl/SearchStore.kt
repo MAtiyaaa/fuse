@@ -164,6 +164,8 @@ internal class LibrarySearcher(
         is SearchFilter.Genre -> FilterKey.GENRE
         is SearchFilter.Developer -> FilterKey.DEVELOPER
         is SearchFilter.Drive -> FilterKey.DRIVE
+        is SearchFilter.Status -> FilterKey.STATUS
+        is SearchFilter.Rating -> FilterKey.RATING
     }
 
     /** A filter in words, as its chip says it. */
@@ -197,6 +199,19 @@ internal class LibrarySearcher(
         is SearchFilter.Genre -> f.value.replaceFirstChar { it.uppercase() }
         is SearchFilter.Developer -> "By ${f.value}"
         is SearchFilter.Drive -> "On ${f.value}"
+        is SearchFilter.Status -> when {
+            f.any -> "In your Journal"
+            f.none -> "Not in your Journal"
+            else -> f.statuses.joinToString(" or ") { io.github.matiyaaa.fuse.ui.shell.store.JournalWords.shelf(it) }
+        }
+        is SearchFilter.Rating -> when {
+            f.to == 0 -> "Not rated"
+            f.from <= 1 && f.to == 10 -> "Rated"
+            f.from == f.to -> io.github.matiyaaa.fuse.ui.shell.store.JournalWords.stars(f.from) ?: "Rated"
+            f.to == 10 -> "${io.github.matiyaaa.fuse.ui.shell.store.JournalWords.stars(f.from)} and up"
+            f.from <= 1 -> "Up to ${io.github.matiyaaa.fuse.ui.shell.store.JournalWords.stars(f.to)}"
+            else -> "${io.github.matiyaaa.fuse.ui.shell.store.JournalWords.stars(f.from)} to ${io.github.matiyaaa.fuse.ui.shell.store.JournalWords.stars(f.to)}"
+        }
     }
 
     /** What to add: filters to start with while nothing is typed, else values for the filter being typed. */
@@ -211,10 +226,13 @@ internal class LibrarySearcher(
             if (visible.any { it.summary.favorite }) add("Favourites", "favorite:yes", FilterKey.FAVORITE, "yes")
             if (visible.any { it.summary.lastPlayedAt != null }) add("Played this week", "played:week", FilterKey.PLAYED, "week")
             if (visible.any { it.summary.lastPlayedAt == null }) add("Never played", "played:no", FilterKey.PLAYED, "no")
+            if (visible.any { it.summary.status == io.github.matiyaaa.fuse.model.PlayStatus.WANT }) add("Up next", "status:next", FilterKey.STATUS, "next")
             fun start(label: String, key: FilterKey, detail: String) = add(SearchSuggestion(label, detail, text.trim().let { if (it.isEmpty()) "" else "$it " } + "${key.word}:", key))
             start("By system", FilterKey.PLATFORM, "platform:")
             if (visible.any { it.summary.releaseYear != null }) start("By year", FilterKey.YEAR, "year:1998, year:1990s")
             if (visible.any { it.genres.isNotEmpty() }) start("By genre", FilterKey.GENRE, "genre:")
+            if (visible.any { it.summary.status != null }) start("From your Journal", FilterKey.STATUS, "status:playing, status:beaten")
+            if (visible.any { it.summary.rating > 0 }) start("By rating", FilterKey.RATING, "rating:4, rating:>=3.5")
             if (collectionsShown() && collections.value.isNotEmpty()) start("In a collection", FilterKey.COLLECTION, "collection:")
             if (drives.value.map { it.driveLabel }.distinct().size > 1) start("On a drive", FilterKey.DRIVE, "drive:")
             if (all.any { it.summary.missing }) add("Missing files", "missing:yes", FilterKey.MISSING, "yes")
@@ -249,6 +267,21 @@ internal class LibrarySearcher(
             FilterKey.FAVORITE, FilterKey.MISSING, FilterKey.HIDDEN -> listOf(s("Yes", null, "yes"), s("No", null, "no"))
                 .filter { want.isEmpty() || TitleText.normalize(it.label).startsWith(want) }
             FilterKey.DEVELOPER -> emptyList()
+            FilterKey.STATUS -> {
+                val counts = visible.mapNotNull { it.summary.status }.groupingBy { it }.eachCount()
+                val words = mapOf(
+                    io.github.matiyaaa.fuse.model.PlayStatus.WANT to "next", io.github.matiyaaa.fuse.model.PlayStatus.PLAYING to "playing",
+                    io.github.matiyaaa.fuse.model.PlayStatus.PAUSED to "hold", io.github.matiyaaa.fuse.model.PlayStatus.BEATEN to "beaten",
+                    io.github.matiyaaa.fuse.model.PlayStatus.COMPLETED to "completed", io.github.matiyaaa.fuse.model.PlayStatus.DROPPED to "dropped",
+                )
+                io.github.matiyaaa.fuse.ui.shell.store.JournalWords.order.filterNotNull().filter { (counts[it] ?: 0) > 0 }.map { st ->
+                    s(io.github.matiyaaa.fuse.ui.shell.store.JournalWords.shelf(st), games(counts[st] ?: 0), words.getValue(st))
+                }.filter { want.isEmpty() || TitleText.normalize(it.label).contains(want) || it.text.contains(want) }
+            }
+            FilterKey.RATING -> listOf(
+                s("5 stars", null, "5"), s("4 stars and up", null, ">=4"), s("3 stars and up", null, ">=3"),
+                s("Rated", null, "yes"), s("Not rated", null, "no"),
+            ).filter { want.isEmpty() || TitleText.normalize(it.label).startsWith(want) || it.text.contains(typed) }
         }
         return list.take(40)
     }

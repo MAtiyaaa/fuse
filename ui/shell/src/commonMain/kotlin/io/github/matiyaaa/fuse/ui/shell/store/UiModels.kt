@@ -108,6 +108,11 @@ data class GameCard(
      * Android) for a game played with its port. Its icon, name and colour are shown then.
      */
     val playsOn: PlatformId? = null,
+    /** Where the person is with it, in their Journal; its rating out of ten (0 for none). */
+    val status: io.github.matiyaaa.fuse.model.PlayStatus? = null,
+    /** When [status] was set. */
+    val statusAt: Long? = null,
+    val rating: Int = 0,
 ) {
     /** Drawn dimmed: its file is gone, or its drive can't be reached right now. */
     val dimmed: Boolean get() = missing || unavailable != null
@@ -204,6 +209,8 @@ data class HomeFeed(
     val recentlyPlayed: List<GameCard> = emptyList(),
     val recentlyAdded: List<GameCard> = emptyList(),
     val favorites: List<GameCard> = emptyList(),
+    /** The Journal's Up Next: the games the person wants to play, the latest added first. */
+    val upNext: List<GameCard> = emptyList(),
     val pinnedGames: List<GameCard> = emptyList(),
     val mostPlayed: List<GameCard> = emptyList(),
     val systems: List<PlatformCard> = emptyList(),

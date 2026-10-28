@@ -274,6 +274,7 @@ internal fun widgetIcon(kind: WidgetKind): ImageVector = when (kind) {
     WidgetKind.CONTINUE_PLAYING -> FuseIcons.CirclePlay
     WidgetKind.RECENTLY_PLAYED -> FuseIcons.History
     WidgetKind.FAVORITES -> FuseIcons.Heart
+    WidgetKind.UP_NEXT -> FuseIcons.Bookmark
     WidgetKind.RECENTLY_ADDED -> FuseIcons.Sparkles
     WidgetKind.PINNED_GAMES -> FuseIcons.Pin
     WidgetKind.PINNED_APPS -> FuseIcons.AppWindow
@@ -894,6 +895,11 @@ internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, at: Int = 0) 
         // Favourites opens the game in front; with none, the Library on them.
         WidgetKind.FAVORITES -> game?.let { activateGame(it) } ?: run {
             librarySegment = io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment.FAVORITES
+            selectTab(Destination.LIBRARY)
+        }
+        // Up Next opens the game in front; with none, the Library's Journal, where games are given a status.
+        WidgetKind.UP_NEXT -> game?.let { activateGame(it) } ?: run {
+            librarySegment = io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment.JOURNAL
             selectTab(Destination.LIBRARY)
         }
         WidgetKind.SYSTEMS -> systemsInOrder(feed).getOrNull(at)?.let { go(Route.PlatformGames(it.platform.id)) } ?: selectTab(Destination.SYSTEMS)

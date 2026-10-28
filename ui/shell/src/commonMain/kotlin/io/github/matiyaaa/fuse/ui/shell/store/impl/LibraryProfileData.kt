@@ -25,7 +25,7 @@ import kotlinx.serialization.json.JsonElement
 
 /**
  * The person's data in this library, as Fuse Sync reads and writes it: each game's favourite,
- * hidden, pinned, name, emulator, play time and sessions (by [GameKey], so the same game matches on
+ * hidden, pinned, name, emulator, Journal, play time and sessions (by [GameKey], so the same game matches on
  * every device), the collections they made, and the settings that are theirs ([ProfileSettings]).
  *
  * Anything changed here between a read and the next write (a favourite tapped while the host
@@ -123,6 +123,11 @@ internal class LibraryProfileData(
                     emulator = Lww(r.emulator, Hlc.ZERO),
                     name = r.customTitle ?: r.title,
                     trophies = TrophyHistory.of(data, rows.map { it.id }),
+                    // The Journal: the copy whose status was set last speaks for the game.
+                    status = rows.maxBy { it.statusAt ?: 0 }.let { j -> Lww(j.status, Hlc.ZERO) },
+                    statusAt = rows.mapNotNull { it.statusAt }.maxOrNull(),
+                    rating = Lww(rows.maxOf { it.rating }, Hlc.ZERO),
+                    note = Lww(rows.firstNotNullOfOrNull { it.note }, Hlc.ZERO),
                 )
             }
         }
@@ -162,7 +167,10 @@ internal class LibraryProfileData(
                 val g = meta.games[keys.getValue(r.id).id]
                 dismissed = g?.continueDismissed?.value?.let { dismissed + (r.id.toString() to it) } ?: (dismissed - r.id.toString())
                 if (g == null) {
-                    r.copy(customTitle = null, favorite = false, hidden = false, pinned = false, lastPlayed = null, trackedSeconds = 0, sessionCount = 0, emulator = null)
+                    r.copy(
+                        customTitle = null, favorite = false, hidden = false, pinned = false, lastPlayed = null, trackedSeconds = 0, sessionCount = 0, emulator = null,
+                        status = null, statusAt = null, rating = 0, note = null,
+                    )
                 } else {
                     r.copy(
                         customTitle = g.title?.value,
@@ -173,6 +181,10 @@ internal class LibraryProfileData(
                         trackedSeconds = g.totalSeconds,
                         sessionCount = g.sessions.size.toLong(),
                         emulator = g.emulator?.value,
+                        status = g.status?.value,
+                        statusAt = g.statusAt.takeIf { g.status?.value != null },
+                        rating = g.rating?.value ?: 0,
+                        note = g.note?.value,
                     )
                 }
             }

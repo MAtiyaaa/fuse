@@ -34,7 +34,7 @@ enum class BackupPart {
     /** The theme and its options, added themes, and Home: Flow's rows and the widget board as arranged. */
     APPEARANCE,
 
-    /** Each game's own name, favourite, hidden and pinned state, emulator, system, details and links, collections and chosen art. */
+    /** Each game's own name, favourite, hidden and pinned state, Journal, emulator, system, details and links, collections and chosen art. */
     LIBRARY,
 
     /** Play time and play sessions. */
@@ -76,6 +76,11 @@ data class BackupGame(
     val igdbId: Long? = null,
     val rommRomId: Long? = null,
     val steamAppId: Long? = null,
+    /** The Journal (0.4.6): a [io.github.matiyaaa.fuse.model.PlayStatus] name and when it was set, the rating out of ten and the note. */
+    val status: String? = null,
+    val statusAt: Long? = null,
+    val rating: Int = 0,
+    val note: String? = null,
 )
 
 @Serializable
@@ -188,6 +193,10 @@ class BackupRepository(
                 igdbId = r.igdb_id,
                 rommRomId = r.romm_rom_id,
                 steamAppId = r.steam_app_id,
+                status = r.play_status,
+                statusAt = r.status_at,
+                rating = r.rating.toInt(),
+                note = r.note,
             )
         }.filter { it.isWorthKeeping() }
         val sessions = q.endedSessions().executeAsList().mapNotNull { s ->
@@ -347,6 +356,18 @@ class BackupRepository(
             id = id,
         )
         if (!library) return
+        // The Journal: what the backup says wins, and what it doesn't say never erases what is here.
+        if (g.status != null || g.rating > 0 || g.note != null) {
+            val status = g.status ?: cur.play_status
+            db.gameQueries.setJournal(
+                status = status,
+                statusAt = if (g.status != null) g.statusAt ?: now else cur.status_at,
+                rating = g.rating.takeIf { it > 0 }?.toLong() ?: cur.rating,
+                note = g.note ?: cur.note,
+                now = now,
+                id = id,
+            )
+        }
         // Names: the backup's own name wins; a name the backup doesn't have never erases one here.
         val titles = GameTitles(
             original = cur.title_original,
@@ -418,7 +439,7 @@ class BackupRepository(
         customTitle != null || favorite || hidden || pinned || removedAt != null || emulatorOverride != null ||
             platformOverride != null || folderPolicy != null || metadataJson != null || trackedSeconds > 0 ||
             importedSeconds > 0 || lastPlayedAt != null || raGameId != null || sgdbGameId != null || igdbId != null ||
-            rommRomId != null || steamAppId != null
+            rommRomId != null || steamAppId != null || status != null || rating > 0 || note != null
 
     companion object {
         /** Sections about this device or this install, never taken from a backup: how far setup got, the performance profile. */

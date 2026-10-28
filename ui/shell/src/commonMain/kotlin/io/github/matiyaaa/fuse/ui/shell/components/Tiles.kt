@@ -338,7 +338,7 @@ internal enum class MarkTint { PLAIN, WARNING }
 
 /**
  * What a game's marks are, in order of importance: its file is missing, an update or DLC waits, it
- * spans several discs, it is a favourite. Tiles, list rows and the stage use the same icons, so a
+ * spans several discs, where the person is with it (the Journal), it is a favourite. Tiles, list rows and the stage use the same icons, so a
  * mark means the same thing everywhere.
  */
 internal fun GameCard.marks(favourite: Boolean = true, installed: Boolean = false): List<GameMark> = buildList {
@@ -351,6 +351,8 @@ internal fun GameCard.marks(favourite: Boolean = true, installed: Boolean = fals
     if (updates > 0) add(GameMark(FuseIcons.ArrowUp, if (updates == 1) "Update" else "$updates updates", MarkTint.PLAIN))
     if (dlc > 0) add(GameMark(FuseIcons.Puzzle, "$dlc DLC", MarkTint.PLAIN))
     if (discs > 1) add(GameMark(FuseIcons.Disc, "$discs discs", MarkTint.PLAIN, count = discs))
+    // Where the person is with it, from their Journal: a quiet mark, named on the stage.
+    status?.let { add(GameMark(io.github.matiyaaa.fuse.ui.shell.app.statusIcon(it), io.github.matiyaaa.fuse.ui.shell.store.JournalWords.label(it), MarkTint.PLAIN, quiet = true)) }
     // A favourite's heart is on its tile, and named on the stage while the game is selected.
     if (favorite && favourite) add(GameMark(FuseIcons.HeartFilled, "Favourite", MarkTint.PLAIN, quiet = true))
 }

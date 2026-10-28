@@ -20,6 +20,7 @@ import io.github.matiyaaa.fuse.model.FolderInterpretation
 import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.Game
 import io.github.matiyaaa.fuse.model.GameId
+import io.github.matiyaaa.fuse.model.GameJournal
 import io.github.matiyaaa.fuse.model.GameLocation
 import io.github.matiyaaa.fuse.model.GameMetadata
 import io.github.matiyaaa.fuse.model.GameTitles
@@ -27,6 +28,7 @@ import io.github.matiyaaa.fuse.model.LibrarySourceId
 import io.github.matiyaaa.fuse.model.LocationKind
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.PlayStats
+import io.github.matiyaaa.fuse.model.PlayStatus
 import io.github.matiyaaa.fuse.data.db.Game as GameRow
 
 internal fun Game_summary.toSummary() = GameSummary(
@@ -49,6 +51,9 @@ internal fun Game_summary.toSummary() = GameSummary(
     discCount = disc_count.toInt(),
     isApp = folder_path == AppGames.FOLDER,
     folderPath = folder_path,
+    status = PlayStatus.of(play_status),
+    statusAt = status_at,
+    rating = rating.toInt(),
 )
 
 internal fun GameRow.titles() = GameTitles(title_original, title_cleaned, title_custom, title_metadata, use_cleaned.asBool())
@@ -91,6 +96,7 @@ internal fun GameRow.toModel(content: List<ChildContent>, discs: List<Disc>) = G
     folderPolicyOverride = enumOrNull<FolderPolicy>(folder_policy_override),
     platformOverride = platform_override?.let(::PlatformId),
     scannedPlatformId = platform_scanned?.let(::PlatformId),
+    journal = GameJournal(PlayStatus.of(play_status), status_at, rating.toInt(), note),
 )
 
 internal fun GameRow.toRecord(game: Game) = GameRecord(

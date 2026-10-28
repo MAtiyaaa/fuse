@@ -48,6 +48,9 @@ enum class WidgetKind(val defaultSpan: WidgetSpan) {
     /** Games suggested from the person's own library, each with its reason. */
     FOR_YOU(WidgetSpan.WIDE),
 
+    /** The games the person's Journal says they want to play next, the latest added first. */
+    UP_NEXT(WidgetSpan.WIDE),
+
     /** One game from the collection, a different one each day, with why and a way to play it. */
     SPOTLIGHT(WidgetSpan.LARGE),
     CARTRIDGE_DOWNLOADS(WidgetSpan.MEDIUM),
@@ -90,7 +93,7 @@ val WidgetKind.isRow: Boolean
 private val RowKinds = setOf(
     WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.FAVORITES, WidgetKind.RECENTLY_ADDED,
     WidgetKind.PINNED_GAMES, WidgetKind.MOST_PLAYED, WidgetKind.PINNED_APPS, WidgetKind.COLLECTIONS,
-    WidgetKind.SYSTEMS, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.FOR_YOU, WidgetKind.SPOTLIGHT,
+    WidgetKind.SYSTEMS, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.FOR_YOU, WidgetKind.SPOTLIGHT, WidgetKind.UP_NEXT,
     WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED,
     WidgetKind.JELLYFIN_FAVORITES, WidgetKind.JELLYFIN_MOVIES, WidgetKind.JELLYFIN_MUSIC,
 )

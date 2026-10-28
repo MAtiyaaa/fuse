@@ -1,0 +1,16 @@
+-- 0.4.6, the Journal: where the person is with each game and since when, their rating out of ten
+-- (0 is none) and a note of their own. Up Next and the Library's Journal read them by status.
+ALTER TABLE game ADD COLUMN play_status TEXT;
+ALTER TABLE game ADD COLUMN status_at INTEGER;
+ALTER TABLE game ADD COLUMN rating INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE game ADD COLUMN note TEXT;
+CREATE INDEX game_status ON game(play_status, status_at);
+
+-- List screens show a game's status and rating on its tile.
+DROP VIEW game_summary;
+CREATE VIEW game_summary AS
+SELECT id, platform_id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned,
+    search_title, sort_title, release_year, dlc_count, update_count, disc_count, favorite, hidden,
+    pinned, missing, removed_at, added_at, last_played_at, tracked_seconds, imported_seconds,
+    session_count, folder_path, play_status, status_at, rating
+FROM game;

@@ -63,6 +63,7 @@ fun WidgetKind.title(): String = when (this) {
     WidgetKind.CONTINUE_PLAYING -> "Continue playing"
     WidgetKind.RECENTLY_PLAYED -> "Recently played"
     WidgetKind.FAVORITES -> "Favourites"
+    WidgetKind.UP_NEXT -> "Up next"
     WidgetKind.RECENTLY_ADDED -> "New in your library"
     WidgetKind.PINNED_GAMES -> "Pinned"
     WidgetKind.PINNED_APPS -> "Apps"
@@ -103,6 +104,7 @@ fun buildShelves(widgets: List<HomeWidget>, feed: HomeFeed, achievementsOn: Bool
             WidgetKind.CONTINUE_PLAYING -> gameShelf(w, feed.continuePlaying, ShelfStyle.WIDE) { "Played ${io.github.matiyaaa.fuse.ui.shell.components.agoText(it.lastPlayedAt ?: 0)}" }
             WidgetKind.RECENTLY_PLAYED -> gameShelf(w, feed.recentlyPlayed, ShelfStyle.ICON)
             WidgetKind.FAVORITES -> gameShelf(w, feed.favorites, ShelfStyle.ICON)
+            WidgetKind.UP_NEXT -> gameShelf(w, feed.upNext, ShelfStyle.ICON)
             WidgetKind.RECENTLY_ADDED -> gameShelf(w, feed.recentlyAdded, ShelfStyle.ICON)
             WidgetKind.PINNED_GAMES -> gameShelf(w, feed.pinnedGames, ShelfStyle.ICON)
             WidgetKind.MOST_PLAYED -> gameShelf(w, feed.mostPlayed, ShelfStyle.ICON) { io.github.matiyaaa.fuse.ui.shell.components.playtimeText(it.playSeconds) }

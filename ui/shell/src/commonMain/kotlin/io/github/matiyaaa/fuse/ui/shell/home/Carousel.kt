@@ -116,7 +116,7 @@ internal val WidgetKind.carouselPeeks: Boolean
 
 private val CarouselKinds = setOf(
     WidgetKind.CONTINUE_PLAYING, WidgetKind.SYSTEMS, WidgetKind.RECENTLY_ADDED, WidgetKind.RECENTLY_PLAYED,
-    WidgetKind.FAVORITES, WidgetKind.PINNED_GAMES, WidgetKind.COLLECTIONS, WidgetKind.FOR_YOU,
+    WidgetKind.FAVORITES, WidgetKind.PINNED_GAMES, WidgetKind.COLLECTIONS, WidgetKind.FOR_YOU, WidgetKind.UP_NEXT,
     WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED,
     WidgetKind.JELLYFIN_FAVORITES, WidgetKind.JELLYFIN_MOVIES, WidgetKind.JELLYFIN_MUSIC,
 )

@@ -55,7 +55,13 @@ CREATE TABLE game (
     -- The system the user chose ("System" in a game's options); platform_id follows it and a
     -- rescan keeps it. platform_scanned is the system the game's folder says.
     platform_override TEXT,
-    platform_scanned TEXT
+    platform_scanned TEXT,
+    -- The Journal (0.4.6): where the person is with the game (a PlayStatus name) and since when,
+    -- their rating out of ten (0 is none) and their own note. Never touched by a rescan.
+    play_status TEXT,
+    status_at INTEGER,
+    rating INTEGER NOT NULL DEFAULT 0,
+    note TEXT
 );
 
 CREATE INDEX game_platform ON game(platform_id, sort_title);
@@ -71,13 +77,14 @@ CREATE INDEX game_sort ON game(sort_title);
 -- the condition as it is and keeps it off this index.
 CREATE INDEX game_missing ON game(missing);
 CREATE INDEX game_ra ON game(ra_game_id);
+CREATE INDEX game_status ON game(play_status, status_at);
 
 -- Light projection for list screens.
 CREATE VIEW game_summary AS
 SELECT id, platform_id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned,
     search_title, sort_title, release_year, dlc_count, update_count, disc_count, favorite, hidden,
     pinned, missing, removed_at, added_at, last_played_at, tracked_seconds, imported_seconds,
-    session_count, folder_path
+    session_count, folder_path, play_status, status_at, rating
 FROM game;
 
 -- Full rows ---------------------------------------------------------------------------------------
@@ -117,7 +124,8 @@ WHERE +missing = 0 AND removed_at IS NULL;
 -- Hidden, missing and removed games, and apps played as games, are never suggested.
 recommendationInputs:
 SELECT id, platform_id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned, favorite,
-    last_played_at, tracked_seconds, imported_seconds, session_count, added_at, release_year, metadata_json
+    last_played_at, tracked_seconds, imported_seconds, session_count, added_at, release_year, metadata_json,
+    play_status, status_at, rating
 FROM game
 WHERE +missing = 0 AND removed_at IS NULL AND hidden = 0 AND folder_path <> 'app:';
 
@@ -169,6 +177,28 @@ WHERE source_id = :sourceId AND +missing = 0;
 
 setFavorite:
 UPDATE game SET favorite = :favorite, updated_at = :now WHERE id = :id;
+
+setJournal:
+UPDATE game SET play_status = :status, status_at = :statusAt, rating = :rating, note = :note, updated_at = :now WHERE id = :id;
+
+-- Moving in from another launcher (0.4.6): what it matches games by, and what it may change of a
+-- game, read before it does so it can be put back exactly.
+moveInRows:
+SELECT id, platform_id, path, launch_path, steam_app_id FROM game WHERE removed_at IS NULL;
+
+moveInState:
+SELECT id, favorite, hidden, imported_seconds, imported_source, last_played_at, play_status, status_at, rating, note
+FROM game WHERE id IN ?;
+
+restoreMoveIn:
+UPDATE game SET favorite = :favorite, hidden = :hidden, imported_seconds = :seconds, imported_source = :source,
+    last_played_at = :lastPlayedAt, play_status = :status, status_at = :statusAt, rating = :rating, note = :note, updated_at = :now
+WHERE id = :id;
+
+-- Last played moved forward only, for a launcher that kept when but not how long.
+playedBy:
+UPDATE game SET last_played_at = :lastPlayedAt, updated_at = :now
+WHERE id = :id AND (last_played_at IS NULL OR last_played_at < :lastPlayedAt);
 
 setHidden:
 UPDATE game SET hidden = :hidden, updated_at = :now WHERE id = :id;
@@ -306,6 +336,12 @@ favorites:
 SELECT * FROM game_summary
 WHERE favorite = 1 AND +missing = 0 AND removed_at IS NULL AND hidden = 0
 ORDER BY sort_title, id;
+
+-- The Journal's games with these statuses, the latest set first (Up Next is WANT).
+withStatus:
+SELECT * FROM game_summary
+WHERE play_status IN :statuses AND +missing = 0 AND removed_at IS NULL AND hidden = 0
+ORDER BY status_at DESC, sort_title, id;
 
 pinned:
 SELECT * FROM game_summary
