@@ -1039,6 +1039,15 @@ class SyncDevice(
      */
     private fun inSlotFormat(slot: LocalSlot, manifest: SaveManifest): SaveManifest {
         if (manifest.format == slot.format || !SaveConversions.canConvert(manifest.format, slot.format)) return manifest
+        // A PlayStation save on its own goes onto the card the emulator reads, beside the saves
+        // already on it (the card as it was is kept first, as with any import).
+        if (manifest.format == Ps1Card.SINGLE && slot.format in Ps1Card.CARDS) {
+            val name = slot.targets.keys.singleOrNull() ?: slot.files.singleOrNull()?.path ?: SaveConversions.CARD
+            val here = slot.target(name)?.takeIf { it.isFile && it.length() == Ps1Card.SIZE.toLong() }?.readBytes()?.takeIf(Ps1Card::isCard)
+            val card = SaveConversions.onCard(here ?: Ps1Card.blank(), manifest.files.associate { it.path to store.fileOf(it.hash).readBytes() })
+                ?: throw IntegrityException("The memory card has no room for this save. Free some blocks on it in the emulator, then import it again")
+            return SaveManifest(slot.format, listOf(SaveFile(name, store.put(card), card.size.toLong())))
+        }
         val bytes = manifest.files.associate { it.path to store.fileOf(it.hash).readBytes() }
         val out = SaveConversions.convert(manifest.format, slot.format, bytes)
             ?: throw IntegrityException("This save couldn't be turned into the shape this emulator reads")

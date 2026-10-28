@@ -44,7 +44,7 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
         val id = SyncCrypto.token(12)
         val stage = File(dir, id).apply { mkdirs() }
         try {
-            val files = stage(source, stage)
+            val files = unwrapCards(stage(source, stage), stage)
             val switch = switchBackups(source, files)
             val bindings = LinkedHashMap<String, Binding>()
             val entries = LinkedHashMap<String, SaveImportEntry>()
@@ -110,6 +110,17 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
                             // No cross-user merging: every complete source root is a separate entry.
                             files.keys.any { it.startsWith("$root/") }
                         }
+                        // A GameCube save on its own (.gci) of this game goes into Dolphin's GCI folder, by the name Dolphin gives it.
+                        if (spot.format == "gc.gci") {
+                            val id = q.serial?.trim()?.uppercase()
+                            for ((name, file) in files) {
+                                if (!name.endsWith(".gci", ignoreCase = true) || file.length() > GCI_LIMIT) continue
+                                val bytes = file.readBytes()
+                                if (id == null || Gci.gameId(bytes)?.uppercase() != id) continue
+                                val dolphin = Gci.dolphinName(bytes) ?: continue
+                                add(entries, bindings, used, name, spot.format, q, spot, mapOf(dolphin to file), setOf(name), SaveImportConfidence.TITLE_ID, spotIndex)
+                            }
+                        }
                         for (root in roots) {
                             val from = files.filterKeys { it.startsWith("$root/") }
                             val prefix = if (spot.folders.isNotEmpty()) root.substringAfterLast('/') + "/" else ""
@@ -129,7 +140,9 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
                             if (!SaveSlotFormats.compatible(detected, spot.format)) continue
                             val stem = File(name).nameWithoutExtension.removeSuffix("_1")
                             val serial = q.serial?.filter { it.isLetterOrDigit() }
-                            val strong = serial != null && stem.filter { it.isLetterOrDigit() }.equals(serial, true)
+                            // A PlayStation save names its game inside it ("BASLUS-00594MGS"), whatever its file is called.
+                            val inner = if (detected == Ps1Card.SINGLE) Ps1Card.saveIn(file.readBytes())?.name?.filter { it.isLetterOrDigit() } else null
+                            val strong = serial != null && (stem.filter { it.isLetterOrDigit() }.equals(serial, true) || inner?.contains(serial, ignoreCase = true) == true)
                             val exact = TitleMatch.same(stem, q.title) || TitleMatch.same(stem, SaveAdapters.stem(q.romPath))
                             val confidence = if (strong) SaveImportConfidence.TITLE_ID else if (exact) SaveImportConfidence.EXACT_NAME else SaveImportConfidence.MANUAL
                             val canonical = canonicalFile(spot, detected, name) ?: continue
@@ -243,7 +256,9 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
         "srm" -> SaveAdapters.sramFormat(platform).takeIf { platform in SRAM_SYSTEMS || platform in setOf("psx", "n64") }
         "sav" -> "sram".takeIf { platform in SRAM_SYSTEMS }
         "dsv" -> "nds.dsv".takeIf { platform == "nds" }
-        "mcd" -> "psx.mcd".takeIf { platform == "psx" }
+        "mcd", "mcr", "mc", "ddf" -> "psx.mcd".takeIf { platform == "psx" }
+        // A PlayStation save on its own (MemcardRex, a PS3, an Action Replay): written onto the card.
+        "mcs", "psv", "psx", "mcb", "mcx", "pda", "ps1" -> Ps1Card.SINGLE.takeIf { platform == "psx" }
         "ps2" -> "ps2.card".takeIf { platform == "ps2" }
         "eep", "mpk", "sra", "fla" -> "n64.split".takeIf { platform == "n64" }
         else -> null
@@ -252,10 +267,23 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
     private fun plausible(file: File, format: String): Boolean = when (format) {
         "sram", "nds.dsv" -> file.length().let { it in 128..(8L * 1024 * 1024) && (it and (it - 1) == 0L || format == "nds.dsv" && (it - 122) > 0 && ((it - 122) and (it - 123)) == 0L) }
         "psx.mcd" -> file.length() == 128L * 1024
+        Ps1Card.SINGLE -> file.length() <= MAX_SINGLE && Ps1Card.saveIn(file.readBytes()) != null
         "retroarch.n64" -> file.length() == 0x48800L
         "ps2.card" -> file.length() in setOf(8L * 1024 * 1024, 8L * 1024 * 1024 + 512 * 1024)
         "n64.split" -> file.length() in setOf(512L, 2048L, 32768L, 131072L)
         else -> false
+    }
+
+    /**
+     * Whole PlayStation cards kept in a wrapper (a DexDrive's `.gme`, Connectix VGS's `.vgs` and
+     * `.mem`) as the plain card inside, so they import like any `.mcd`.
+     */
+    private fun unwrapCards(files: Map<String, File>, folder: File): Map<String, File> = files.entries.associate { (name, file) ->
+        val ext = name.substringAfterLast('.', "").lowercase()
+        if (ext !in setOf("gme", "vgs", "mem") || file.length() > Ps1Card.SIZE + 4096L) return@associate name to file
+        val card = Ps1Card.cardIn(name, file.readBytes()) ?: return@associate name to file
+        val out = File(folder, "${file.name}.mcd").apply { writeBytes(card) }
+        name.substringBeforeLast('.') + ".mcd" to out
     }
 
     private fun stage(source: File, folder: File): Map<String, File> {
@@ -477,5 +505,11 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
         val FUSE_ONE = SaveSpot(SaveKind.SAVE, SWITCH, available = false, mounts = mapOf(SwitchNand.DEVICE to ""))
 
         val SRAM_SYSTEMS = setOf("nes", "snes", "gb", "gbc", "gba", "nds", "megadrive", "genesis", "mastersystem", "gamegear", "pce", "neogeo", "wonderswan", "wonderswancolor", "ngp", "ngpc")
+
+        /** The largest PlayStation save on its own: fifteen blocks and the biggest header. */
+        const val MAX_SINGLE = 15L * Ps1Card.BLOCK + 0x84
+
+        /** The largest GameCube save on its own: a whole card's blocks and its header. */
+        const val GCI_LIMIT = 2043L * 0x2000 + 0x40
     }
 }

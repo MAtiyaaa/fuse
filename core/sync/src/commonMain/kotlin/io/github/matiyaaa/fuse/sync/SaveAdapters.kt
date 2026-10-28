@@ -987,7 +987,7 @@ object SaveSlotFormats {
 object SaveConversions {
     private val pairs = setOf("nds.dsv" to "sram", "sram" to "nds.dsv", "n64.split" to "retroarch.n64", "retroarch.n64" to "n64.split")
 
-    fun canConvert(from: String, to: String): Boolean = (from to to) in pairs
+    fun canConvert(from: String, to: String): Boolean = (from to to) in pairs || (from == Ps1Card.SINGLE && to in Ps1Card.CARDS)
 
     /** [files] (name to bytes, names as the save names them) in [to]'s shape; null when it can't be done. */
     fun convert(from: String, to: String, files: Map<String, ByteArray>): Map<String, ByteArray>? = when (from to to) {
@@ -996,7 +996,19 @@ object SaveConversions {
         "sram" to "nds.dsv" -> files
         "n64.split" to "retroarch.n64" -> combineN64(files)?.let { mapOf("save.srm" to it) }
         "retroarch.n64" to "n64.split" -> files["save.srm"]?.let(::splitN64)
-        else -> null
+        // PlayStation saves on their own, on a card of their own (a card already there is merged
+        // with them where the save goes into place: SyncDevice).
+        else -> if (from == Ps1Card.SINGLE && to in Ps1Card.CARDS) onCard(Ps1Card.blank(), files)?.let { mapOf(CARD to it) } else null
+    }
+
+    /** The name a card made from saves on their own goes by. */
+    const val CARD = "card1.mcd"
+
+    /** [card] with each of [files]' saves written onto it; null when one isn't a save or the card has no room. */
+    fun onCard(card: ByteArray, files: Map<String, ByteArray>): ByteArray? {
+        var out = card
+        for ((_, bytes) in files.entries.sortedBy { it.key }) out = Ps1Card.write(out, Ps1Card.saveIn(bytes) ?: return null) ?: return null
+        return out
     }
 
     private const val DESMUME_FOOTER = 122
