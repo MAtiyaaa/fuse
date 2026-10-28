@@ -234,6 +234,14 @@ internal class FakeServices(
         return file.absolutePath
     }
 
+    override suspend fun copyBeside(from: String, name: String, edits: List<io.github.matiyaaa.fuse.library.patch.FileEdit>): String? {
+        val file = File(File(from).parentFile, name)
+        if (file.exists()) return null
+        File(from).copyTo(file)
+        java.io.RandomAccessFile(file, "rw").use { f -> edits.forEach { f.seek(it.offset); f.write(it.bytes) } }
+        return file.absolutePath
+    }
+
     override suspend fun keepFile(relativePath: String, bytes: ByteArray): String? {
         require(!relativePath.contains("..")) { "Kept files never leave the data folder" }
         val file = File(cache, "kept/$relativePath")

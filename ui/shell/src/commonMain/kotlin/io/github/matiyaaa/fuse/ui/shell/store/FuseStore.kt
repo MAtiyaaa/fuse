@@ -941,11 +941,13 @@ interface LibraryOps {
     suspend fun detachContent(child: GameId): GameId? = null
 
     /**
-     * Applies the IPS, UPS, BPS or xdelta patch at [patchPath] to [id]'s game file, as a new copy beside it
-     * that joins the library: the game itself is never changed. UPS and BPS are checked against the
-     * game they were made for, and a patch for another version is refused.
+     * Applies the IPS, UPS, BPS, xdelta or PPF patch at [patchPath] to [id]'s game file, as a new copy
+     * beside it that joins the library: the game itself is never changed. UPS and BPS are checked
+     * against the game they were made for, PPF against the disc where it carries a piece of it, and a
+     * patch for another version is refused. A .cue game's patch goes to its data track and an .m3u
+     * game's to its [disc] (0 for the first), each with a copy of the sheet naming the patched file.
      */
-    suspend fun applyPatch(id: GameId, patchPath: String): PatchApplied = PatchApplied.Failed("Patching isn't available here.")
+    suspend fun applyPatch(id: GameId, patchPath: String, disc: Int? = null): PatchApplied = PatchApplied.Failed("Patching isn't available here.")
 
     /** The parts the person attached to [owner]: id, title and kind. */
     suspend fun userParts(owner: GameId): List<Triple<GameId, String, io.github.matiyaaa.fuse.model.ContentKind>> = emptyList()
@@ -1545,6 +1547,9 @@ sealed interface PatchApplied {
 
     /** The game already is what the patch makes. */
     data object AlreadyPatched : PatchApplied
+
+    /** The game is several discs ([discs], their file names in order): which one the patch is for is asked, then given as `disc`. */
+    data class WhichDisc(val discs: List<String>) : PatchApplied
 
     /** It couldn't be done; [reason] says why, in words for the person. */
     data class Failed(val reason: String) : PatchApplied

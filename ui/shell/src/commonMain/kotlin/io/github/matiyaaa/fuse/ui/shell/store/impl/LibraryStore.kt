@@ -2137,34 +2137,102 @@ internal class DefaultLibraryOps(
 
     override suspend fun userParts(owner: GameId) = data.games.userParts(owner)
 
-    override suspend fun applyPatch(id: GameId, patchPath: String): io.github.matiyaaa.fuse.ui.shell.store.PatchApplied {
+    override suspend fun applyPatch(id: GameId, patchPath: String, disc: Int?): io.github.matiyaaa.fuse.ui.shell.store.PatchApplied {
         val failed = io.github.matiyaaa.fuse.ui.shell.store.PatchApplied::Failed
         val game = data.games.get(id) ?: return failed("This game isn't in the library any more.")
         if (game.appId != null || game.location.kind != LocationKind.FILE) return failed("Patches apply to a game that is one file. This one is a folder or an app.")
-        val path = game.location.path
-        val ext = path.substringAfterLast('.', "").lowercase()
-        if (ext in ARCHIVES) return failed("This game is in a .$ext archive. Patches apply to the game itself: unpack it first, then patch that.")
-        val limit = io.github.matiyaaa.fuse.library.patch.RomPatches.MAX_SIZE.toInt()
-        val patch = ctx.services.readFile(patchPath, 64 * 1024 * 1024) ?: return failed("Fuse couldn't read the patch.")
-        val rom = ctx.services.readFile(path, limit) ?: return failed("Fuse couldn't read the game (or it is larger than the games patches are for).")
-        val outcome = withContext(Dispatchers.Default) { io.github.matiyaaa.fuse.library.patch.RomPatches.apply(rom, patch) }
-        fun crc(v: Long) = v.toString(16).uppercase().padStart(8, '0')
-        return when (outcome) {
-            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Unreadable -> failed(outcome.reason)
-            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.NotForThisGame -> failed(outcome.reason)
-            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.AlreadyPatched -> io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched
-            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.WrongGame -> io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WrongGame(outcome.format.label, crc(outcome.expected), crc(outcome.actual))
-            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Patched -> {
-                // Named after the game and the patch, so both are plain to see, beside the game.
-                val stem = FsPath.name(path).let { n -> n.substringBeforeLast('.', n) }
-                val patchStem = patchPath.replace('\\', '/').substringAfterLast('/').let { n -> n.substringBeforeLast('.', n) }.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(80).trim()
-                val name = "$stem - $patchStem${if (ext.isEmpty()) "" else ".$ext"}"
-                val written = ctx.services.writeBeside(path, name, outcome.bytes)
-                    ?: return failed("Fuse couldn't write the patched copy beside the game (the folder may not allow it, or \"$name\" is there already).")
-                val added = addGameFile(written, game.platformId)
-                io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made(added, name, outcome.format.label, outcome.checked, outcome.headerRemoved)
-            }
+        val fs = ctx.services.fs
+        fun extOf(p: String) = p.substringAfterLast('.', "").lowercase()
+        // The file the patch changes, and the sheets around it (an .m3u, then a .cue), outermost first:
+        // each gets a copy naming the patched file below it.
+        var path = game.location.path
+        val sheets = ArrayList<Pair<String, Int>>()
+        if (extOf(path) == "m3u") {
+            val discs = fs.readText(path)?.let { io.github.matiyaaa.fuse.library.scan.Playlists.parseM3u(it, FsPath.parent(path) ?: "") }.orEmpty()
+            if (discs.isEmpty()) return failed("Fuse couldn't read the discs in ${FsPath.name(path)}.")
+            val index = disc ?: if (discs.size == 1) 0 else return io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WhichDisc(discs.map { FsPath.name(it) })
+            sheets += path to index
+            path = discs.getOrNull(index) ?: return failed("${FsPath.name(path)} has no disc ${index + 1}.")
         }
+        if (extOf(path) == "cue") {
+            val track = fs.readText(path)?.let { io.github.matiyaaa.fuse.library.scan.Playlists.parseCue(it, FsPath.parent(path) ?: "") }?.firstOrNull()
+                ?: return failed("Fuse couldn't find the tracks ${FsPath.name(path)} names.")
+            sheets += path to 0
+            path = track
+        }
+        val ext = extOf(path)
+        when {
+            ext == "gdi" -> return failed("Fuse doesn't patch a Dreamcast game kept as .gdi tracks. Its patches come with a tool of their own, which knows the track it changes.")
+            ext in COMPRESSED_DISCS -> return failed("${FsPath.name(path)} is kept compressed (.$ext). Patches change the disc itself: patch an uncompressed copy (a .bin and .cue, or an .iso), then compress that if you like.")
+            ext in ARCHIVES -> return failed("This game is in a .$ext archive. Patches apply to the game itself: unpack it first, then patch that.")
+        }
+        val patch = ctx.services.readFile(patchPath, 64 * 1024 * 1024) ?: return failed("Fuse couldn't read the patch.")
+        // Each copy is named after its original and the patch, so both are plain to see, beside the original.
+        val patchStem = patchPath.replace('\\', '/').substringAfterLast('/').let { n -> n.substringBeforeLast('.', n) }.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(80).trim()
+        fun copyName(p: String): String {
+            val stem = FsPath.name(p).let { n -> n.substringBeforeLast('.', n) }
+            return "$stem - $patchStem${extOf(p).let { if (it.isEmpty()) "" else ".$it" }}"
+        }
+        val name = copyName(path)
+        val taken = "Fuse couldn't write the patched copy beside the game (the folder may not allow it, or \"$name\" is there already)."
+        val made: io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made
+        val written: String
+        if (io.github.matiyaaa.fuse.library.patch.Ppf.isPpf(patch)) {
+            // A disc image of hundreds of megabytes: read where the patch looks, and copied with its
+            // changes written in, never held whole.
+            val size = fs.stat(path)?.sizeBytes ?: return failed("Fuse couldn't read the game.")
+            val verdict = try {
+                val parsed = withContext(Dispatchers.Default) { io.github.matiyaaa.fuse.library.patch.Ppf.parse(patch) }
+                io.github.matiyaaa.fuse.library.patch.Ppf.check(parsed, size) { at, length -> fs.readBytes(path, at, length) }
+            } catch (e: io.github.matiyaaa.fuse.library.patch.Ppf.Problem) {
+                return failed(e.message.orEmpty())
+            }
+            val ready = when (verdict) {
+                is io.github.matiyaaa.fuse.library.patch.Ppf.Verdict.Ready -> verdict
+                io.github.matiyaaa.fuse.library.patch.Ppf.Verdict.AlreadyPatched -> return io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched
+                is io.github.matiyaaa.fuse.library.patch.Ppf.Verdict.NotForThisGame -> return failed(verdict.reason)
+            }
+            val folder = FsPath.parent(path) ?: ""
+            fs.freeSpace(folder)?.let { free ->
+                if (free < size + ROOM_TO_SPARE) return failed("There isn't room beside the game for a patched copy: it needs ${io.github.matiyaaa.fuse.ui.shell.home.bytesText(size)}, and ${io.github.matiyaaa.fuse.ui.shell.home.bytesText(free)} is free.")
+            }
+            written = ctx.services.copyBeside(path, name, ready.edits) ?: return failed(taken)
+            made = io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made(null, name, "PPF", ready.checked, headerRemoved = false)
+        } else {
+            val rom = ctx.services.readFile(path, io.github.matiyaaa.fuse.library.patch.RomPatches.MAX_SIZE.toInt())
+                ?: return failed("Fuse couldn't read the game (or it is larger than the games patches are for).")
+            val outcome = withContext(Dispatchers.Default) { io.github.matiyaaa.fuse.library.patch.RomPatches.apply(rom, patch) }
+            fun crc(v: Long) = v.toString(16).uppercase().padStart(8, '0')
+            val patched = when (outcome) {
+                is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Unreadable -> return failed(outcome.reason)
+                is io.github.matiyaaa.fuse.library.patch.PatchOutcome.NotForThisGame -> return failed(outcome.reason)
+                is io.github.matiyaaa.fuse.library.patch.PatchOutcome.AlreadyPatched -> return io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched
+                is io.github.matiyaaa.fuse.library.patch.PatchOutcome.WrongGame -> return io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WrongGame(outcome.format.label, crc(outcome.expected), crc(outcome.actual))
+                is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Patched -> outcome
+            }
+            written = ctx.services.writeBeside(path, name, patched.bytes) ?: return failed(taken)
+            made = io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made(null, name, patched.format.label, patched.checked, patched.headerRemoved)
+        }
+        // The sheets, innermost first, each naming the copy below it; if one can't be written, the
+        // copies made for it go again.
+        val copies = arrayListOf(written)
+        var top = written
+        for ((sheet, index) in sheets.asReversed()) {
+            val text = fs.readText(sheet)
+            val repointed = when {
+                text == null -> null
+                extOf(sheet) == "m3u" -> io.github.matiyaaa.fuse.library.scan.Playlists.repointM3u(text, index, FsPath.name(top))
+                else -> io.github.matiyaaa.fuse.library.scan.Playlists.repointCue(text, FsPath.name(top))
+            }
+            val sheetCopy = repointed?.let { ctx.services.writeBeside(sheet, copyName(sheet), it.encodeToByteArray()) }
+            if (sheetCopy == null) {
+                copies.forEach { fs.delete(it) }
+                return failed("Fuse couldn't write a copy of ${FsPath.name(sheet)} naming the patched disc (the folder may not allow it, or \"${copyName(sheet)}\" is there already).")
+            }
+            copies += sheetCopy
+            top = sheetCopy
+        }
+        return made.copy(game = addGameFile(top, game.platformId), name = FsPath.name(top))
     }
 
     override suspend fun browse(path: String?): BrowseListing {
@@ -2270,7 +2338,13 @@ private const val STEAM_SESSION_MAX_MS = 24L * 60 * 60 * 1000
 private const val COMPAT_CACHE = "rpcs3.compat"
 
 /** Archives a patch never applies to: it is for the game inside. */
-private val ARCHIVES = setOf("zip", "7z", "rar", "gz", "chd", "rvz", "cso", "zso")
+private val ARCHIVES = setOf("zip", "7z", "rar", "gz")
+
+/** Discs kept compressed, which a patch would break: it is for the disc as it is when not. */
+private val COMPRESSED_DISCS = setOf("chd", "cso", "zso", "rvz", "wia", "gcz", "pbp", "ecm", "ciso")
+
+/** Room kept free on a drive after a patched copy of a disc is made there. */
+private const val ROOM_TO_SPARE = 64L * 1024 * 1024
 
 /** Emulators finish writing a moment after they close: RomM's save sync waits that long. */
 private const val ROMM_SETTLE_MS = 1_500L

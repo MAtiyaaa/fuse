@@ -18,7 +18,7 @@ was tried on every Android device.
 | Streaming with Moonlight, per game or per system | Needs Moonlight for Android. |
 | Haptics, the second screen (two-screen handhelds), screen calibration | The second screen goes dark with Standby. |
 | Accessibility: colour palettes, right to left, screen reader labels, text size | Right to left follows the system's language. |
-| ROM patches (IPS, UPS, BPS, xdelta) and game manuals (PDF, CBZ) | Manuals are drawn by Android itself. |
+| ROM patches (IPS, UPS, BPS, xdelta, PPF) and game manuals (PDF, CBZ) | Manuals are drawn by Android itself. |
 | GameBanana: finding and downloading a game's mods | Installing them depends on reaching the emulator's folder (below). |
 | Phone Link and its permissions | |
 | Fuse's own updates | A stopped download resumes and is checked before installing. |

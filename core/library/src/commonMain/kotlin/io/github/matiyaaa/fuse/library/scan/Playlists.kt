@@ -37,6 +37,45 @@ object Playlists {
         FsPath.resolve(gdiDir, raw.trim('"'))
     }
 
+    /**
+     * [text] of a cue sheet with its first `FILE` line naming [name] instead, in the folder of the
+     * file it named (a sheet for a patched copy of the data track), or null when it names none.
+     */
+    fun repointCue(text: String, name: String): String? = repoint(text, { cueFile.matchEntire(it) != null }, 0) { line ->
+        val body = cueFile.matchEntire(line)!!.groupValues[1]
+        val (ref, type) = if (body.startsWith("\"")) {
+            body.substring(1).substringBefore('"') to body.substring(1).substringAfter('"').trim()
+        } else {
+            body.substringBeforeLast(' ', body).trim() to body.substringAfterLast(' ', "").trim()
+        }
+        "FILE \"${besideRef(ref, name)}\"" + (if (type.isEmpty()) "" else " $type")
+    }
+
+    /**
+     * [text] of an .m3u playlist with its entry [index] (0 for the first, comments not counted) naming
+     * [name] instead, in the folder of the file it named, or null when it has no such entry.
+     */
+    fun repointM3u(text: String, index: Int, name: String): String? =
+        repoint(text, { it.isNotEmpty() && !it.startsWith("#") }, index) { line -> besideRef(line, name) }
+
+    /** Rewrites the [index]th line [counts] (trimmed) with [rewrite], keeping its indent and line ending. */
+    private fun repoint(text: String, counts: (String) -> Boolean, index: Int, rewrite: (String) -> String): String? {
+        val bom = text.startsWith("\uFEFF")
+        val raw = text.removePrefix("\uFEFF").split('\n').toMutableList()
+        var seen = 0
+        for ((i, line) in raw.withIndex()) {
+            val trimmed = line.trim().trimEnd('\r')
+            if (!counts(trimmed)) continue
+            if (seen++ != index) continue
+            raw[i] = line.takeWhile { it == ' ' || it == '\t' } + rewrite(trimmed) + (if (line.endsWith("\r")) "\r" else "")
+            return (if (bom) "\uFEFF" else "") + raw.joinToString("\n")
+        }
+        return null
+    }
+
+    /** [ref] (a path as a sheet wrote it) with its last part [name]. */
+    private fun besideRef(ref: String, name: String): String = ref.substring(0, maxOf(ref.lastIndexOf('/'), ref.lastIndexOf('\\')) + 1) + name
+
     private fun lines(text: String): List<String> =
         text.removePrefix("﻿").split('\n').map { it.trim().trimEnd('\r') }
 }

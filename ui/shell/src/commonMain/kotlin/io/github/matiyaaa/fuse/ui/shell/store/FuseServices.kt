@@ -192,6 +192,14 @@ interface FuseServices {
      */
     suspend fun writeBeside(beside: String, name: String, bytes: ByteArray): String? = null
 
+    /**
+     * Copies the file at [from] as a new file named [name] in its folder, with [edits] written into
+     * the copy in their order: a patched copy of a disc image too large to hold in memory. Made under
+     * a temporary name and moved into place like [writeBeside], never over a file that is there.
+     * Returns its path, or null when it could not be made.
+     */
+    suspend fun copyBeside(from: String, name: String, edits: List<io.github.matiyaaa.fuse.library.patch.FileEdit>): String? = null
+
     /** Where the Store puts programs on a computer; null on Android (which has [packages]) and in tests. */
     val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller? get() = null
 

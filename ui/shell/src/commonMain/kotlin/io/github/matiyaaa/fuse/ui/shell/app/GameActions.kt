@@ -568,7 +568,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         }
         if (!card.isApp) add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))
         // A translation, a hack or a fix, as its own copy beside the game: the game stays as it is.
-        if (!card.isApp && card.platformId.value !in NO_ROM_PATCHES) add(MenuAction("patch", "Apply a Patch", FuseIcons.Bandage, detail = "An IPS, UPS, BPS or xdelta file. Makes a patched copy; this game stays as it is", onSelect = { applyPatch(card) }))
+        if (!card.isApp && card.platformId.value !in NO_ROM_PATCHES) add(MenuAction("patch", "Apply a Patch", FuseIcons.Bandage, detail = "An IPS, UPS, BPS, xdelta or PPF file. Makes a patched copy; this game stays as it is", onSelect = { applyPatch(card) }))
         // RomM, when it is the RomM integration in use: games not on RomM go up from here.
         if (store.prefs.value.romm.enabled && store.romm.supported && !card.isApp && card.rommRomId == null) {
             add(MenuAction("romm.upload", "Upload to RomM", FuseIcons.Upload, detail = "With its other discs, DLC and updates, through Downloads", onSelect = {
@@ -1600,11 +1600,11 @@ internal fun AppState.applyPatch(card: GameCard) {
     }
 }
 
-/** Makes a patched copy of [card] with the patch file at [patch], and says how it went. */
-internal fun AppState.patchWith(card: GameCard, patch: String) {
+/** Makes a patched copy of [card] (of its [disc], for a game of several) with the patch file at [patch], and says how it went. */
+internal fun AppState.patchWith(card: GameCard, patch: String, disc: Int? = null) {
     scope.launch {
         toasts.show("Patching ${card.title}...", icon = FuseIcons.Bandage)
-        when (val r = store.library.applyPatch(card.id, patch)) {
+        when (val r = store.library.applyPatch(card.id, patch, disc)) {
             is io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made -> {
                 val notes = listOfNotNull(
                     if (r.checked) "The ${r.format} patch confirmed this is the game it is for." else "${r.format} patches don't say which game they are for: if the copy doesn't start, the patch is for another version.",
@@ -1626,6 +1626,14 @@ internal fun AppState.patchWith(card: GameCard, patch: String) {
                 message = "The ${r.format} patch is for a game whose checksum is ${r.expected}; this copy of ${card.title} is ${r.actual}. Patching it would make a broken game, so nothing was made. The patch's notes usually say which dump it needs (a region or revision).",
                 options = listOf(MenuAction("ok", "OK", FuseIcons.Check, onSelect = { choice = null })),
             )
+            is io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WhichDisc -> choice = ChoiceSpec(
+                title = "Which disc is the patch for?",
+                icon = FuseIcons.Disc,
+                message = "${card.title} is ${r.discs.size} discs, and a patch changes one. The copy keeps the others as they are.",
+                options = r.discs.mapIndexed { i, name ->
+                    MenuAction("disc.$i", "Disc ${i + 1}", FuseIcons.Disc, detail = name, onSelect = { choice = null; patchWith(card, patch, i) })
+                },
+            )
             io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched -> toasts.show("${card.title} already has this patch", icon = FuseIcons.Bandage)
             is io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Failed -> toasts.show(r.reason, ToastKind.WARNING)
         }
@@ -1635,7 +1643,7 @@ internal fun AppState.patchWith(card: GameCard, patch: String) {
 /** Systems whose emulators Fuse knows a way of playing together in (PCSX2, PPSSPP, Dolphin, RPCS3), besides RetroArch's. */
 private val TOGETHER_SYSTEMS = setOf("ps2", "psp", "ngc", "wii", "ps3")
 
-/** Systems whose games are installed packages or programs, where ROM patches (IPS, UPS, BPS, xdelta) don't apply. */
+/** Systems whose games are installed packages or programs, where ROM patches (IPS, UPS, BPS, xdelta, PPF) don't apply. */
 private val NO_ROM_PATCHES = setOf("switch", "ps3", "ps4", "ps5", "psvita", "wiiu", "xbox", "xbox360", "win", "win3x", "win9x", "steam", "android", "dos", "mac", "scummvm", "pico8", "flash", "j2me")
 
 /**
