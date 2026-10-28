@@ -3020,6 +3020,118 @@ const STATUSES = [
   ['DROPPED', 'Dropped', 'circle-slash'],
 ];
 
+/** A rating out of ten in words: "3½ stars", "Half a star"; empty when not rated. */
+function ratingWords(r) {
+  const whole = Math.floor(r / 2);
+  const half = r % 2 === 1;
+  if (r <= 0) return '';
+  if (whole === 0) return 'half a star';
+  if (half) return `${whole}\u00BD stars`;
+  return whole === 1 ? '1 star' : `${whole} stars`;
+}
+
+const STAR_PATH = (() => {
+  // A five-pointed star in a 24 unit square, points up, as the device draws it.
+  const pts = [];
+  for (let k = 0; k < 10; k++) {
+    const r = k % 2 === 0 ? 12 : 6;
+    const a = -Math.PI / 2 + (k * Math.PI) / 5;
+    pts.push(`${(12 + r * Math.cos(a)).toFixed(2)},${(12.72 + r * Math.sin(a)).toFixed(2)}`);
+  }
+  return `M${pts.join('L')}Z`;
+})();
+
+/**
+ * Five stars to rate by, as on Letterboxd: each half of a star is a step. A tap or a drag across them
+ * gives the rating as the finger lifts, a mouse over them shows what a click would give, a tap on the
+ * rating already given takes it away, and the arrow keys step it half a star.
+ */
+function starRating(value, onRate) {
+  let current = value;
+  let shown = value;
+  const ns = 'http://www.w3.org/2000/svg';
+  const id = uid('stars');
+  const el = h('div.rate', { role: 'slider', tabindex: '0', 'aria-label': 'Your rating', 'aria-valuemin': '0', 'aria-valuemax': '10' });
+  const words = h('span.rate-words');
+  const fills = [];
+  const row = h('div.rate-stars');
+  for (let i = 0; i < 5; i++) {
+    const svg = svgEl('svg', { viewBox: '0 0 24 24', class: 'rate-star', 'aria-hidden': 'true' });
+    const clip = document.createElementNS(ns, 'clipPath');
+    clip.setAttribute('id', `${id}-${i}`);
+    const rect = document.createElementNS(ns, 'rect');
+    rect.setAttribute('x', '0'); rect.setAttribute('y', '0'); rect.setAttribute('height', '24'); rect.setAttribute('width', '0');
+    clip.appendChild(rect);
+    const defs = document.createElementNS(ns, 'defs');
+    defs.appendChild(clip);
+    const base = document.createElementNS(ns, 'path');
+    base.setAttribute('d', STAR_PATH); base.setAttribute('class', 'rate-empty');
+    const fill = document.createElementNS(ns, 'path');
+    fill.setAttribute('d', STAR_PATH); fill.setAttribute('class', 'rate-fill'); fill.setAttribute('clip-path', `url(#${id}-${i})`);
+    svg.append(defs, base, fill);
+    fills.push(rect);
+    row.appendChild(svg);
+  }
+  function draw(v, previewing) {
+    shown = v;
+    fills.forEach((rect, i) => { rect.setAttribute('width', String(Math.max(0, Math.min(2, v - i * 2)) * 12)); });
+    el.classList.toggle('is-preview', !!previewing && v !== current);
+    words.textContent = v ? ratingWords(v).replace(/^h/, 'H') : 'Not rated';
+    el.setAttribute('aria-valuenow', String(v));
+    el.setAttribute('aria-valuetext', v ? ratingWords(v) : 'Not rated');
+  }
+  function valueAt(x) {
+    const stars = row.children;
+    for (let i = 0; i < stars.length; i++) {
+      const r = stars[i].getBoundingClientRect();
+      if (x < r.right || i === stars.length - 1) return i * 2 + (x < r.left + r.width / 2 ? 1 : 2);
+    }
+    return 10;
+  }
+  let pressed = false;
+  let moved = false;
+  let start = 0;
+  row.addEventListener('pointerdown', (e) => {
+    pressed = true; moved = false;
+    start = valueAt(e.clientX);
+    row.setPointerCapture(e.pointerId);
+    draw(start, true);
+    e.preventDefault();
+  });
+  row.addEventListener('pointermove', (e) => {
+    if (!pressed && e.pointerType !== 'mouse') return;
+    const v = valueAt(e.clientX);
+    if (pressed && v !== start) moved = true;
+    draw(v, true);
+  });
+  row.addEventListener('pointerup', (e) => {
+    if (!pressed) return;
+    pressed = false;
+    const v = valueAt(e.clientX);
+    const next = !moved && v === current ? 0 : v;
+    current = next;
+    draw(next, false);
+    if (navigator.vibrate) navigator.vibrate(8);
+    onRate(next);
+  });
+  row.addEventListener('pointercancel', () => { pressed = false; draw(current, false); });
+  row.addEventListener('pointerleave', (e) => { if (!pressed && e.pointerType === 'mouse') draw(current, false); });
+  // The keys step half a star, and give it a moment after the last press.
+  let keyTimer = 0;
+  el.addEventListener('keydown', (e) => {
+    const by = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+    if (by == null) return;
+    e.preventDefault();
+    const next = Math.max(0, Math.min(10, shown + by));
+    draw(next, true);
+    clearTimeout(keyTimer);
+    keyTimer = setTimeout(() => { current = next; draw(next, false); onRate(next); }, 700);
+  });
+  el.append(row, words);
+  draw(value, false);
+  return el;
+}
+
 /**
  * The game's Journal, as on the device: where the person is with it, their rating in half stars,
  * and their note, written on the phone's own keyboard. Each change is kept on the device at once.
@@ -3048,18 +3160,9 @@ function journalSection(d) {
       b.addEventListener('click', () => save({ status: on ? null : id }, on ? 'Taken out of your Journal' : `${label}, kept in your Journal`));
       return b;
     }));
-  // A star once gives it whole, again gives half of it, a third time clears the rating.
-  const rating = num(j.rating);
-  const stars = h('div.stars', { role: 'group', 'aria-label': rating ? `Your rating: ${rating / 2} of 5 stars` : 'Not rated' },
-    [1, 2, 3, 4, 5].map((n) => {
-      const fill = rating >= n * 2 ? ' is-full' : rating === n * 2 - 1 ? ' is-half' : '';
-      const b = h('button', { type: 'button', class: 'star' + fill, 'aria-label': `${n} ${n === 1 ? 'star' : 'stars'}` }, icon('star'));
-      b.addEventListener('click', () => {
-        const next = rating === n * 2 ? n * 2 - 1 : rating === n * 2 - 1 ? 0 : n * 2;
-        save({ rating: next }, next ? `Rated ${next / 2} ${next === 2 ? 'star' : 'stars'}` : 'Rating cleared');
-      });
-      return b;
-    }));
+  const stars = starRating(num(j.rating), (next) => {
+    save({ rating: next }, next ? `Rated ${ratingWords(next)}` : 'Rating cleared');
+  });
   const note = h('textarea', { rows: '3', maxlength: '2000', 'aria-label': 'Your note', placeholder: 'Where you left off, what to try next, what you thought' });
   note.value = j.note || '';
   const saveNote = btn('Save note', {

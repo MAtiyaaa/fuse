@@ -94,20 +94,21 @@ fun AppState.journalSheet(game: GameId, title: String, journal: GameJournal) {
     )
 }
 
-/** The rating sheet: five stars to half a star, or none. Back and a choice both return to the Journal. */
+/** Stars for [title], half a star at a time; given or left, it comes back to the Journal. */
 private fun AppState.ratingSheet(game: GameId, title: String, journal: GameJournal) {
-    fun pick(r: Int) {
+    choice = null
+    rating = RatingSpec(title, journal.rating, onBack = { journalSheet(game, title, journal) }) { r ->
         val next = journal.copy(rating = r)
         scope.launch { store.library.setJournal(game, next) }
         journalSheet(game, title, next)
     }
-    choice = ChoiceSpec(
-        title = "Your rating",
-        icon = FuseIcons.Star,
-        message = title,
-        options = (GameJournal.MOST_RATING downTo 1).map { r ->
-            MenuAction("rate.$r", JournalWords.stars(r)!!, trailing = Trailing.Rating(r), detail = if (journal.rating == r) "Your rating now" else null, onSelect = { pick(r) })
-        } + MenuAction("rate.0", "Not rated", FuseIcons.CircleDot, trailing = Trailing.Check(journal.rating == 0), onSelect = { pick(0) }),
-        onBack = { journalSheet(game, title, journal) },
-    )
+}
+
+/** Stars for [title] on their own (from its page): given, they go into its Journal. */
+fun AppState.rateGame(game: GameId, title: String, journal: GameJournal, art: Any? = null) {
+    closeOverlays()
+    rating = RatingSpec(title, journal.rating, art) { r ->
+        scope.launch { store.library.setJournal(game, journal.copy(rating = r)) }
+        toasts.show(io.github.matiyaaa.fuse.ui.designsystem.components.RatingWords.stars(r)?.let { "Rated $it" } ?: "Rating taken away", icon = FuseIcons.Star)
+    }
 }
