@@ -54,8 +54,18 @@ data class GameRecord(
     val removedAt: Long?,
 )
 
-/** A game as moving in matches it: its system, its files and its Steam id. */
-data class MoveInRow(val id: GameId, val platform: String, val path: String, val launchPath: String, val steamAppId: Long?)
+/** A game as moving in matches it: its system, its files, its Steam and RetroAchievements ids and its names. */
+data class MoveInRow(
+    val id: GameId,
+    val platform: String,
+    val path: String,
+    val launchPath: String,
+    val steamAppId: Long?,
+    /** RetroAchievements' id for it, once Fuse has found it. */
+    val raGameId: Long? = null,
+    /** Its names: the person's own, the metadata's, the cleaned and the file's. */
+    val titles: List<String> = emptyList(),
+)
 
 /**
  * What moving in may change of a game, as it was: favourite, hidden, imported play time and where

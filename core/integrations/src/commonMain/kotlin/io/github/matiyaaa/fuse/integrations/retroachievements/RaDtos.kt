@@ -330,6 +330,23 @@ data class RaFollowing(
     @SerialName("Results") val results: List<RaFollowed> = emptyList(),
 )
 
+/** A game on a person's Want to Play list: RetroAchievements' id for it, its title and its console. */
+@Serializable
+data class RaWanted(
+    @SerialName("ID") @Serializable(with = FlexLong::class) val id: Long? = null,
+    @SerialName("Title") val title: String = "",
+    @SerialName("ConsoleID") @Serializable(with = LooseInt::class) val consoleId: Int = 0,
+    @SerialName("ConsoleName") val consoleName: String = "",
+)
+
+/** API_GetUserWantToPlayList: one page of the games a person wants to play. */
+@Serializable
+data class RaWantToPlay(
+    @SerialName("Count") @Serializable(with = LooseInt::class) val count: Int = 0,
+    @SerialName("Total") @Serializable(with = LooseInt::class) val total: Int = 0,
+    @SerialName("Results") val results: List<RaWanted> = emptyList(),
+)
+
 /** A score on a leaderboard: whose, what (as the game formats it), and the place when it is given. */
 @Serializable
 data class RaLeaderboardEntry(

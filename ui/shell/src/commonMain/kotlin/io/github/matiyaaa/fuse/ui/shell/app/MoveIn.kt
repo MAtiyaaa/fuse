@@ -15,6 +15,7 @@ internal fun moveInIcon(s: MoveInSource): ImageVector = when (s) {
     MoveInSource.RETROARCH -> FuseIcons.Blocks
     MoveInSource.PEGASUS -> FuseIcons.GalleryThumbnails
     MoveInSource.STEAM -> FuseIcons.Gamepad
+    MoveInSource.RETROACHIEVEMENTS -> FuseIcons.Trophy
 }
 
 /** "40 favourites, play time for 120 games, 3 collections": what a move in brings, in a line. */
@@ -29,9 +30,9 @@ internal fun moveInWords(r: MoveInReport): String = listOfNotNull(
 private fun gamesWord(n: Int) = if (n == 1) "1 game" else "$n games"
 
 /**
- * Moving in: finds the launchers on this device (ES-DE, RetroArch, Pegasus, Steam), shows what
- * each would bring to the games here, and brings in the ones chosen. Steam's play time is only
- * brought in when the person turns it on.
+ * Moving in: finds the launchers on this device (ES-DE, RetroArch, Pegasus, Steam) and the
+ * person's Want to Play list on RetroAchievements, shows what each would bring to the games here,
+ * and brings in the ones chosen. Steam's play time is only brought in when the person turns it on.
  */
 fun AppState.moveInSheet() {
     choice = null
@@ -42,7 +43,7 @@ fun AppState.moveInSheet() {
             choice = ChoiceSpec(
                 title = "Nothing to bring in",
                 icon = FuseIcons.Import,
-                message = "Fuse looked for ES-DE, RetroArch, Pegasus and Steam on this device, and none of them says anything about the games here yet.",
+                message = "Fuse looked for ES-DE, RetroArch, Pegasus and Steam on this device, and at your Want to Play list on RetroAchievements, and none of them says anything about the games here yet.",
                 options = listOf(MenuAction("done", "Done", FuseIcons.Check, onSelect = { choice = null })),
             )
             return@launch

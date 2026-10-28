@@ -752,6 +752,19 @@ internal class DefaultAchievementOps(
         }.sortedBy { it.myRank == null }
     }
 
+    /**
+     * The person's Want to Play list on RetroAchievements, with their name there, for moving in
+     * ([MoveInWork]): null when no account is set up or RetroAchievements isn't answering.
+     */
+    internal suspend fun wantToPlay(): Pair<String, List<io.github.matiyaaa.fuse.integrations.retroachievements.RaWanted>>? {
+        val client = client() ?: return null
+        val user = account()?.first ?: return null
+        val list = fetch(KEY_WANT, kotlinx.serialization.builtins.ListSerializer(io.github.matiyaaa.fuse.integrations.retroachievements.RaWanted.serializer()), FOLLOWING_TTL, force = false) {
+            client.allWantToPlay()
+        } ?: return null
+        return user to list
+    }
+
     /** Cached value regardless of age (shown while offline or rate limited). */
     private suspend fun <T> cachedAny(key: String, serializer: KSerializer<T>): T? =
         runCatching { cache.get(userNs(), key, serializer, now = 0L) }.getOrNull()
@@ -807,6 +820,8 @@ internal class DefaultAchievementOps(
         /** A game's leaderboards, and the person's own scores on them. */
         const val KEY_BOARDS = "boards:"
         const val KEY_MY_BOARDS = "myboards:"
+        /** The person's Want to Play list, for moving in. */
+        const val KEY_WANT = "wanttoplay"
         val FOLLOWING_TTL: Duration = 15.minutes
         /** How many of them are shown, so a long list asks no more than this many summaries. */
         const val FOLLOWED_SHOWN = 8

@@ -123,6 +123,25 @@ class RetroAchievementsClient(
     suspend fun following(count: Int = 100, offset: Int = 0): ApiResult<RaFollowing> =
         get("GetUsersIFollow", RaFollowing.serializer(), "c" to count.coerceIn(1, 500), "o" to offset.coerceAtLeast(0))
 
+    /** API_GetUserWantToPlayList: one page of the games [user] wants to play (the key's owner's, or someone who follows them back); [count] (c) is capped at 500. */
+    suspend fun wantToPlay(user: String = credentials.username, count: Int = 500, offset: Int = 0): ApiResult<RaWantToPlay> =
+        get("GetUserWantToPlayList", RaWantToPlay.serializer(), "u" to user, "c" to count.coerceIn(1, 500), "o" to offset.coerceAtLeast(0))
+
+    /** Every page of API_GetUserWantToPlayList, at most [maxPages] requests. */
+    suspend fun allWantToPlay(user: String = credentials.username, maxPages: Int = 4): ApiResult<List<RaWanted>> {
+        val all = ArrayList<RaWanted>()
+        repeat(maxPages) {
+            when (val page = wantToPlay(user, MAX_WANT_PAGE, all.size)) {
+                is ApiResult.Failure -> return page
+                is ApiResult.Success -> {
+                    all += page.value.results
+                    if (page.value.results.isEmpty() || all.size >= page.value.total) return ApiResult.Success(all)
+                }
+            }
+        }
+        return ApiResult.Success(all)
+    }
+
     /** API_GetGameLeaderboards: [gameId]'s leaderboards, each with its top score; [count] (c) is capped at 500. */
     suspend fun gameLeaderboards(gameId: Long, count: Int = 100): ApiResult<RaLeaderboards> =
         get("GetGameLeaderboards", RaLeaderboards.serializer(), "i" to gameId, "c" to count.coerceIn(1, 500))
@@ -189,6 +208,9 @@ class RetroAchievementsClient(
         const val BASE_URL = "https://retroachievements.org/"
         private const val API_PREFIX = "API/API_"
         const val MAX_COMPLETION_PAGE = 500
+
+        /** The most API_GetUserWantToPlayList gives in one page. */
+        const val MAX_WANT_PAGE = 500
         const val MAX_RECENTLY_PLAYED = 50
 
         /** One request at a time, 400 ms apart. */

@@ -6,6 +6,7 @@ import io.github.matiyaaa.fuse.library.movein.MoveInSource
 import io.github.matiyaaa.fuse.model.GameJournal
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
 import io.github.matiyaaa.fuse.model.PlayStatus
+import io.ktor.client.engine.mock.respond
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -109,5 +110,53 @@ class MoveInStoreTest {
         assertTrue(services.data.collections.observeManual().first().none { it.name == "Couch" })
         assertNull(store.library.lastMoveIn())
         assertFalse(store.library.undoMoveIn())
+    }
+
+    @Test
+    fun aWantToPlayListOnRetroAchievementsFillsTheJournalWhereItIsEmpty() = runBlocking {
+        val roms = File(root, "roms")
+        File(roms, "psx").mkdirs()
+        File(roms, "snes").mkdirs()
+        listOf("psx/Spyro the Dragon (USA).chd", "psx/crash.chd", "psx/Tekken 3 (USA).chd", "snes/Chrono Trigger (USA).sfc").forEach { File(roms, it).writeBytes(ByteArray(64)) }
+        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache).also { it.homeFolder = File(root, "home").absolutePath }
+        val json = io.ktor.http.headersOf(io.ktor.http.HttpHeaders.ContentType, "application/json")
+        services.web = { request ->
+            when {
+                request.url.host != "retroachievements.org" -> null
+                request.url.encodedPath.endsWith("API_GetUserProfile.php") -> respond("""{"User":"Ana","ULID":"01HANA","TotalPoints":120}""", io.ktor.http.HttpStatusCode.OK, json)
+                request.url.encodedPath.endsWith("API_GetUserWantToPlayList.php") -> respond(
+                    """{"Count":5,"Total":5,"Results":[
+                        {"ID":11,"Title":"Crash Bandicoot","ConsoleID":12,"ConsoleName":"PlayStation"},
+                        {"ID":12,"Title":"Spyro the Dragon","ConsoleID":12,"ConsoleName":"PlayStation"},
+                        {"ID":319,"Title":"Chrono Trigger","ConsoleID":3,"ConsoleName":"SNES/Super Famicom"},
+                        {"ID":555,"Title":"~Hack~ Tekken 3","ConsoleID":12,"ConsoleName":"PlayStation"},
+                        {"ID":777,"Title":"Vagrant Story","ConsoleID":12,"ConsoleName":"PlayStation"}]}""",
+                    io.ktor.http.HttpStatusCode.OK, json,
+                )
+                else -> null
+            }
+        }
+        val store = createFuseStore(services, scope)
+        store.sources.add(roms.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val games = withTimeout(20_000) { store.library.games(GameQuery(includeHidden = true)).first { it.size == 4 } }
+        fun game(title: String) = games.single { it.title.startsWith(title, ignoreCase = true) }
+        // Crash's file says nothing of its name, but Fuse already knows its RetroAchievements id.
+        services.data.games.updateLinks(game("crash").id) { it.copy(retroAchievementsGameId = 11) }
+        // Chrono Trigger is already beaten in Fuse: that stays.
+        store.library.setJournal(game("Chrono").id, GameJournal(PlayStatus.BEATEN))
+        assertTrue(store.achievements.connect("Ana", "key-a").isSuccess)
+
+        val look = store.library.moveInLook().associateBy { it.source }
+        val ra = look.getValue(MoveInSource.RETROACHIEVEMENTS)
+        assertEquals("Ana on RetroAchievements", ra.where)
+        assertEquals(MoveInReport(games = 2, journal = 2), ra.report)
+        store.library.moveIn(setOf(MoveInSource.RETROACHIEVEMENTS))
+        assertEquals(PlayStatus.WANT, services.data.games.get(game("crash").id)!!.journal.status)
+        assertEquals(PlayStatus.WANT, services.data.games.get(game("Spyro").id)!!.journal.status)
+        assertEquals(PlayStatus.BEATEN, services.data.games.get(game("Chrono").id)!!.journal.status)
+        // A hack is another game than the one here.
+        assertNull(services.data.games.get(game("Tekken").id)!!.journal.status)
+        assertTrue(store.library.undoMoveIn())
+        assertNull(services.data.games.get(game("Spyro").id)!!.journal.status)
     }
 }

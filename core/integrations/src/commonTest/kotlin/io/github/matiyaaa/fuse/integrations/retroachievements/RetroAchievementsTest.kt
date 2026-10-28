@@ -114,6 +114,21 @@ class RetroAchievementsTest {
     }
 
     @Test
+    fun theWantToPlayListIsReadPageByPage() = runTest {
+        val pages = listOf(
+            """{"Count":2,"Total":3,"Results":[{"ID":20246,"Title":"Sonic the Hedgehog","ImageIcon":"/Images/074560.png","ConsoleID":1,"ConsoleName":"Genesis/Mega Drive","PointsTotal":1500,"AchievementsPublished":50},{"ID":"1451","Title":"Chrono Trigger","ConsoleID":"3","ConsoleName":"SNES/Super Famicom"}]}""",
+            """{"Count":1,"Total":3,"Results":[{"ID":11240,"Title":"Kingdom Hearts","ConsoleID":21,"ConsoleName":"PlayStation 2"}]}""",
+        )
+        val http = TestHttp { request -> json(pages[if (request.url.parameters["o"] == "0") 0 else 1]) }
+        val all = (client(http).allWantToPlay() as ApiResult.Success).value
+        assertEquals(listOf(20246L, 1451L, 11240L), all.map { it.id })
+        assertEquals(listOf(1, 3, 21), all.map { it.consoleId })
+        assertEquals("Chrono Trigger", all[1].title)
+        assertEquals(listOf("0", "2"), http.requests.map { it.url.parameters["o"] })
+        assertEquals("MaxMilyin", http.requests.first().url.parameters["u"])
+    }
+
+    @Test
     fun profileRequestAndMapping() = runTest {
         val http = TestHttp { json(profileJson) }
         val user = client(http).verifyCredentials()

@@ -534,7 +534,7 @@ internal class DefaultLibraryOps(
         }.distinctUntilChanged()
     }
 
-    private val moveInWork by lazy { MoveInWork(ctx) }
+    private val moveInWork by lazy { MoveInWork(ctx) { achievements.wantToPlay() } }
 
     override suspend fun moveInLook() = moveInWork.look()
 

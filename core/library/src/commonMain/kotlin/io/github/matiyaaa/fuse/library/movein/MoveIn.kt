@@ -15,6 +15,9 @@ enum class MoveInSource(val label: String) {
 
     /** Steam: play time of the Steam games Fuse lists, only when asked for. */
     STEAM("Steam"),
+
+    /** RetroAchievements: the person's Want to Play list, as Want to play in the Journal. */
+    RETROACHIEVEMENTS("RetroAchievements"),
 }
 
 /**

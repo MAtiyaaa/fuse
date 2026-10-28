@@ -248,7 +248,9 @@ class GameRepository(
 
     /** Every game with what moving in matches it by: its system, files and Steam id. */
     suspend fun moveInRows(): List<MoveInRow> = withContext(dispatcher) {
-        q.moveInRows().executeAsList().map { MoveInRow(GameId(it.id), it.platform_id, it.path, it.launch_path, it.steam_app_id) }
+        q.moveInRows().executeAsList().map {
+            MoveInRow(GameId(it.id), it.platform_id, it.path, it.launch_path, it.steam_app_id, it.ra_game_id, listOfNotNull(it.title_custom, it.title_metadata, it.title_cleaned, it.title_original))
+        }
     }
 
     /** What moving in may change of each of [ids], as it is now. */

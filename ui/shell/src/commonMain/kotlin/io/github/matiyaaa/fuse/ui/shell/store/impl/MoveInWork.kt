@@ -1,6 +1,9 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
+import io.github.matiyaaa.fuse.data.repo.MoveInRow
 import io.github.matiyaaa.fuse.data.repo.PlayState
+import io.github.matiyaaa.fuse.integrations.match.TitleNormalizer
+import io.github.matiyaaa.fuse.integrations.retroachievements.RaWanted
 import io.github.matiyaaa.fuse.library.movein.EsDeCollection
 import io.github.matiyaaa.fuse.library.movein.HereGame
 import io.github.matiyaaa.fuse.library.movein.MoveInFind
@@ -8,8 +11,10 @@ import io.github.matiyaaa.fuse.library.movein.MoveInFinder
 import io.github.matiyaaa.fuse.library.movein.MoveInMatch
 import io.github.matiyaaa.fuse.library.movein.MoveInSource
 import io.github.matiyaaa.fuse.library.movein.MovedGame
+import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
 import io.github.matiyaaa.fuse.model.CollectionId
 import io.github.matiyaaa.fuse.model.GameId
+import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.PlayStatus
 import io.github.matiyaaa.fuse.ui.shell.store.MoveInReport
 import io.github.matiyaaa.fuse.ui.shell.store.MoveInView
@@ -26,7 +31,11 @@ import kotlinx.serialization.json.Json
  * empty; collections are made, or added to when one of that name exists. What it changed is kept
  * so it can all be put back ([undo]).
  */
-internal class MoveInWork(private val ctx: StoreContext) {
+internal class MoveInWork(
+    private val ctx: StoreContext,
+    /** The person's Want to Play list on RetroAchievements and their name there, when they have an account. */
+    private val wantToPlay: suspend () -> Pair<String, List<RaWanted>>? = { null },
+) {
     private val data get() = ctx.data
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -64,9 +73,38 @@ internal class MoveInWork(private val ctx: StoreContext) {
     private suspend fun find(sources: Set<MoveInSource>): List<MoveInFind> {
         val roots = data.sources.all().filter { it.enabled }.map { it.path }
         val steam = if (MoveInSource.STEAM in sources) runCatching { ctx.services.locations.steamRoots().roots }.getOrDefault(emptyList()) else emptyList()
-        return runCatching { finder().find(sources, roots, steam) }.getOrDefault(emptyList())
+        val here = runCatching { finder().find(sources, roots, steam) }.getOrDefault(emptyList())
             .groupBy { it.source }
             .map { (source, finds) -> MoveInFind(source, finds.joinToString(", ") { it.where }, finds.flatMap { it.games }, finds.flatMap { it.collections }) }
+        val wanted = if (MoveInSource.RETROACHIEVEMENTS in sources) wanted() else null
+        return here + listOfNotNull(wanted)
+    }
+
+    /**
+     * The person's Want to Play list on RetroAchievements, each game found here by RetroAchievements'
+     * id for it, else by its name on that console when only one game here has it, as Want to play.
+     */
+    private suspend fun wanted(): MoveInFind? {
+        val (user, list) = runCatching { wantToPlay() }.getOrNull() ?: return null
+        if (list.isEmpty()) return null
+        val rows = data.games.moveInRows()
+        val byRa = rows.filter { it.raGameId != null }.groupBy { it.raGameId!! }
+        val consoleOf = rows.map { it.platform }.distinct().associateWith { ctx.platform(PlatformId(it))?.retroAchievementsConsoleId }
+        val byName = HashMap<Pair<Int, String>, MutableSet<MoveInRow>>()
+        for (r in rows) {
+            val console = consoleOf[r.platform] ?: continue
+            val names = (r.titles + r.titles.map { DisplayNameCleaner.clean(it) })
+                .map { TitleNormalizer.normalize(it) }.filter { it.isNotEmpty() }.toSet()
+            for (n in names) byName.getOrPut(console to n) { LinkedHashSet() } += r
+        }
+        val games = list.mapNotNull { w ->
+            // Hacks and subsets are other games than the one here.
+            if (w.title.startsWith("~") || w.title.contains("[Subset", ignoreCase = true)) return@mapNotNull null
+            val row = w.id?.let { byRa[it]?.singleOrNull() }
+                ?: w.title.split(" | ").firstNotNullOfOrNull { n -> byName[w.consoleId to TitleNormalizer.normalize(n)]?.singleOrNull() }
+            row?.let { MovedGame(it.path, status = PlayStatus.WANT) }
+        }
+        return MoveInFind(MoveInSource.RETROACHIEVEMENTS, "$user on RetroAchievements", games.distinctBy { it.path })
     }
 
     private suspend fun plan(finds: List<MoveInFind>): Plan {

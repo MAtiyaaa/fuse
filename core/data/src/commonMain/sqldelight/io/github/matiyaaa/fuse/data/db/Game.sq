@@ -184,7 +184,8 @@ UPDATE game SET play_status = :status, status_at = :statusAt, rating = :rating, 
 -- Moving in from another launcher (0.4.6): what it matches games by, and what it may change of a
 -- game, read before it does so it can be put back exactly.
 moveInRows:
-SELECT id, platform_id, path, launch_path, steam_app_id FROM game WHERE removed_at IS NULL;
+SELECT id, platform_id, path, launch_path, steam_app_id, ra_game_id, title_original, title_cleaned, title_custom, title_metadata
+FROM game WHERE removed_at IS NULL;
 
 moveInState:
 SELECT id, favorite, hidden, imported_seconds, imported_source, last_played_at, play_status, status_at, rating, note
