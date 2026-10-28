@@ -100,6 +100,22 @@ class CaptureController(
         }
     }
 
+    /** Saves [picture], one Fuse drew to keep (a recap), as [name] where screenshots go, and shows it saved. */
+    fun savePicture(name: String, picture: androidx.compose.ui.graphics.ImageBitmap) {
+        if (state != State.Idle) return
+        job = scope.launch {
+            val result = try {
+                capture.savePicture(name, picture).copy(picture = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                CaptureResult(capture.picturesPlace, failure = "The picture couldn't be saved")
+            }
+            if (result.failure == null) haptics.confirm()
+            show(result)
+        }
+    }
+
     /** Starts a recording (after the countdown when [delayed]), or stops the one running. */
     fun toggleRecording(delayed: Boolean) {
         when (state) {

@@ -15,24 +15,37 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
@@ -101,7 +114,8 @@ private fun plural(n: Int, one: String, many: String = one + "s") = if (n == 1) 
  * Your Year: a month or a year of play on one page. The time in large numbers over its months (or
  * days) as bars, its moments (the most played game, the longest session, the longest run of days,
  * the games new to you, those finished in the Journal and when you play most), and beside them a
- * list of its games, systems and the other recaps, each opening what it names.
+ * list of its games, systems and the other recaps, each opening what it names. It can be saved as a
+ * picture, made for keeping and sharing, where screenshots go.
  */
 @Composable
 fun RecapScreen(app: AppState, period: RecapPeriod) {
@@ -126,7 +140,13 @@ fun RecapScreen(app: AppState, period: RecapPeriod) {
 private fun RecapPage(app: AppState, period: RecapPeriod, r: PlayRecap, periods: List<RecapPeriod>, now: RecapPeriod?, sel: LinearSelection, narrow: Boolean, short: Boolean) {
     val art = app.store.prefs.value.gameArt
     val momentRows = short || narrow
+    var drawing by remember(period) { mutableStateOf(false) }
     val rows = buildList {
+        if (app.capture != null && r.loaded && r.seconds > 0) add(MenuAction(
+            "picture", "Save as a picture", FuseIcons.Image,
+            detail = "This recap drawn to keep and share, saved with your screenshots",
+            trailing = Trailing.Chevron, onSelect = { drawing = true },
+        ))
         if (momentRows) momentsOf(r).forEach { m ->
             add(MenuAction(
                 "m${m.label}", m.label, m.icon, detail = m.detail, trailing = Trailing.Value(m.value),
@@ -179,6 +199,11 @@ private fun RecapPage(app: AppState, period: RecapPeriod, r: PlayRecap, periods:
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e -> handleMenuAction(e, rows, sel) }
 
     Box(Modifier.fillMaxSize()) {
+        if (drawing) PosterCapture(r, recapName(period, null), recapDetail(period, now)) { picture ->
+            drawing = false
+            val capture = app.capture
+            if (picture == null || capture == null) app.toasts.show("The picture couldn't be made") else capture.savePicture("Fuse ${recapName(period, null)}", picture)
+        }
         Column(Modifier.fillMaxSize().padding(horizontal = if (narrow) Space.gutterCompact else Space.gutter)) {
             Spacer(Modifier.height(Size.hudHeight + if (short) Space.s else Space.l))
             SettingsPageHeading(recapName(period, null), "What you played, as Fuse saw it on this device", short, Modifier.reveal(0))
@@ -287,11 +312,12 @@ private fun BarLabels(labels: List<String>, monthly: Boolean) {
  * outlined while the period is still going. They grow in once, or appear at once with reduced motion.
  */
 @Composable
-private fun RecapBars(bars: List<Long>, now: Int?, modifier: Modifier) {
+private fun RecapBars(bars: List<Long>, now: Int?, modifier: Modifier, animate: Boolean = true) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val grow = remember { FuselineValue(if (motion.reduced) 1f else 0f) }
-    PageEffect(bars.isNotEmpty()) { if (!motion.reduced) grow.animateTo(1f, motion.tween(700)) }
+    val still = motion.reduced || !animate
+    val grow = remember { FuselineValue(if (still) 1f else 0f) }
+    PageEffect(bars.isNotEmpty()) { if (!still) grow.animateTo(1f, motion.tween(700)) }
     val restTop = c.text.copy(alpha = if (c.isDark) 0.3f else 0.2f)
     val restBottom = c.text.copy(alpha = if (c.isDark) 0.1f else 0.07f)
     val track = c.text.copy(alpha = if (c.isDark) 0.05f else 0.04f)
@@ -376,6 +402,132 @@ private fun MomentTile(m: Moment, modifier: Modifier, onClick: () -> Unit) {
                     SquareGameArt(m.game.art, Modifier.size(44.dp), fallback = { GeneratedArt(m.game.title, Color(m.game.accent), Modifier.size(44.dp)) })
                 }
             }
+        }
+    }
+}
+
+/** A moment's name as the picture's narrower tiles have room for it. */
+private fun posterLabel(label: String): String = when (label) {
+    "Longest session" -> "Best session"
+    "Longest streak" -> "Streak"
+    "When you play" -> "Mostly"
+    else -> label
+}
+
+/** A recap's picture in pixels: a 4:5 portrait, the shape galleries and feeds show whole. */
+private const val POSTER_W = 1080
+private const val POSTER_H = 1350
+
+/** The density it is drawn at whatever the screen's, so the picture is the same from every device: 480 by 600. */
+private const val POSTER_DENSITY = 2.25f
+
+/** How long the picture waits for its game's art before it is taken as drawn. */
+private const val POSTER_SETTLE_MS = 450L
+
+/**
+ * Draws [r]'s picture where nothing shows it, into a layer of its own, and gives it to [onDrawn]
+ * once its art has had a moment to arrive (null when it couldn't be made).
+ */
+@Composable
+private fun PosterCapture(r: PlayRecap, name: String, detail: String, onDrawn: (ImageBitmap?) -> Unit) {
+    val layer = rememberGraphicsLayer()
+    val done by rememberUpdatedState(onDrawn)
+    CompositionLocalProvider(LocalDensity provides Density(POSTER_DENSITY, 1f)) {
+        val d = LocalDensity.current
+        // Recorded, never drawn to the screen.
+        Box(Modifier.requiredSize(with(d) { POSTER_W.toDp() }, with(d) { POSTER_H.toDp() }).drawWithContent { layer.record { this@drawWithContent.drawContent() } }) {
+            RecapPoster(r, name, detail)
+        }
+    }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(POSTER_SETTLE_MS)
+        withFrameNanos { }
+        done(runCatching { layer.toImageBitmap() }.getOrNull())
+    }
+}
+
+/**
+ * A recap made to keep: the theme's spark glowing from a corner of its room, the period and its
+ * time in large numbers with its facts, its bars, the most played game with its art, and up to
+ * three of its moments beside each other.
+ */
+@Composable
+private fun RecapPoster(r: PlayRecap, name: String, detail: String) {
+    val c = Fuse.colors
+    val t = Fuse.type
+    val card = Modifier.clip(RoundedCornerShape(18.dp)).background(c.surface.copy(alpha = if (c.isDark) 0.72f else 0.86f))
+    Box(Modifier.fillMaxSize().background(c.ink)) {
+        Canvas(Modifier.fillMaxSize()) {
+            drawRect(Brush.radialGradient(listOf(c.accent.copy(alpha = if (c.isDark) 0.46f else 0.3f), Color.Transparent), center = Offset(size.width * 0.95f, 0f), radius = size.width * 1.1f))
+            drawRect(Brush.radialGradient(listOf(c.accent.copy(alpha = if (c.isDark) 0.14f else 0.1f), Color.Transparent), center = Offset(0f, size.height), radius = size.width * 0.9f))
+        }
+        Column(Modifier.fillMaxSize().padding(horizontal = 30.dp, vertical = 28.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FuseIcon(FuseIcons.Sparkles, size = 14.dp, tint = c.accent)
+                Spacer(Modifier.width(6.dp))
+                FText("FUSE", t.overline, color = c.accent, maxLines = 1)
+                Spacer(Modifier.weight(1f))
+                FText(detail.uppercase(), t.overline, color = c.textMuted, maxLines = 1)
+            }
+            Spacer(Modifier.height(20.dp))
+            FText(name, t.display.copy(fontSize = 34.sp, lineHeight = 40.sp), maxLines = 1)
+            Spacer(Modifier.height(18.dp))
+            FText("TIME PLAYED", t.overline, color = c.accent, maxLines = 1)
+            Spacer(Modifier.height(2.dp))
+            FText(playtimeText(r.seconds), t.hero.copy(fontSize = 58.sp, lineHeight = 64.sp).tabular(), maxLines = 1)
+            Spacer(Modifier.height(8.dp))
+            val facts = listOfNotNull(
+                r.sessions.takeIf { it > 0 }?.let { plural(it, "session") },
+                r.days.takeIf { it > 0 }?.let { plural(it, "day") + " played" },
+                r.gameCount.takeIf { it > 0 }?.let { plural(it, "game") },
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { facts.forEach { Pill(it) } }
+            if (r.bars.isNotEmpty()) {
+                Spacer(Modifier.height(22.dp))
+                RecapBars(r.bars, null, Modifier.fillMaxWidth().height(76.dp), animate = false)
+                Spacer(Modifier.height(4.dp))
+                BarLabels(r.barLabels, monthly = r.period.month == null)
+            }
+            Spacer(Modifier.height(22.dp))
+            r.games.firstOrNull()?.let { (g, seconds) ->
+                Row(card.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val shape = RoundedCornerShape(12.dp)
+                    Box(Modifier.size(64.dp).clip(shape)) {
+                        SquareGameArt(g.art, Modifier.size(64.dp), fallback = { GeneratedArt(g.title, Color(g.accent), Modifier.size(64.dp)) })
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FuseIcon(FuseIcons.Crown, size = 12.dp, tint = c.accent)
+                            Spacer(Modifier.width(4.dp))
+                            FText("MOST PLAYED", t.overline, color = c.accent, maxLines = 1)
+                        }
+                        Spacer(Modifier.height(2.dp))
+                        FText(g.title, t.titleSmall, maxLines = 1)
+                        FText(listOf(playtimeText(seconds), share(seconds, r.seconds), g.platformShort).filter { it.isNotEmpty() }.joinToString("  ·  "), t.caption, color = c.textMuted, maxLines = 1)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+            val moments = momentsOf(r).drop(if (r.games.isNotEmpty()) 1 else 0).take(3)
+            if (moments.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    moments.forEach { m ->
+                        Column(card.weight(1f).padding(horizontal = 12.dp, vertical = 10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                FuseIcon(m.icon, size = 12.dp, tint = c.textMuted)
+                                Spacer(Modifier.width(4.dp))
+                                FText(posterLabel(m.label).uppercase(), t.overline.copy(fontSize = 9.sp), color = c.textMuted, maxLines = 1)
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            FText(m.value, t.titleSmall.tabular(), maxLines = 1)
+                        }
+                    }
+                    repeat(3 - moments.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            FText("Made with Fuse", t.caption, color = c.textFaint, maxLines = 1, modifier = Modifier.align(Alignment.CenterHorizontally))
         }
     }
 }

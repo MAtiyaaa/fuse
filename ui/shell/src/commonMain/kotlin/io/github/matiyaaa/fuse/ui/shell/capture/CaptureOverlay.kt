@@ -201,7 +201,7 @@ private fun SavedCard(saved: CaptureResult?, hidden: Boolean, modifier: Modifier
             Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s - Space.xxs)) {
                     FuseIcon(FuseIcons.CircleCheck, size = Size.iconS, tint = c.success)
-                    FText(if (card.video) "Recording saved" else "Screenshot saved", Fuse.type.bodyStrong, color = c.text, maxLines = 1)
+                    FText(if (card.video) "Recording saved" else if (card.picture) "Picture saved" else "Screenshot saved", Fuse.type.bodyStrong, color = c.text, maxLines = 1)
                 }
                 FText(card.place, Fuse.type.caption, color = c.textMuted, maxLines = 1)
             }

@@ -17,6 +17,8 @@ import android.os.StatFs
 import android.util.DisplayMetrics
 import android.view.PixelCopy
 import android.view.WindowManager
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
@@ -94,6 +96,19 @@ class AndroidScreenCapture(
             } finally {
                 bitmap.recycle()
             }
+        }
+    }
+
+    override suspend fun savePicture(name: String, picture: ImageBitmap): CaptureResult {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && !ask(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+            return CaptureResult(picturesPlace, failure = "Fuse needs the storage permission to save pictures")
+        }
+        return withContext(Dispatchers.IO) {
+            // A picture drawn by the graphics card is copied out of it first, to be written.
+            val drawn = picture.asAndroidBitmap()
+            val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && drawn.config == Bitmap.Config.HARDWARE) drawn.copy(Bitmap.Config.ARGB_8888, false) else drawn
+            if (!saver.savePng(bitmap, name)) return@withContext CaptureResult(picturesPlace, failure = "The picture couldn't be saved")
+            CaptureResult(picturesPlace, preview = preview(bitmap)?.asImageBitmap())
         }
     }
 

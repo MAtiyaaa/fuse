@@ -111,7 +111,7 @@ internal fun AuditDriver.fuse046Screens() {
             )
             override suspend fun recapPeriods() = periods
         }
-        show(object : FuseStore by base { override val library: LibraryOps = library })
+        show(object : FuseStore by base { override val library: LibraryOps = library }, capturePlatform)
         settle(1_500)
         tap(PadButton.DPAD_LEFT)
         tap(PadButton.A)
@@ -120,6 +120,11 @@ internal fun AuditDriver.fuse046Screens() {
         tap(PadButton.A)
         waitFor("Longest streak")
         shoot("the year in play", 1_600)
+        // Kept as a picture: drawn where nothing shows it, then saved with the screenshots.
+        focusText("Save as a picture")
+        tap(PadButton.A)
+        waitFor("Picture saved")
+        shoot("saved as a picture", 600)
         focusText("October")
         tap(PadButton.A)
         waitFor("8 Oct to 13 Oct")

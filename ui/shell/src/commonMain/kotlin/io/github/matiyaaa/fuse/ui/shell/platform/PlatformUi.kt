@@ -475,6 +475,10 @@ interface ScreenCapture {
     /** Saves what Fuse shows right now as a picture called [name]. */
     suspend fun screenshot(name: String): CaptureResult
 
+    /** Saves [picture], one Fuse drew to keep (a recap), as a picture called [name] where screenshots go. */
+    suspend fun savePicture(name: String, picture: ImageBitmap): CaptureResult =
+        CaptureResult(picturesPlace, failure = "Pictures can't be saved on this device")
+
     /**
      * Gets what a recording needs: the system's permission to record the screen (asked every time),
      * and with [withSound] the permission to capture Fuse's own sound.
@@ -518,6 +522,8 @@ data class CaptureResult(
     val video: Boolean = false,
     /** Why nothing was saved; null when it was. */
     val failure: String? = null,
+    /** A picture Fuse drew to keep (a recap), not a screenshot. */
+    val picture: Boolean = false,
 )
 
 interface HomeRole {
