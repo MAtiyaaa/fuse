@@ -564,6 +564,76 @@ fun SegmentedControl(
     }
 }
 
+/**
+ * A page's filters as a row of pills, each with how many it keeps ("Installed 3"): the chosen one
+ * stands out in the text's own colour, and while the row has controller focus it is filled and
+ * ringed. Words are always the theme's text over a tint of that same text, so they read in every
+ * theme, whatever its accent. A tap or a click picks one.
+ */
+@Composable
+fun FilterPills(
+    labels: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    focused: Boolean = false,
+    /** How many each keeps, shown after its name; null shows none. */
+    counts: List<Int?> = emptyList(),
+) {
+    val c = Fuse.colors
+    val motion = Fuse.motion
+    val shape = controlShape()
+    val hover = c.hoverOverlay()
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
+        labels.forEachIndexed { i, label ->
+            val on = i == selectedIndex
+            val lit = on && focused
+            val fill by fuselineColor(
+                when {
+                    lit -> c.text
+                    on -> c.text.copy(alpha = 0.16f)
+                    else -> c.text.copy(alpha = 0.06f)
+                },
+                motion.tween(Durations.FAST), label = "filterFill",
+            )
+            val tint by fuselineColor(
+                when {
+                    lit -> c.ink
+                    on -> c.text
+                    else -> c.textMuted
+                },
+                motion.tween(Durations.FAST), label = "filterTint",
+            )
+            val ring by fuselineFloat(if (lit) 1f else 0f, motion.focusSpring(), label = "filterRing")
+            val interaction = remember { MutableInteractionSource() }
+            val press = rememberAtomPress(interaction, true)
+            Row(
+                Modifier
+                    .height(FILTER_HEIGHT)
+                    .ringOutside({ ring }, c.focus, controlRingShape())
+                    .clip(shape)
+                    .clickable(interaction, null, role = Role.Tab) { onSelect(i) }
+                    .semantics { selected = on }
+                    .background({ fill })
+                    .drawBehind { if (press.hovered > 0f) drawRect(hover, alpha = press.hovered) }
+                    .padding(horizontal = Space.m),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FText(label, Fuse.type.label, color = { tint }, maxLines = 1)
+                counts.getOrNull(i)?.let { n ->
+                    Spacer(Modifier.width(Space.xs + 2.dp))
+                    FText("$n", Fuse.type.numericSmall, color = { tint.copy(alpha = COUNT_ALPHA) }, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+private val FILTER_HEIGHT = 34.dp
+
+/** A filter's count, a step quieter than its name. */
+private const val COUNT_ALPHA = 0.7f
+
 // ------------------------------------------------------------------------------------- labels
 
 /**

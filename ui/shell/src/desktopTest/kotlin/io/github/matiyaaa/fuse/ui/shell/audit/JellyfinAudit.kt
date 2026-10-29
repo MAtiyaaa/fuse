@@ -147,7 +147,10 @@ internal fun AuditDriver.jellyfinScreens() {
             tap(PadButton.DPAD_RIGHT, 2)
             tap(PadButton.DPAD_DOWN, 2)
             shoot("further down the grid", 1_200)
-            focusHint("Choose") { tap(PadButton.DPAD_UP) }
+            // Back up the two rows and onto the buttons: three presses, each let to settle (pressing
+            // until the hint shows could press once more while the grid glides, onto the tabs).
+            repeat(3) { tap(PadButton.DPAD_UP); settle(900) }
+            waitFor("Choose")
             tap(PadButton.A)
             waitFor("Sort by")
             shoot("sorting")

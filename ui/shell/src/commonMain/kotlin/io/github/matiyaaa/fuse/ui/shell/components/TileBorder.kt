@@ -48,6 +48,12 @@ val LocalTileBorders = staticCompositionLocalOf { TileBorders() }
 /** False inside a system's own page, where every tile would name the same system. */
 val LocalTileShowsSystem = staticCompositionLocalOf { true }
 
+/**
+ * True for a tile whose name another game in the same list has on another system (Deadpool on three
+ * consoles): it tags its system over its art too, with or without a border to carry the tag.
+ */
+val LocalTileTagsSystem = staticCompositionLocalOf { false }
+
 /** Whether this border names the system on the tile itself, so generated art needn't tag it too. */
 val BorderStyle.carriesTag: Boolean get() = mode != BorderMode.OFF && logoOverlay
 
@@ -66,45 +72,51 @@ fun BoxScope.TileBorder(
     badge: String?,
     inset: Dp = Space.s,
     badgeAt: Alignment = Alignment.BottomStart,
+    /** Tags the system even with no border to carry the tag ([LocalTileTagsSystem]). */
+    tagged: Boolean = false,
 ) {
-    if (style.mode == BorderMode.OFF) return
+    val framed = style.mode != BorderMode.OFF
+    if (!framed && !tagged) return
     val color = style.accent?.toColor() ?: accent
     val frame = style.customFramePath.takeIf { style.mode == BorderMode.CUSTOM }
-    if (frame != null) {
-        Artwork(frame, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, fadeIn = false)
-    } else {
-        val shape = remember(style.shape, cornerFraction) {
-            when (style.shape) {
-                BorderShape.ROUNDED -> SquircleShape.fraction(cornerFraction)
-                BorderShape.SQUARE -> SquircleShape.fraction(0f)
-                BorderShape.CIRCLE -> SquircleShape.fraction(0.5f)
+    // A frame where one is chosen; a list asking for the tag alone gets the tag alone.
+    if (framed) {
+        if (frame != null) {
+            Artwork(frame, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, fadeIn = false)
+        } else {
+            val shape = remember(style.shape, cornerFraction) {
+                when (style.shape) {
+                    BorderShape.ROUNDED -> SquircleShape.fraction(cornerFraction)
+                    BorderShape.SQUARE -> SquircleShape.fraction(0f)
+                    BorderShape.CIRCLE -> SquircleShape.fraction(0.5f)
+                }
             }
+            Box(
+                Modifier.fillMaxSize().drawWithCache {
+                    val width = FRAME_WIDTH.toPx()
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    val brush = if (style.gradient) {
+                        Brush.linearGradient(
+                            listOf(color, color.copy(alpha = 0.35f), color),
+                            start = Offset.Zero,
+                            end = Offset(size.width, size.height),
+                        )
+                    } else {
+                        SolidColor(color)
+                    }
+                    val stroke = Stroke(width * 2)
+                    onDrawWithContent {
+                        drawContent()
+                        // Centred on the clip edge, so exactly the inner half shows and follows the corners.
+                        drawOutline(outline, brush, style = stroke)
+                    }
+                },
+            )
         }
-        Box(
-            Modifier.fillMaxSize().drawWithCache {
-                val width = FRAME_WIDTH.toPx()
-                val outline = shape.createOutline(size, layoutDirection, this)
-                val brush = if (style.gradient) {
-                    Brush.linearGradient(
-                        listOf(color, color.copy(alpha = 0.35f), color),
-                        start = Offset.Zero,
-                        end = Offset(size.width, size.height),
-                    )
-                } else {
-                    SolidColor(color)
-                }
-                val stroke = Stroke(width * 2)
-                onDrawWithContent {
-                    drawContent()
-                    // Centred on the clip edge, so exactly the inner half shows and follows the corners.
-                    drawOutline(outline, brush, style = stroke)
-                }
-            },
-        )
     }
-    if (style.logoOverlay && badge != null) {
+    if ((tagged || framed && style.logoOverlay) && badge != null) {
         // Dark words on a light frame colour, light ones on a deep one, so the tag always reads.
-        val words = if (color.luminance() > LIGHT_FRAME) Fuse.colors.ink else Fuse.colors.onArt
+        val words = if (color.luminance() > LIGHT_FRAME) DARK_WORDS else Fuse.colors.onArt
         Box(
             Modifier
                 .align(badgeAt)
@@ -126,3 +138,6 @@ private const val BADGE_FILL = 0.88f
 
 /** Frame colours lighter than this take dark words on their badge. */
 private const val LIGHT_FRAME = 0.42f
+
+/** The dark words on a light badge: dark in every theme, as the badge sits on art, never on the page. */
+private val DARK_WORDS = Color(0xFF0B0C11)

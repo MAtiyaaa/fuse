@@ -216,7 +216,9 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
 - **Library, All**: the chosen game in a compact stage with Play and Options, a card for each place
   your games are (this device, RomM, your other devices, the computers that stream) with its count,
   Jump Back In, and shelves whose tiles are sized to the screen. A mouse chooses what it points at
-  and pages a shelf with arrows; a finger presses the same buttons.
+  and pages a shelf with arrows; a finger presses the same buttons. Where a list mixes systems, a
+  game whose name another system has too says its system on its tile, and RomM's games that the
+  server gave one name (or kept as separate discs) are named by what tells them apart.
 - **The quick menu while you play**: a Playing section with the game, how long it has run, its saves,
   emulator settings, updates, DLC and mods, a screenshot and Sync Now; tiles for Continue,
   Downloads, Sync Now, Achievements, Favourites, Mute and Text Size.

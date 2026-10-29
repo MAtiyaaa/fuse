@@ -141,6 +141,79 @@ object RommContent {
     }
 
     private fun discOf(name: String): Int? = FilenameParser.parse(name).tags.discNumber
+
+    /**
+     * Whether [rom] is a copy still being made, or one left unfinished: a file named the way copying
+     * tools name what they haven't finished ("Game.iso.part", WinSCP's ".filepart", a browser's
+     * ".crdownload"). Downloaded it wouldn't play, and listed it shows its game twice.
+     */
+    fun unfinished(rom: RommRom): Boolean = !rom.multi && UNFINISHED.any { rom.fsName.endsWith(it, ignoreCase = true) }
+
+    private val UNFINISHED = listOf(".part", ".partial", ".filepart", ".crdownload", ".download", ".tmp", ".temp", ".!qb", ".aria2")
+}
+
+/**
+ * Names for the server's games where two on one system would read the same. RomM can give several
+ * games one name (four Splinter Cells matched to one game, each "Tom Clancy's Splinter Cell"), keep
+ * the discs of one game as games of their own, or hold a game twice in two formats. Each of those
+ * is named by what tells it apart: its file's own title where that says more, else its disc, its
+ * region, its revision or version, else its format. Every other game keeps its name.
+ */
+object RommNames {
+    /**
+     * The new name of each game in [roms] that needs one, by id. [titleOf] is a game's name now, or
+     * null for one to leave as it is (a name the person gave it).
+     */
+    fun apart(roms: List<RommRom>, titleOf: (RommRom) -> String?): Map<Long, String> {
+        val out = HashMap<Long, String>()
+        val groups = roms.mapNotNull { r -> titleOf(r)?.let { Named(r, it) } }.groupBy { it.rom.platformSlug + "|" + key(it.name) }
+        for ((group, named) in groups) {
+            if (named.size < 2) continue
+            val shared = group.substringAfter('|')
+            // The file's own title, where it names more than the name they share.
+            for (n in named) {
+                val file = n.parsed.baseTitle.replace(" - ", ": ").trim()
+                if (file.isNotEmpty() && key(file) != shared) n.name = file
+            }
+            // Then whatever still reads the same takes what tells it apart, in that order.
+            for (tell in TELLERS) {
+                val clashing = named.groupBy { key(it.name) + "|" + it.suffixes.joinToString("|") }.values.filter { it.size > 1 }
+                if (clashing.isEmpty()) break
+                for (same in clashing) {
+                    val values = same.map { tell(it.parsed) }
+                    if (values.toSet().size < 2) continue
+                    same.forEachIndexed { i, n -> values[i]?.let { n.suffixes += it } }
+                }
+            }
+            for (n in named) {
+                val name = if (n.suffixes.isEmpty()) n.name else n.name + n.suffixes.joinToString("") { " ($it)" }
+                if (name != titleOf(n.rom)) out[n.rom.id] = name
+            }
+        }
+        return out
+    }
+
+    private class Named(val rom: RommRom, var name: String) {
+        // Only a game whose name another shares has its file's name read.
+        val parsed by lazy { FilenameParser.parse(rom.fsName, hasExtension = !rom.multi && '.' in rom.fsName) }
+        val suffixes = ArrayList<String>()
+    }
+
+    /**
+     * A name as two names that read the same agree on it: its words and numbers, without what is in
+     * brackets. Cheap, as every game's name is keyed each time the lists are drawn again.
+     */
+    private fun key(name: String): String = name.lowercase().replace(BRACKETED, " ").replace("&", " and ").filter { it.isLetterOrDigit() }
+
+    private val BRACKETED = Regex("""\s*[\[(][^\])]*[\])]""")
+
+    private val TELLERS: List<(io.github.matiyaaa.fuse.library.parse.ParsedName) -> String?> = listOf(
+        { p -> p.tags.discNumber?.let { "Disc $it" } },
+        { p -> p.tags.regions.takeIf { it.isNotEmpty() }?.joinToString(", ") },
+        { p -> p.tags.revision?.let { "Rev $it" } },
+        { p -> p.tags.version?.let { "v$it" } },
+        { p -> p.extension.takeIf { it.isNotEmpty() }?.uppercase() },
+    )
 }
 
 /** A library folder Fuse knows on this device, with the folders directly inside it. */

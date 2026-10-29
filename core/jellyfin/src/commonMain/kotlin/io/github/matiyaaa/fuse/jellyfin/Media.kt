@@ -77,6 +77,8 @@ data class MediaItem(
     val playedPercent: Double? = null,
     val unplayed: Int? = null,
     val childCount: Int? = null,
+    /** A show in a list of what's new: how many of its episodes are new (the server's grouping), not its seasons. */
+    val newEpisodes: Int? = null,
     val poster: JellyfinArt? = null,
     /** An episode's or season's show poster, tall where the episode's own picture is wide. */
     val seriesPoster: JellyfinArt? = null,

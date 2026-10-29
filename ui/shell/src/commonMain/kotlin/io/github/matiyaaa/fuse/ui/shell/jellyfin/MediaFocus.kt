@@ -28,7 +28,7 @@ internal fun mediaFacts(item: MediaItem): String = listOfNotNull(
         MediaType.SERIES -> item.year?.let { y -> if (item.endYear != null && item.endYear != y) "$y to ${item.endYear}" else "$y" }
         else -> item.year?.toString()
     },
-    if (item.type == MediaType.SERIES) item.childCount?.let { if (it == 1) "1 season" else "$it seasons" } else item.runtimeMs?.let { minutes(it) },
+    if (item.type == MediaType.SERIES) seriesCount(item) else item.runtimeMs?.let { minutes(it) },
     item.officialRating,
     item.rating?.let { r -> "${(r * 10).toInt() / 10.0}" },
 ).joinToString("  ·  ")

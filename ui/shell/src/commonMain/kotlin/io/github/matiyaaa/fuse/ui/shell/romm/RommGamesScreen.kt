@@ -86,6 +86,8 @@ fun RommGamesScreen(app: AppState, slug: String?, name: String, collection: Stri
             app.rommDownloadAll(name, notHere.map { it.romId })
         },
     )
+    // Every game, or a collection of several systems: a name more than one system has says its system.
+    val shared = remember(list) { io.github.matiyaaa.fuse.ui.shell.library.namesOnSeveralSystems(list.map { it.card }) }
     val sections = listOfNotNull(
         io.github.matiyaaa.fuse.ui.shell.reach.GameSection(
             "collections", "Collections", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.Bookmark, "${collections.size}",
@@ -104,7 +106,11 @@ fun RommGamesScreen(app: AppState, slug: String?, name: String, collection: Stri
             list.map { g ->
                 io.github.matiyaaa.fuse.ui.shell.reach.SectionItem(
                     g.romId, g.card,
-                    tile = { selected, size, onClick, onLong -> RommTile(g, selected, size, onClick = onClick, onLongClick = onLong) },
+                    tile = { selected, size, onClick, onLong ->
+                        androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.shell.components.LocalTileTagsSystem provides (io.github.matiyaaa.fuse.ui.shell.library.sameTitleKey(g.card.title) in shared)) {
+                            RommTile(g, selected, size, onClick = onClick, onLongClick = onLong)
+                        }
+                    },
                     open = { app.go(Route.GameInfo(g.game ?: g.card.id)) },
                     options = { app.openContextMenu(gameMenu(app, g)) },
                 )

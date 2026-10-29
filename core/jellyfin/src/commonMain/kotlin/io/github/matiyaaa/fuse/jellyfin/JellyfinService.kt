@@ -439,8 +439,9 @@ class JellyfinService(
 
     /**
      * Runs a call on the route in use. When it can't get through, the way in is looked for again
-     * and the call asked once more on whichever answers; the account is marked signed out only
-     * when the server says so.
+     * and the call asked once more on whichever answers; when a proxy in front of the server (a
+     * Cloudflare tunnel, a reverse proxy) says the server didn't answer in time, it is asked once
+     * more a moment later. The account is marked signed out only when the server says so.
      */
     suspend fun <T> call(block: suspend (base: String, account: Account) -> T): T {
         val (base, account) = session()
@@ -448,6 +449,10 @@ class JellyfinService(
             return block(base, account)
         } catch (e: JellyfinException) {
             if (e.kind == JellyfinException.Kind.AUTH) stateFlow.update { it.copy(authRequired = true) }
+            if (e.kind == JellyfinException.Kind.SERVER && e.status in GATEWAY) {
+                delay(GATEWAY_WAIT_MS)
+                return block(stateFlow.value.base ?: base, account)
+            }
             if (e.kind != JellyfinException.Kind.NETWORK) throw e
             reconnect(force = true)
             val again = stateFlow.value.base ?: throw e
@@ -610,6 +615,12 @@ class JellyfinService(
         private const val QUIET_CHECK_MS = 3_000L
         private const val REFRESHED_SETTLE_MS = 400L
         private const val LOCAL_TIMEOUT_MS = 2_500L
+
+        /** What a proxy in front of the server says when the server behind it didn't answer: worth one more try. */
+        private val GATEWAY = setOf(502, 503, 504, 520, 521, 522, 523, 524)
+
+        /** How long before asking again after a proxy's [GATEWAY] answer. */
+        private const val GATEWAY_WAIT_MS = 800L
         private const val REMOTE_TIMEOUT_MS = 6_000L
         private const val DISCOVERY_MS = 2_000L
 

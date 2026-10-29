@@ -52,8 +52,12 @@ class DesktopFuseServices private constructor(
     override val secrets: SecretStore = DesktopSecretStore(dirs.data)
 
     // Made the first time something goes on the network: a Fast Start that needs none never makes it.
-    // GitHub release redirects can exceed CIO's 8 KiB response-header line limit.
-    private val engine = lazy { OkHttp.create() }
+    // GitHub release redirects can exceed CIO's 8 KiB response-header line limit. OkHttp lets only
+    // five requests run per server at once: a page of posters from one Jellyfin server would line
+    // up behind each other, and its page requests behind them (as on Android).
+    private val engine = lazy {
+        OkHttp.create { config { dispatcher(okhttp3.Dispatcher().apply { maxRequests = 64; maxRequestsPerHost = 16 }) } }
+    }
     override val http: HttpClient by lazy { FuseHttp.client(engine.value, FuseHttpConfig(appVersion = appVersion)) }
     override val cacheDir: String = dirs.cache
     override val dataDir: String = dirs.data

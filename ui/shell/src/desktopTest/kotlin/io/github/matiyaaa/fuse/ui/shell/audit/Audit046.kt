@@ -242,6 +242,9 @@ internal fun AuditDriver.fuse046Screens() {
             tap(PadButton.DPAD_DOWN, 2)
             shoot("page $page", 900)
         }
+        // And all the way back up: the first line shows the sheet's title over it again.
+        tap(PadButton.DPAD_UP, 20)
+        shoot("back up at the top", 1_200)
     }
     scenario("addons", "android ports as box art") {
         val base = androidStore

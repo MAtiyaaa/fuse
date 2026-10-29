@@ -216,7 +216,7 @@ private fun Progress(fraction: Float, modifier: Modifier) {
 }
 
 private fun posterLine(item: MediaItem): String? = when (item.type) {
-    MediaType.SERIES -> listOfNotNull(item.year?.let { y -> if (item.endYear != null && item.endYear != y) "$y to ${item.endYear}" else "$y" }, item.childCount?.let { if (it == 1) "1 season" else "$it seasons" }).joinToString("  ·  ").ifEmpty { null }
+    MediaType.SERIES -> listOfNotNull(item.year?.let { y -> if (item.endYear != null && item.endYear != y) "$y to ${item.endYear}" else "$y" }, seriesCount(item)).joinToString("  ·  ").ifEmpty { null }
     MediaType.SEASON -> item.childCount?.let { if (it == 1) "1 episode" else "$it episodes" }
     MediaType.EPISODE -> listOfNotNull(item.episodeLabel, item.seriesName).joinToString("  ·  ")
     MediaType.ALBUM -> item.albumArtist ?: item.artists.firstOrNull() ?: item.year?.toString()
@@ -240,3 +240,7 @@ private const val LOGO_WIDTH = 480
 
 /** A logo's height on a [ContinueCard], as a share of the card's width. */
 private const val LOGO_SHARE = 0.15f
+
+/** A show's count for its line: its new episodes in a list of what's new, else its seasons. */
+internal fun seriesCount(item: MediaItem): String? = item.newEpisodes?.let { if (it == 1) "1 new episode" else "$it new episodes" }
+    ?: item.childCount?.let { if (it == 1) "1 season" else "$it seasons" }
