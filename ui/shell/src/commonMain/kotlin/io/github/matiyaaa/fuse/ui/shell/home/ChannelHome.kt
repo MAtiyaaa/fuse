@@ -93,7 +93,6 @@ import io.github.matiyaaa.fuse.ui.fuseline.slideOutVertically
 import io.github.matiyaaa.fuse.ui.fuseline.spring
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
-import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -157,6 +156,8 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
     var onTools by remember { mutableStateOf<Int?>(null) }
     // The bar along the bottom while arranging (Add and Done), reached by moving down past the board's last row.
     var onBar by remember { mutableStateOf<Int?>(null) }
+    // What can be added, while the gallery of it is open.
+    var adding by remember { mutableStateOf<List<Addable>?>(null) }
     // Whose arrangement this is, this device's or the profile's, where that can be chosen.
     val ownHome: Boolean? = space.own
     fun setOwnHome(own: Boolean) = space.setOwn(own)
@@ -304,12 +305,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
             app.toasts.show(if (paging.count > 1) "Every ${space.item} is on this page already" else "Every ${space.item} is on ${space.name} already")
             return
         }
-        app.choice = ChoiceSpec(
-            title = "Add a ${space.item}",
-            icon = FuseIcons.CirclePlus,
-            message = "It takes the first free place on the board. Then drag it anywhere, or resize it by its handles",
-            options = missing.map { a -> MenuAction(a.key, a.title, a.icon, detail = a.detail, onSelect = { app.choice = null; add(a) }) },
-        )
+        adding = missing
     }
     fun stopArranging() {
         editor.cancel()
@@ -809,6 +805,14 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                 look = look,
                 onLook = { onTools = 3; look?.let { it.pick(1 - it.editing) } },
                 compact = narrow || small,
+            )
+        }
+        // Adding: the gallery of what can be added, each as it will look, over the board.
+        adding?.let { list ->
+            AddGallery(
+                app, space, list, columns, cellW, cellH, gapX, gapY,
+                onAdd = { a -> adding = null; add(a) },
+                onClose = { adding = null },
             )
         }
         // Controls of widgets that are gone, or of a board no longer arranged, catch no touches.
