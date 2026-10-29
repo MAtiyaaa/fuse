@@ -636,6 +636,52 @@ class StoreIntegrationTest {
         }
     }
 
+    @Test
+    fun aPpfPatchGoesToACueGamesDataTrackAndToTheDiscAskedFor() = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+        val store = createFuseStore(services, scope)
+        val elsewhere = Files.createTempDirectory("fuse-ppf").toFile()
+        fun le32(v: Int) = byteArrayOf(v.toByte(), (v shr 8).toByte(), (v shr 16).toByte(), (v shr 24).toByte())
+        try {
+            val track = ByteArray(40_000) { (it * 3).toByte() }
+            File(elsewhere, "Vagrant (Track 1).bin").writeBytes(track)
+            File(elsewhere, "Vagrant (Track 2).bin").writeBytes(ByteArray(100))
+            val sheet = "FILE \"Vagrant (Track 1).bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\nFILE \"Vagrant (Track 2).bin\" BINARY\r\n  TRACK 02 AUDIO\r\n"
+            val cue = File(elsewhere, "Vagrant.cue").apply { writeText(sheet) }
+            val id = assertNotNull(store.library.addGameFile(cue.absolutePath, PlatformId("psx")))
+            // PPF 2.0: the size and block of the disc it is for, then "FUSE" at 1000.
+            val ppf = "PPF20".encodeToByteArray() + byteArrayOf(1) + ByteArray(50) + le32(40_000) + track.copyOfRange(0x9320, 0x9320 + 1024) +
+                le32(1000) + byteArrayOf(4) + "FUSE".encodeToByteArray()
+            val patch = File(elsewhere, "English.ppf").apply { writeBytes(ppf) }
+            val made = assertIs<io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made>(store.library.applyPatch(id, patch.absolutePath))
+            assertEquals("Vagrant - English.cue", made.name)
+            assertEquals("PPF", made.format)
+            assertTrue(made.checked)
+            assertEquals("FUSE", File(elsewhere, "Vagrant (Track 1) - English.bin").readBytes().copyOfRange(1000, 1004).decodeToString())
+            assertContentEquals(track, File(elsewhere, "Vagrant (Track 1).bin").readBytes(), "the disc itself is never changed")
+            // The copy of the sheet names the patched track, and the other as it was.
+            assertEquals(sheet.replace("FILE \"Vagrant (Track 1).bin\"", "FILE \"Vagrant (Track 1) - English.bin\""), File(elsewhere, made.name).readText())
+            val copy = assertNotNull(made.game)
+            assertIs<io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched>(store.library.applyPatch(copy, patch.absolutePath))
+
+            // Two discs: which one is asked, then that disc's copy and a playlist naming it.
+            File(elsewhere, "Disc 2.iso").writeBytes(track)
+            val m3u = File(elsewhere, "Vagrant.m3u").apply { writeText("Vagrant.cue\nDisc 2.iso\n") }
+            val both = assertNotNull(store.library.addGameFile(m3u.absolutePath, PlatformId("psx")))
+            assertEquals(io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WhichDisc(listOf("Vagrant.cue", "Disc 2.iso")), store.library.applyPatch(both, patch.absolutePath))
+            val second = assertIs<io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made>(store.library.applyPatch(both, patch.absolutePath, disc = 1))
+            assertEquals("Vagrant - English.m3u", second.name)
+            assertEquals("Vagrant.cue\nDisc 2 - English.iso\n", File(elsewhere, second.name).readText())
+
+            // Kept compressed: refused, and nothing made.
+            val chd = assertNotNull(store.library.addGameFile(File(elsewhere, "Other.chd").apply { writeBytes(ByteArray(10)) }.absolutePath, PlatformId("psx")))
+            assertIs<io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Failed>(store.library.applyPatch(chd, patch.absolutePath))
+            assertFalse(File(elsewhere, "Other - English.chd").exists())
+        } finally {
+            elsewhere.deleteRecursively()
+        }
+    }
+
     private fun freshDb(): String = File(cache, "fuse-${System.nanoTime()}.db").absolutePath
 
     /** Waits until the scan's results are in the library (a follow-up quick scan may already run). */

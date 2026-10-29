@@ -269,6 +269,9 @@ internal fun gameMenu(app: AppState, g: RommGame): ContextMenuSpec {
             when (g.presence) {
                 RommPresence.ON_SERVER -> {
                     add(MenuAction("romm.download", "Download", FuseIcons.Download, onSelect = { app.closeOverlays(); app.rommDownload(g.romId, g.card.title) }))
+                    add(MenuAction("romm.later", "Download Later", FuseIcons.PlugZap, detail = "Once this device is charging on Wi-Fi, with no game running", onSelect = {
+                        app.closeOverlays(); app.rommDownloadLater(g.romId, g.card.title)
+                    }))
                     add(MenuAction("romm.everything", "Download Everything", FuseIcons.CloudDownload, detail = "With its updates and DLC, where RomM has them", onSelect = { queue(RommDownloadWhat.Everything) }))
                 }
                 RommPresence.DOWNLOADING, RommPresence.QUEUED -> add(MenuAction("romm.downloads", "See in Downloads", FuseIcons.Download, onSelect = { app.closeOverlays(); app.go(Route.Downloads) }))

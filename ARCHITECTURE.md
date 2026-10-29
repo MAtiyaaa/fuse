@@ -368,7 +368,8 @@ The interface and the platform meet through three interfaces in `ui:shell`:
   settings Fuse changes on request (desktop only).
 - **`PlatformUi`** (`platform/PlatformUi.kt`) is what the interface can ask of the system directly:
   status, displays, performance metrics, sounds, haptics, the Home role, storage access, quick
-  controls, video previews, and the system's save and open dialogs (`saveFile`, `openFile`). A missing capability is reported in `PlatformFeatures` and its screens
+  controls, video previews, screenshots and recordings of Fuse's own screen (`capture`), and the
+  system's save and open dialogs (`saveFile`, `openFile`). A missing capability is reported in `PlatformFeatures` and its screens
   are hidden rather than shown broken.
 
 `DefaultFuseStore` composes `core:library`, `core:launch`, `core:integrations` and `core:data` over a

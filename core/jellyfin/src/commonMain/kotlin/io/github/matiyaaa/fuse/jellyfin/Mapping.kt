@@ -63,6 +63,8 @@ internal fun ItemDto.toMedia(): MediaItem {
         year = productionYear ?: premiereDate?.take(4)?.toIntOrNull(),
         endYear = endDate?.take(4)?.toIntOrNull(),
         premiere = premiereDate,
+        ended = endDate,
+        places = productionLocations.orEmpty().filter { it.isNotBlank() },
         runtimeMs = ticksToMs(runTimeTicks),
         rating = communityRating,
         criticRating = criticRating,

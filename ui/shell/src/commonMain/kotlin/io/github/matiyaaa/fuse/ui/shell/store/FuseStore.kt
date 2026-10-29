@@ -63,6 +63,9 @@ interface FuseStore {
     /** Puts Home back as it was before the last reset here (rejoining the profile's, if the reset left it). */
     fun undoHomeReset() {}
 
+    /** Which app is in front, where the system can say (Android's Usage access): play time on screen only. Null elsewhere. */
+    val usage: AppUsage? get() = null
+
     val library: LibraryOps
     val sources: SourceOps
     val emulators: EmulatorOps
@@ -324,6 +327,13 @@ interface StorageOps {
     /** Connected drives games can be moved to, each with its games folder when it has one. */
     suspend fun moveTargets(): List<MoveTarget> = emptyList()
 
+    /**
+     * Games that can go to make room, largest first: none a favourite or played in the last three
+     * months, each with an identical copy (checked by its files) on RomM or another device, so it
+     * comes back in a press. Their saves stay where the emulators keep them.
+     */
+    suspend fun roomToMake(): List<RoomSuggestion> = emptyList()
+
     /** What Fuse's own art and caches take (the system may clear them), or null when it can't tell. */
     suspend fun cacheBytes(): Long? = null
 
@@ -435,6 +445,12 @@ data class GameSize(
 
 data class DeleteReport(val deleted: Int, val freedBytes: Long, val failed: List<String>)
 
+/**
+ * A game that can go to make room ([StorageOps.roomToMake]): what it takes, where an identical copy
+ * is kept (RomM, or another device by name), and when it was last played (null for never).
+ */
+data class RoomSuggestion(val game: GameSize, val keptOn: String, val lastPlayedAt: Long?)
+
 data class GameQuery(
     val platform: PlatformId? = null,
     val collection: CollectionId? = null,
@@ -444,12 +460,47 @@ data class GameQuery(
     val set: GameSet = GameSet.LIBRARY,
     /** Only the library's games in this list (Unplayed, Play together...). */
     val smart: SmartFilter? = null,
+    /**
+     * Only games in the Journal with one of these statuses (any status when empty), in the Journal's
+     * order: playing first, then wanted, on hold and the ones done with, each the latest set first.
+     */
+    val journal: Set<io.github.matiyaaa.fuse.model.PlayStatus>? = null,
 )
+
+/** A launcher found to move in from: where it keeps its files, and what it would bring here. */
+data class MoveInView(val source: io.github.matiyaaa.fuse.library.movein.MoveInSource, val where: String, val report: MoveInReport)
+
+/**
+ * What moving in brings, or brought: the games it changes, and of them how many become favourites,
+ * are hidden, gain play time or a last played, and gain a status or a rating; and the collections.
+ */
+data class MoveInReport(
+    val games: Int = 0,
+    val favourites: Int = 0,
+    val hidden: Int = 0,
+    val timed: Int = 0,
+    val journal: Int = 0,
+    val collections: Int = 0,
+) {
+    val isEmpty: Boolean get() = games == 0 && collections == 0
+}
 
 /** Which games a [GameQuery] lists: the library, or games whose files are gone, hidden or removed. */
 enum class GameSet { LIBRARY, MISSING, HIDDEN, REMOVED }
 
 /** One file of a game's saves on this device, as its emulator keeps it. */
+/**
+ * Where a game was left ([LibraryOps.resumePoint]): the emulator that carries on from it, when it
+ * was made, and the device it was made on when Fuse One says (null when only this device knows it).
+ */
+data class ResumeInfo(val emulator: String, val at: Long?, val device: String? = null)
+
+/** An emulator Fuse writes its hotkeys into: its name, and its family ([io.github.matiyaaa.fuse.launch.settings.Hotkeys.families]). */
+data class HotkeyEmulator(val name: String, val family: String)
+
+/** What [LibraryOps.applyHotkeys] did in one emulator: its name, and the actions left on the person's own binding. */
+data class HotkeysApplied(val emulator: String, val kept: List<String>)
+
 data class LocalSave(
     val name: String,
     val path: String,
@@ -490,11 +541,43 @@ interface LibraryOps {
     /** [id]'s saves on this device, with or without any save sync. */
     suspend fun localSaves(id: GameId): LocalSaves = LocalSaves(null, emptyList())
 
+    /**
+     * Where [id] was left, when the emulator it starts in here can carry on from there (Continue):
+     * its resume state on this device (Fuse One puts the newest in place as the game starts), when
+     * it was made and on which device. Null when there is none, or Continue is off.
+     */
+    suspend fun resumePoint(id: GameId): ResumeInfo? = null
+
+    /** Whether the game being played can be asked to close from Fuse (on Linux and macOS). */
+    val canQuitPlaying: Boolean get() = false
+
+    /**
+     * Asks the game being played to close, as closing its window would; its play time is kept
+     * and its saves go up as it ends, as after any game. False when none of Fuse's is running.
+     */
+    suspend fun quitPlaying(): Boolean = false
+
+    /** The emulators here Fuse can write the same hotkeys into (set up, on a computer). */
+    suspend fun hotkeysHere(): List<HotkeyEmulator> = emptyList()
+
+    /**
+     * Fuse's hotkeys written into every emulator here that takes them ([on]), each beside the
+     * person's own bindings, or taken out again. What each emulator got; one the settings can't
+     * be changed in is left out.
+     */
+    suspend fun applyHotkeys(on: Boolean): List<HotkeysApplied> = emptyList()
+
     /** [old]'s save copied to where [id]'s emulator reads it now, the one there kept aside first; where it was kept. */
     suspend fun useOldSave(id: GameId, old: io.github.matiyaaa.fuse.sync.OldSave): Result<String?> = Result.failure(UnsupportedOperationException())
 
     /** Today's game in [platform]'s spotlight, and why; null while the system has no games. */
     fun spotlight(platform: PlatformId): Flow<Suggestion?> = kotlinx.coroutines.flow.flowOf(null)
+
+    /**
+     * Games here like [id], for its page: the rest of its series, its maker's, then games of its
+     * kinds, the ones not played yet first, each with why. Empty when nothing is like it.
+     */
+    fun similar(id: GameId): Flow<List<Suggestion>> = kotlinx.coroutines.flow.flowOf(emptyList())
     val platforms: StateFlow<List<PlatformCard>>
     fun games(query: GameQuery): Flow<List<GameCard>>
 
@@ -549,6 +632,8 @@ interface LibraryOps {
         together: Together? = null,
         /** With its port, or its emulator, as the list it was started from says ([PlayVia]). */
         via: PlayVia = PlayVia.DEFAULT,
+        /** Carry on from where it was left ([resumePoint]), where its emulator can; otherwise it starts as always. */
+        resume: Boolean = false,
         /** Told as the launch moves on: checking the save first (when Fuse Sync or Syncthing does), then starting. */
         onStage: (LaunchStage) -> Unit = {},
     ): LaunchOutcome
@@ -584,6 +669,31 @@ interface LibraryOps {
     fun onPause()
 
     suspend fun setFavorite(id: GameId, favorite: Boolean)
+
+    /**
+     * [id]'s Journal as [journal] says: where the person is with it (when it was set comes along as
+     * it changes), their rating and their note. A game from RomM takes it there too while changes go.
+     */
+    suspend fun setJournal(id: GameId, journal: io.github.matiyaaa.fuse.model.GameJournal) {}
+
+    /** The launchers found on this device that the person could move in from, each with what it would bring here. */
+    suspend fun moveInLook(): List<MoveInView> = emptyList()
+
+    /**
+     * Brings in what [sources] say about the games here: favourites, hidden games, play time and
+     * last played, completed games and ratings into the Journal, and collections. Nothing set in
+     * Fuse is undone, and all of it can be put back with [undoMoveIn].
+     */
+    suspend fun moveIn(sources: Set<io.github.matiyaaa.fuse.library.movein.MoveInSource>): MoveInReport = MoveInReport()
+
+    /** Puts back what the last move in changed; false when there is none to put back. */
+    suspend fun undoMoveIn(): Boolean = false
+
+    /** When the last move in that can still be put back was made, or null. */
+    suspend fun lastMoveIn(): Long? = null
+
+    /** How many of the library's games (of [platform], or every system) the Journal has with each status. */
+    fun journalCounts(platform: PlatformId?): Flow<Map<io.github.matiyaaa.fuse.model.PlayStatus, Int>> = kotlinx.coroutines.flow.flowOf(emptyMap())
     suspend fun setHidden(id: GameId, hidden: Boolean)
     suspend fun setPinned(id: GameId, pinned: Boolean)
     suspend fun rename(id: GameId, title: String?)
@@ -615,8 +725,8 @@ interface LibraryOps {
 
     /**
      * What a PlayStation or PS2 disc image says about itself (its serial, and PCSX2's CRC for PS2
-     * discs), read from the image once and remembered. Null for other games, compressed images and
-     * images that can't be read.
+     * discs), read from the image (ISO, BIN, CHD, CSO or ZSO) once and remembered. Null for other
+     * games and images that can't be read.
      */
     suspend fun discIdentity(id: GameId): io.github.matiyaaa.fuse.library.disc.DiscIdentity? = null
 
@@ -806,6 +916,12 @@ interface LibraryOps {
     /** Play time today, this week, this month and in all, per day, per game and per system. */
     fun playTime(): Flow<PlayTimeReport> = kotlinx.coroutines.flow.flowOf(PlayTimeReport(loaded = true))
 
+    /** [period] added up for Your Year, once (a period still going is as it stands now). */
+    fun recap(period: RecapPeriod): Flow<PlayRecap> = kotlinx.coroutines.flow.flowOf(PlayRecap(period, loaded = true))
+
+    /** The recaps there are: this year and this month so far, last month, and each earlier year anything was played. */
+    suspend fun recapPeriods(): List<RecapPeriod> = emptyList()
+
     /**
      * Files the game under [platform] for good (a rescan keeps it), or back under the system its
      * folder says when null. Its emulator choice goes with the old system.
@@ -834,11 +950,13 @@ interface LibraryOps {
     suspend fun detachContent(child: GameId): GameId? = null
 
     /**
-     * Applies the IPS, UPS, BPS or xdelta patch at [patchPath] to [id]'s game file, as a new copy beside it
-     * that joins the library: the game itself is never changed. UPS and BPS are checked against the
-     * game they were made for, and a patch for another version is refused.
+     * Applies the IPS, UPS, BPS, xdelta or PPF patch at [patchPath] to [id]'s game file, as a new copy
+     * beside it that joins the library: the game itself is never changed. UPS and BPS are checked
+     * against the game they were made for, PPF against the disc where it carries a piece of it, and a
+     * patch for another version is refused. A .cue game's patch goes to its data track and an .m3u
+     * game's to its [disc] (0 for the first), each with a copy of the sheet naming the patched file.
      */
-    suspend fun applyPatch(id: GameId, patchPath: String): PatchApplied = PatchApplied.Failed("Patching isn't available here.")
+    suspend fun applyPatch(id: GameId, patchPath: String, disc: Int? = null): PatchApplied = PatchApplied.Failed("Patching isn't available here.")
 
     /** The parts the person attached to [owner]: id, title and kind. */
     suspend fun userParts(owner: GameId): List<Triple<GameId, String, io.github.matiyaaa.fuse.model.ContentKind>> = emptyList()
@@ -1123,6 +1241,22 @@ interface AchievementOps {
     val local: StateFlow<List<LocalGameAchievements>?> get() = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
     fun refresh(force: Boolean = false)
     suspend fun forGame(game: GameId): AchievementState?
+
+    /**
+     * RetroAchievements' achievement of the week, with whether the person has it and the game here it
+     * belongs to; null without RetroAchievements, or when it can't be asked. Asked as the page opens,
+     * at most every few hours.
+     */
+    suspend fun week(): WeekAchievement? = null
+
+    /** The people the person follows on RetroAchievements, with what each last played; asked at most every few minutes. */
+    suspend fun following(): List<FollowedPlayer> = emptyList()
+
+    /**
+     * [game]'s RetroAchievements leaderboards, the ones with the person's own score first; null when
+     * it has no set Fuse knows or RetroAchievements can't be asked. Each is kept a few minutes.
+     */
+    suspend fun leaderboards(game: GameId): List<GameLeaderboard>? = null
     /** Checks a username + key against RetroAchievements and stores them securely on success. */
     suspend fun connect(username: String, apiKey: String): Result<Unit>
     suspend fun disconnect()
@@ -1422,6 +1556,9 @@ sealed interface PatchApplied {
 
     /** The game already is what the patch makes. */
     data object AlreadyPatched : PatchApplied
+
+    /** The game is several discs ([discs], their file names in order): which one the patch is for is asked, then given as `disc`. */
+    data class WhichDisc(val discs: List<String>) : PatchApplied
 
     /** It couldn't be done; [reason] says why, in words for the person. */
     data class Failed(val reason: String) : PatchApplied

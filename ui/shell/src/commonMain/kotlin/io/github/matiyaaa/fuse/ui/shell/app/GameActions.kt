@@ -32,8 +32,8 @@ import kotlinx.coroutines.launch
 internal const val SECOND_SCREEN_VEIL_MS = 900L
 
 /** What confirming a game tile does: play it, or open its page when the user chose that. */
-fun AppState.activateGame(card: GameCard) {
-    if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id, card.via)) else play(card)
+fun AppState.activateGame(card: GameCard, resume: Boolean = false) {
+    if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id, card.via)) else play(card, resume = resume)
 }
 
 /** The hint for confirming on a game tile, following [activateGame]. */
@@ -43,12 +43,12 @@ val AppState.gameConfirmLabel: String get() = if (store.prefs.value.openGamePage
  * Starts a game. The launch veil appears immediately (so pressing Play always responds), the store
  * resolves the emulator and fires the launch, and anything other than a clean start is explained.
  */
-fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null, discPath: String? = null) {
+fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null, discPath: String? = null, resume: Boolean = false) {
     if (launching != null) return
     // Moonlight as its emulator: the game plays on a computer at home and streams here.
     if (emulator == null && discPath == null) streamPickFor(card)?.let { streamInstead(card, it); return }
     // On two screens this may ask which one first; the veil only covers the launch itself.
-    playOnChosenScreen(card) { display -> launch(card, emulator, discPath, display) }
+    playOnChosenScreen(card) { display -> launch(card, emulator, discPath, display, resume = resume) }
 }
 
 /** Starts [card] to be played with others: hosting it here, or joining someone's game ([together]). */
@@ -58,7 +58,7 @@ internal fun AppState.playTogether(card: GameCard, together: io.github.matiyaaa.
     launch(card, null, null, null, together = together)
 }
 
-private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?, skipSaveCheck: Boolean = false, playAnyway: Boolean = false, together: io.github.matiyaaa.fuse.ui.shell.store.Together? = null) {
+private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?, skipSaveCheck: Boolean = false, playAnyway: Boolean = false, together: io.github.matiyaaa.fuse.ui.shell.store.Together? = null, resume: Boolean = false) {
     if (launching != null) return
     // The veil shows the room the game was lit by, with its own cover beside the title.
     val system = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }
@@ -85,10 +85,11 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
         }
     }
     job = scope.launch {
-        val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway, together, card.via) { stage ->
+        val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway, together, card.via, resume) { stage ->
             launching = when (stage) {
                 io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE -> launching?.copy(status = "Checking your save", cancel = callOff)
-                io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING -> launching?.copy(status = null, cancel = null)
+                // Carrying on: said while the emulator opens, so the person knows where it will land.
+                io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING -> launching?.copy(status = if (resume) "Carrying on where you left off" else null, cancel = null)
             }
         }
         when (outcome) {
@@ -108,35 +109,35 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
             is LaunchOutcome.Problem -> {
                 // A package that isn't installed yet installs now, then plays: no detour through its page.
                 if (!skipSaveCheck && outcome.problem.actions.any { it is io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.InstallContent }) {
-                    installThenPlay(card) { launching = null; launch(card, emulator, discPath, display, together = together) }
+                    installThenPlay(card) { launching = null; launch(card, emulator, discPath, display, together = together, resume = resume) }
                     return@launch
                 }
                 launching = null
-                showProblem(outcome.problem, card, retry = { launch(card, emulator, discPath, display, together = together) })
+                showProblem(outcome.problem, card, retry = { launch(card, emulator, discPath, display, together = together, resume = resume) })
             }
             // Both sides played since they last synced: the person picks, then the game starts.
             is LaunchOutcome.SaveConflict -> {
                 launching = null
-                saveConflict = io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictSpec(outcome.conflict) { launch(card, emulator, discPath, display, skipSaveCheck = true, together = together) }
+                saveConflict = io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictSpec(outcome.conflict) { launch(card, emulator, discPath, display, skipSaveCheck = true, together = together, resume = resume) }
             }
             // Another device is on this game, or still sending its save: wait for it, or play here.
             is LaunchOutcome.SyncBusy -> {
                 launching = null
-                syncBusy(card, outcome.busy, play = { launch(card, emulator, discPath, display, playAnyway = true, together = together) }, retry = { launch(card, emulator, discPath, display, together = together) })
+                syncBusy(card, outcome.busy, play = { launch(card, emulator, discPath, display, playAnyway = true, together = together, resume = resume) }, retry = { launch(card, emulator, discPath, display, together = together, resume = resume) })
             }
             is LaunchOutcome.SyncWaiting -> {
                 launching = null
-                syncWaiting(card, outcome.waiting, play = { launch(card, emulator, discPath, display, playAnyway = true, together = together) }, retry = { launch(card, emulator, discPath, display, together = together) })
+                syncWaiting(card, outcome.waiting, play = { launch(card, emulator, discPath, display, playAnyway = true, together = together, resume = resume) }, retry = { launch(card, emulator, discPath, display, together = together, resume = resume) })
             }
             // This device's save and RomM's both changed: which one to play with, then the game starts.
             is LaunchOutcome.RommSaveConflict -> {
                 launching = null
-                rommSaveConflict(card, outcome.conflict) { launch(card, emulator, discPath, display, together = together) }
+                rommSaveConflict(card, outcome.conflict) { launch(card, emulator, discPath, display, together = together, resume = resume) }
             }
             // Syncthing kept two versions of the save: which one to play with, then the game starts.
             is LaunchOutcome.SyncthingConflict -> {
                 launching = null
-                syncthingConflict(card, outcome.conflicts) { launch(card, emulator, discPath, display, skipSaveCheck = true, together = together) }
+                syncthingConflict(card, outcome.conflicts) { launch(card, emulator, discPath, display, skipSaveCheck = true, together = together, resume = resume) }
             }
         }
     }
@@ -486,6 +487,10 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         if (!card.isApp) {
             add(MenuAction("runs", "How It Runs Here", FuseIcons.Gauge, detail = "Plays well, with problems, or not at all, as you found it on this device", trailing = Trailing.Chevron, onSelect = { compatSheet(card) }))
         }
+        // Fuse 0.4.6: RetroAchievements' leaderboards, the best of everyone and the person's own.
+        if (!card.isApp && store.achievements.configured.value) {
+            add(MenuAction("boards", "Leaderboards", FuseIcons.Medal, detail = "RetroAchievements' best scores, and yours", trailing = Trailing.Chevron, onSelect = { leaderboardsSheet(card) }))
+        }
         if (!card.isApp && card.platformId.value == "ps3") {
             add(MenuAction("compat", "How It Runs in RPCS3", FuseIcons.Gauge, detail = "From RPCS3's compatibility list. Asks rpcs3.net with the game's title id", trailing = Trailing.Chevron, onSelect = { showCompatibility(card) }))
         }
@@ -563,7 +568,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         }
         if (!card.isApp) add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))
         // A translation, a hack or a fix, as its own copy beside the game: the game stays as it is.
-        if (!card.isApp && card.platformId.value !in NO_ROM_PATCHES) add(MenuAction("patch", "Apply a Patch", FuseIcons.Bandage, detail = "An IPS, UPS, BPS or xdelta file. Makes a patched copy; this game stays as it is", onSelect = { applyPatch(card) }))
+        if (!card.isApp && card.platformId.value !in NO_ROM_PATCHES) add(MenuAction("patch", "Apply a Patch", FuseIcons.Bandage, detail = "An IPS, UPS, BPS, xdelta or PPF file. Makes a patched copy; this game stays as it is", onSelect = { applyPatch(card) }))
         // RomM, when it is the RomM integration in use: games not on RomM go up from here.
         if (store.prefs.value.romm.enabled && store.romm.supported && !card.isApp && card.rommRomId == null) {
             add(MenuAction("romm.upload", "Upload to RomM", FuseIcons.Upload, detail = "With its other discs, DLC and updates, through Downloads", onSelect = {
@@ -1595,11 +1600,11 @@ internal fun AppState.applyPatch(card: GameCard) {
     }
 }
 
-/** Makes a patched copy of [card] with the patch file at [patch], and says how it went. */
-internal fun AppState.patchWith(card: GameCard, patch: String) {
+/** Makes a patched copy of [card] (of its [disc], for a game of several) with the patch file at [patch], and says how it went. */
+internal fun AppState.patchWith(card: GameCard, patch: String, disc: Int? = null) {
     scope.launch {
         toasts.show("Patching ${card.title}...", icon = FuseIcons.Bandage)
-        when (val r = store.library.applyPatch(card.id, patch)) {
+        when (val r = store.library.applyPatch(card.id, patch, disc)) {
             is io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made -> {
                 val notes = listOfNotNull(
                     if (r.checked) "The ${r.format} patch confirmed this is the game it is for." else "${r.format} patches don't say which game they are for: if the copy doesn't start, the patch is for another version.",
@@ -1621,6 +1626,14 @@ internal fun AppState.patchWith(card: GameCard, patch: String) {
                 message = "The ${r.format} patch is for a game whose checksum is ${r.expected}; this copy of ${card.title} is ${r.actual}. Patching it would make a broken game, so nothing was made. The patch's notes usually say which dump it needs (a region or revision).",
                 options = listOf(MenuAction("ok", "OK", FuseIcons.Check, onSelect = { choice = null })),
             )
+            is io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WhichDisc -> choice = ChoiceSpec(
+                title = "Which disc is the patch for?",
+                icon = FuseIcons.Disc,
+                message = "${card.title} is ${r.discs.size} discs, and a patch changes one. The copy keeps the others as they are.",
+                options = r.discs.mapIndexed { i, name ->
+                    MenuAction("disc.$i", "Disc ${i + 1}", FuseIcons.Disc, detail = name, onSelect = { choice = null; patchWith(card, patch, i) })
+                },
+            )
             io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched -> toasts.show("${card.title} already has this patch", icon = FuseIcons.Bandage)
             is io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Failed -> toasts.show(r.reason, ToastKind.WARNING)
         }
@@ -1630,7 +1643,7 @@ internal fun AppState.patchWith(card: GameCard, patch: String) {
 /** Systems whose emulators Fuse knows a way of playing together in (PCSX2, PPSSPP, Dolphin, RPCS3), besides RetroArch's. */
 private val TOGETHER_SYSTEMS = setOf("ps2", "psp", "ngc", "wii", "ps3")
 
-/** Systems whose games are installed packages or programs, where ROM patches (IPS, UPS, BPS, xdelta) don't apply. */
+/** Systems whose games are installed packages or programs, where ROM patches (IPS, UPS, BPS, xdelta, PPF) don't apply. */
 private val NO_ROM_PATCHES = setOf("switch", "ps3", "ps4", "ps5", "psvita", "wiiu", "xbox", "xbox360", "win", "win3x", "win9x", "steam", "android", "dos", "mac", "scummvm", "pico8", "flash", "j2me")
 
 /**

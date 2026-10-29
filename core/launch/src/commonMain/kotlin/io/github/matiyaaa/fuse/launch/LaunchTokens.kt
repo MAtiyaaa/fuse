@@ -40,6 +40,12 @@ object LaunchTokens {
     /** Linux: folder of the emulator executable (ES-DE `%EMUDIR%`). */
     const val EMUDIR = "{EMUDIR}"
 
+    /** The save state a game resumes from ([io.github.matiyaaa.fuse.launch.Resume.statePath]). Fuse's own. */
+    const val STATE = "{STATE}"
+
+    /** The settings file Fuse wrote to make an emulator load its automatic state ([io.github.matiyaaa.fuse.launch.Resume.configPath]). Fuse's own. */
+    const val RESUMECFG = "{RESUMECFG}"
+
     /** Android: SAF tree document URI of the target, the tree being the per-system ROM folder (ES-DE `%ROMSAF%`). */
     const val SAF = "{SAF}"
 
@@ -67,7 +73,7 @@ object LaunchTokens {
 
     /** Every token a template may use. */
     val all: Set<String> =
-        setOf(PATH, ROM, ROMDIR, BASENAME, PKG, CORE, CORE_PATH, SERIAL, INJECT, EMUDIR) + androidResolved
+        setOf(PATH, ROM, ROMDIR, BASENAME, PKG, CORE, CORE_PATH, SERIAL, INJECT, EMUDIR, STATE, RESUMECFG) + androidResolved
 
     private val tokenRegex = Regex("""\{[A-Z_]+\}""")
 

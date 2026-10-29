@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.jellyfin.MediaItem
 import io.github.matiyaaa.fuse.jellyfin.MediaType
@@ -152,9 +155,18 @@ internal fun MediaSearchScreen(app: AppState) {
         val compact = maxHeight < 600.dp
         val poster = if (compact) 120.dp else 152.dp
         val wide = if (compact) 232.dp else 296.dp
+        // On a wide screen the chosen result is told whole beside the results.
+        val detail = if (maxWidth >= DETAIL_FROM && !compact) (maxWidth * 0.32f).coerceAtMost(DETAIL_MOST) else 0.dp
+        if (detail > 0.dp) {
+            SearchDetail(
+                current,
+                Modifier.align(Alignment.TopEnd).width(detail).fillMaxHeight()
+                    .padding(top = Size.hudHeight + Space.l, end = Space.gutter, bottom = Size.hintHeight + Space.l),
+            )
+        }
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp).dragScroll(list),
+            modifier = Modifier.fillMaxHeight().width(maxWidth - detail).padding(top = Size.hudHeight).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp).dragScroll(list),
             contentPadding = PaddingValues(top = if (compact) Space.s else Space.l, bottom = Size.hintHeight + Space.xl),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
         ) {
@@ -202,6 +214,64 @@ internal fun MediaSearchScreen(app: AppState) {
         }
     }
 }
+
+/**
+ * The chosen result told whole: its picture, its logo or name, an episode's show and place in it,
+ * its facts and its story; a person's photo and name. Nothing while the field is chosen.
+ */
+@Composable
+private fun SearchDetail(item: MediaItem?, modifier: Modifier) {
+    val c = Fuse.colors
+    io.github.matiyaaa.fuse.ui.fuseline.Crossfade(item, modifier, animationSpec = Fuse.motion.fade(), label = "searchDetail") { m ->
+        if (m == null) return@Crossfade
+        androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(Space.m)) {
+            val shape = RoundedCornerShape(Fuse.geometry.control)
+            if (m.type == MediaType.PERSON) {
+                Box(Modifier.width(DETAIL_PHOTO).aspectRatio(2f / 3f).clip(shape).background(c.surfaceRaised)) {
+                    io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(m.poster.at(POSTER_WIDTH), Modifier.fillMaxSize(), fallback = {
+                        io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt(m.name, accentOf(m.name), Modifier.fillMaxSize())
+                    })
+                }
+            } else {
+                (m.backdrop ?: m.thumb)?.let { art ->
+                    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(shape).background(c.surfaceRaised)) {
+                        io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(art.at(WIDE_WIDTH), Modifier.fillMaxSize())
+                    }
+                }
+            }
+            val name: @Composable () -> Unit = { FText(m.name, Fuse.type.title, maxLines = 2) }
+            val logo = m.logo
+            if (logo != null && m.type != MediaType.EPISODE) {
+                io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(
+                    logo.at(640), Modifier.height(DETAIL_LOGO).fillMaxWidth(0.8f),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit, focusX = 0f, focusY = 0.5f, fallback = name,
+                )
+            } else {
+                name()
+            }
+            if (m.type == MediaType.EPISODE) {
+                listOfNotNull(m.seriesName, m.season?.let { s -> m.episode?.let { e -> "Season $s, Episode $e" } }).joinToString("  \u00B7  ").takeIf { it.isNotEmpty() }?.let {
+                    FText(it, Fuse.type.label, color = c.text.copy(alpha = 0.86f), maxLines = 1)
+                }
+            }
+            val facts = stageFacts(m)
+            if (facts.isNotEmpty() || m.rating != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                    StageRating(m)
+                    if (facts.isNotEmpty()) FText(facts, Fuse.type.label, color = c.text.copy(alpha = 0.86f), maxLines = 2)
+                }
+            }
+            m.overview?.let { FText(it, Fuse.type.body, color = c.textMuted, maxLines = DETAIL_LINES) }
+        }
+    }
+}
+
+/** From this width the chosen result is told beside the results; at most this wide; its story's lines. */
+private val DETAIL_FROM = 1100.dp
+private val DETAIL_MOST = 520.dp
+private const val DETAIL_LINES = 7
+private val DETAIL_LOGO = 64.dp
+private val DETAIL_PHOTO = 160.dp
 
 /** The search field: what was asked (or what can be), how many results, and a spinner while it looks. */
 @Composable

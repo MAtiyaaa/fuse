@@ -49,6 +49,9 @@ data class JellyfinConnection(
 /** A server that answered on the local network. */
 data class DiscoveredServer(val name: String, val address: String, val id: String?)
 
+/** A Quick Connect sign-in under way: its [code], the server's [info], and the address it was asked at. */
+data class QuickConnectStart(val code: QuickConnectCode, val info: ServerInfo, val route: Route, val base: String)
+
 /**
  * Jellyfin for the rest of Fuse: signing in (the token and, for the household's other devices,
  * the sign-in itself, only ever in the secret store),
@@ -173,15 +176,8 @@ class JellyfinService(
                 try {
                     val info = client.publicInfo(base)
                     val signed = client.signIn(base, username, password)
-                    val account = signed.copy(serverName = info.name, serverId = signed.serverId ?: info.id)
-                    saveAccount(account)
                     rememberLogin(username, password)
-                    lastBase = base
-                    secrets.put(LAST_BASE, base)
-                    stateFlow.update { it.copy(account = account, route = route, base = base, offline = false, authRequired = false, serverName = info.name, serverVersion = info.version, own = profile != null) }
-                    cache.clear()
-                    revisionFlow.update { it + 1 }
-                    return@runCatching account
+                    return@runCatching signedIn(signed, info, route, base)
                 } catch (e: JellyfinException) {
                     last = e
                     // The right server said no: no point trying it another way.
@@ -190,6 +186,63 @@ class JellyfinService(
             }
         }
         throw last ?: JellyfinException("The server can't be reached.", JellyfinException.Kind.NETWORK)
+    }
+
+    /** Keeps [signed] as the account in use on [base], reached by [route], and starts afresh from it. */
+    private suspend fun signedIn(signed: Account, info: ServerInfo, route: Route, base: String): Account {
+        val account = signed.copy(serverName = info.name, serverId = signed.serverId ?: info.id)
+        saveAccount(account)
+        lastBase = base
+        secrets.put(LAST_BASE, base)
+        stateFlow.update { it.copy(account = account, route = route, base = base, offline = false, authRequired = false, serverName = info.name, serverVersion = info.version, own = profile != null) }
+        cache.clear()
+        revisionFlow.update { it + 1 }
+        return account
+    }
+
+    /**
+     * A Quick Connect sign-in started on whichever address answers (local first): the code to show
+     * and where it was asked. A server with Quick Connect turned off says so, with where to turn it on.
+     */
+    suspend fun startQuickConnect(): Result<QuickConnectStart> = runCatching {
+        val bases = addressesInOrder()
+        if (bases.isEmpty()) throw JellyfinException("Enter the server's address first.", JellyfinException.Kind.NETWORK)
+        var last: Throwable? = null
+        for ((route, address) in bases) {
+            for (base in JellyfinClient.candidates(address)) {
+                try {
+                    val info = client.publicInfo(base)
+                    if (!client.quickConnectEnabled(base)) {
+                        throw JellyfinException("Quick Connect is off on ${info.name ?: "this server"}. An administrator turns it on in Jellyfin's Dashboard, under General.", JellyfinException.Kind.AUTH)
+                    }
+                    return@runCatching QuickConnectStart(client.quickConnectStart(base), info, route, base)
+                } catch (e: JellyfinException) {
+                    last = e
+                    if (e.kind == JellyfinException.Kind.AUTH) throw e
+                }
+            }
+        }
+        throw last ?: JellyfinException("The server can't be reached.", JellyfinException.Kind.NETWORK)
+    }
+
+    /**
+     * Waits for [start]'s code to be approved, asking every few seconds only while this runs (the
+     * screen showing the code); signed in once it is. Gives up when the code runs out.
+     */
+    suspend fun awaitQuickConnect(start: QuickConnectStart): Result<Account> = runCatching {
+        val began = kotlin.time.TimeSource.Monotonic.markNow()
+        while (began.elapsedNow().inWholeMilliseconds < QUICK_CONNECT_MS) {
+            kotlinx.coroutines.delay(QUICK_CONNECT_ASK_MS)
+            val approved = try {
+                client.quickConnectApproved(start.base, start.code.secret)
+            } catch (e: JellyfinException) {
+                // A code the server has forgotten won't be approved now.
+                if (e.kind == JellyfinException.Kind.NOT_FOUND || e.kind == JellyfinException.Kind.AUTH) break
+                false
+            }
+            if (approved) return@runCatching signedIn(client.signInWithQuickConnect(start.base, start.code.secret), start.info, start.route, start.base)
+        }
+        throw JellyfinException("The code ran out before it was approved. Ask for a new one.", JellyfinException.Kind.AUTH)
     }
 
     suspend fun signOut() {
@@ -527,6 +580,9 @@ class JellyfinService(
         return client.imageUrl(base, art)
     }
 
+    /** One sheet of trickplay pictures, on the route in use. */
+    suspend fun trickplaySheet(t: JellyfinTrickplay): ByteArray = call { b, a -> client.trickplaySheet(b, a, t) }
+
     /** After playing: what was watched has changed, so pages ask again. */
     suspend fun changed() {
         cache.invalidate { true }
@@ -556,6 +612,10 @@ class JellyfinService(
         private const val LOCAL_TIMEOUT_MS = 2_500L
         private const val REMOTE_TIMEOUT_MS = 6_000L
         private const val DISCOVERY_MS = 2_000L
+
+        /** How long a Quick Connect code is waited on (Jellyfin forgets one after ten minutes), and how often it is asked after. */
+        private const val QUICK_CONNECT_MS = 10 * 60_000L
+        private const val QUICK_CONNECT_ASK_MS = 4_000L
     }
 }
 

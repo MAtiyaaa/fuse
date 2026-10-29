@@ -33,6 +33,10 @@ data class GameSummary(
     val isApp: Boolean = false,
     /** The platform folder the scanner found the game in; tells which library folder (and drive) holds it. */
     val folderPath: String = "",
+    /** Where the person is with it (the Journal) and since when; its rating out of ten, 0 for none. */
+    val status: io.github.matiyaaa.fuse.model.PlayStatus? = null,
+    val statusAt: Long? = null,
+    val rating: Int = 0,
 ) {
     val displayTitle: String get() = titles.display
     val sortKey: String get() = titles.sortKey
@@ -48,6 +52,34 @@ data class GameRecord(
     val missingSince: Long?,
     /** Epoch millis of "Remove from Fuse", or null. */
     val removedAt: Long?,
+)
+
+/** A game as moving in matches it: its system, its files, its Steam and RetroAchievements ids and its names. */
+data class MoveInRow(
+    val id: GameId,
+    val platform: String,
+    val path: String,
+    val launchPath: String,
+    val steamAppId: Long?,
+    /** RetroAchievements' id for it, once Fuse has found it. */
+    val raGameId: Long? = null,
+    /** Its names: the person's own, the metadata's, the cleaned and the file's. */
+    val titles: List<String> = emptyList(),
+)
+
+/**
+ * What moving in may change of a game, as it was: favourite, hidden, imported play time and where
+ * from, last played, and the Journal. Kept so a move in can be put back exactly.
+ */
+@kotlinx.serialization.Serializable
+data class PlayState(
+    val id: GameId,
+    val favorite: Boolean,
+    val hidden: Boolean,
+    val importedSeconds: Long,
+    val importedSource: String?,
+    val lastPlayedAt: Long?,
+    val journal: io.github.matiyaaa.fuse.model.GameJournal,
 )
 
 /** A game as suggestions read it: its details and what was done with it here. */
@@ -67,4 +99,8 @@ data class RecommendationRow(
     val rating: Int?,
     /** The most people who can play it at once, when its details say ([mostPlayers]). */
     val players: Int? = null,
+    /** Where the person is with it, in their Journal, and since when; their own rating out of ten. */
+    val status: io.github.matiyaaa.fuse.model.PlayStatus? = null,
+    val statusAt: Long? = null,
+    val stars: Int = 0,
 )

@@ -80,6 +80,55 @@ class RetroAchievementsTest {
         RetroAchievementsClient(http.client, RaCredentials("MaxMilyin", "RA_SECRET_KEY_42"), RateLimiter.unlimited(), clock = { 1_000L })
 
     @Test
+    fun theWeekThePeopleFollowedAndLeaderboardsDecode() = runTest {
+        val week = """
+            {"Achievement":{"ID":"165","Title":"Upgrade","Description":"Collect 50 rings","Points":"5","TrueRatio":6,"Type":null,"Author":"jarvis"},
+             "Console":{"ID":"1","Title":"Genesis/Mega Drive"},"ForumTopic":{"ID":"112"},"Game":{"ID":"1","Title":"Sonic the Hedgehog"},
+             "StartAt":"2024-05-06T00:00:00.000000Z","TotalPlayers":"27080",
+             "Unlocks":[{"User":"Amaranth","ULID":"01H","RAPoints":"1200","RASoftcorePoints":0,"DateAwarded":"2024-05-06T10:00:00.000000Z","HardcoreMode":"1"}],
+             "UnlocksCount":"1250","UnlocksHardcoreCount":900}
+        """.trimIndent()
+        val w = (client(TestHttp { json(week) }).achievementOfTheWeek() as ApiResult.Success).value
+        assertEquals(165, w.achievement.id)
+        assertEquals("Sonic the Hedgehog", w.game.title)
+        assertEquals(27080, w.totalPlayers)
+        assertEquals(1250, w.unlocksCount)
+        assertTrue(w.unlocks.single().hardcore)
+
+        val following = """{"Count":2,"Total":2,"Results":[{"User":"zuliman92","ULID":"01A","Points":"1882","PointsSoftcore":258,"IsFollowingMe":true},{"User":"kestrel","Points":12,"IsFollowingMe":false}]}"""
+        val f = (client(TestHttp { json(following) }).following() as ApiResult.Success).value
+        assertEquals(listOf("zuliman92", "kestrel"), f.results.map { it.user })
+        assertTrue(f.results[0].followsMe)
+        assertEquals(1882, f.results[0].points)
+
+        val boards = """{"Count":1,"Total":1,"Results":[{"ID":"104370","RankAsc":true,"Title":"Green Hill Act 1","Description":"Fastest time","Format":"TIME",
+            "TopEntry":{"User":"vani11a","ULID":"01B","Score":"390490","FormattedScore":"1:05.07"}}]}"""
+        val b = (client(TestHttp { json(boards) }).gameLeaderboards(1) as ApiResult.Success).value.results.single()
+        assertTrue(b.lowerIsBetter)
+        assertEquals("1:05.07", b.top?.formattedScore)
+        val mine = """{"Count":1,"Total":1,"Results":[{"ID":104370,"RankAsc":true,"Title":"Green Hill Act 1","Description":"","Format":"TIME",
+            "UserEntry":{"User":"sample","Score":12620,"FormattedScore":"2:06.20","Rank":"2","DateUpdated":"2024-01-01T00:00:00Z"}}]}"""
+        val m = (client(TestHttp { json(mine) }).myLeaderboards(1) as ApiResult.Success).value.results.single()
+        assertEquals(2, m.mine?.rank)
+        assertEquals("2:06.20", m.mine?.formattedScore)
+    }
+
+    @Test
+    fun theWantToPlayListIsReadPageByPage() = runTest {
+        val pages = listOf(
+            """{"Count":2,"Total":3,"Results":[{"ID":20246,"Title":"Sonic the Hedgehog","ImageIcon":"/Images/074560.png","ConsoleID":1,"ConsoleName":"Genesis/Mega Drive","PointsTotal":1500,"AchievementsPublished":50},{"ID":"1451","Title":"Chrono Trigger","ConsoleID":"3","ConsoleName":"SNES/Super Famicom"}]}""",
+            """{"Count":1,"Total":3,"Results":[{"ID":11240,"Title":"Kingdom Hearts","ConsoleID":21,"ConsoleName":"PlayStation 2"}]}""",
+        )
+        val http = TestHttp { request -> json(pages[if (request.url.parameters["o"] == "0") 0 else 1]) }
+        val all = (client(http).allWantToPlay() as ApiResult.Success).value
+        assertEquals(listOf(20246L, 1451L, 11240L), all.map { it.id })
+        assertEquals(listOf(1, 3, 21), all.map { it.consoleId })
+        assertEquals("Chrono Trigger", all[1].title)
+        assertEquals(listOf("0", "2"), http.requests.map { it.url.parameters["o"] })
+        assertEquals("MaxMilyin", http.requests.first().url.parameters["u"])
+    }
+
+    @Test
     fun profileRequestAndMapping() = runTest {
         val http = TestHttp { json(profileJson) }
         val user = client(http).verifyCredentials()

@@ -116,6 +116,9 @@ sealed interface Trailing {
      * value as [text] ("30%"), so the row shows how much at a glance and the fill eases on change.
      */
     data class Level(val fraction: Float, val text: String) : Trailing
+
+    /** A rating out of ten as five stars in halves ([Stars]); 0 is not rated. */
+    data class Rating(val rating: Int) : Trailing
 }
 
 @Immutable
@@ -342,6 +345,7 @@ private fun RowTrailing(trailing: Trailing, selected: Boolean, available: Boolea
             }
             FuseIcon(FuseIcons.ChevronDown, size = TRAILING_ICON, tint = if (trailing.open || selected) c.text else c.textMuted, modifier = Modifier.graphicsLayer { rotationZ = turn })
         }
+        is Trailing.Rating -> Stars(trailing.rating, size = TRAILING_ICON, tint = c.accent)
         is Trailing.Level -> Row(verticalAlignment = Alignment.CenterVertically) {
             LevelMeter(trailing.fraction, selected)
             Spacer(Modifier.width(Space.m))

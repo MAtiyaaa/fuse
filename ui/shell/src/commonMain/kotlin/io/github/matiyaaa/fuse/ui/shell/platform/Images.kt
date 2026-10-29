@@ -53,6 +53,9 @@ fun fuseImageLoader(
         // Jellyfin's pictures: fetched on the route in use, cached by the picture (JellyfinImages).
         add(JellyfinImages.Key())
         add(JellyfinImages.Fetch(http))
+        // Its trickplay pictures for seeking, which need the sign-in.
+        add(JellyfinImages.TrickplayKey())
+        add(JellyfinImages.TrickplayFetch())
         // RomM's pictures: fetched with Fuse's sign-in, kept for offline (RommImages).
         add(RommImages.Key())
         add(RommImages.Fetch())

@@ -134,6 +134,12 @@ object LibrarySearch {
                 val want = TitleText.normalize(f.value)
                 want.isNotEmpty() && e.makers.contains(want)
             }
+            is SearchFilter.Status -> when {
+                f.any -> s.status != null
+                f.none -> s.status == null
+                else -> s.status in f.statuses
+            }
+            is SearchFilter.Rating -> s.rating in f.from..f.to
             is SearchFilter.Platform, is SearchFilter.Collection, is SearchFilter.Drive -> true
         }
     }

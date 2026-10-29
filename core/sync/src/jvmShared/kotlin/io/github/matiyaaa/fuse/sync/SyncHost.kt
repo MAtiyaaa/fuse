@@ -258,7 +258,8 @@ class SyncHost(
     private fun notePresence(d: DeviceRecord, note: PresenceNote) {
         val state = note.state
         if (state == null) {
-            presence.remove(d.id)
+            // Done with it: the others look again, so who is playing what stays true on theirs.
+            if (presence.remove(d.id)?.state == Presence.PLAYING) household.wake(HouseholdHost.WAKE_PLAYING, except = d.id, all = ::liveDevices)
             return
         }
         val now = clock()
@@ -267,8 +268,11 @@ class SyncHost(
             Hosting(h.way.take(40), h.emulator.take(40), h.addresses.take(MAX_ADDRESSES).map { it.take(100) }, h.port.takeIf { it in 0..65535 } ?: 0)
         }
         presence[d.id] = Presence(d.id, d.name, note.profile, note.game.take(200), note.title.take(200), state, now, was?.since ?: note.since.takeIf { it in 1..now } ?: now, hosting)
-        // A game newly open to join: the other devices look, so its invitation reaches them while it is open.
-        if (hosting != null && was?.hosting != hosting) household.wake(HouseholdHost.WAKE_PLAYING, except = d.id, all = ::liveDevices)
+        // A game newly open to join (its invitation reaches the others while it is open), or one started
+        // or left: the other devices look. Saying it again while playing wakes no one.
+        val started = state == Presence.PLAYING && was?.state != Presence.PLAYING
+        val left = state != Presence.PLAYING && was?.state == Presence.PLAYING
+        if (started || left || (hosting != null && was?.hosting != hosting)) household.wake(HouseholdHost.WAKE_PLAYING, except = d.id, all = ::liveDevices)
     }
 
     // ---------------------------------------------------------------- joining without a code

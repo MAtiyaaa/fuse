@@ -81,7 +81,7 @@ private fun roomOf(width: androidx.compose.ui.unit.Dp, height: androidx.compose.
 @Composable
 internal fun GameCarousel(kind: WidgetKind, games: List<GameCard>, feed: HomeFeed, face: FaceSize) {
     if (games.isEmpty()) {
-        Framed(kind, null, null) { EmptyFace(widgetIcon(kind), kind.title(), emptyGamesText(kind)) }
+        Framed(kind, null, null) { EmptyFace(widgetIcon(kind), kind.title(), emptyGamesText(kind), shelf = true) }
         return
     }
     val shown = games.take(CATALOGUE_ITEMS)
@@ -93,6 +93,24 @@ internal fun GameCarousel(kind: WidgetKind, games: List<GameCard>, feed: HomeFee
         header = { dots -> CarouselHeader(widgetIcon(kind), widgetLabel(kind), dots, compact = compact) },
     ) { i, depth ->
         GameSlide(shown[i], gameLine(kind, shown[i], feed), feed.systems.firstOrNull { it.platform.id == shown[i].shownPlatform }, face, depth)
+    }
+}
+
+/**
+ * A widget about one game (today's Spotlight, the game running now), told as the catalogues tell
+ * theirs: its art filling the face, its logo or name, [line] about it, its box beside and its
+ * system, under the widget's name.
+ */
+@Composable
+internal fun SingleGameFace(kind: WidgetKind, game: GameCard, line: String, feed: HomeFeed, face: FaceSize) {
+    val compact = face == FaceSize.SMALL || face == FaceSize.TALL
+    Carousel(
+        count = 1,
+        peek = false,
+        cardShape = cardShape(),
+        header = { dots -> CarouselHeader(widgetIcon(kind), widgetLabel(kind), dots, compact = compact) },
+    ) { _, depth ->
+        GameSlide(game, line, feed.systems.firstOrNull { it.platform.id == game.shownPlatform }, face, depth)
     }
 }
 
@@ -166,6 +184,11 @@ private fun gameLine(kind: WidgetKind, g: GameCard, feed: HomeFeed): String = wh
     WidgetKind.FOR_YOU -> feed.reasons[g.id] ?: g.platformShort
     WidgetKind.RECENTLY_ADDED -> "Added ${agoText(g.addedAt)}"
     WidgetKind.RECENTLY_PLAYED -> g.lastPlayedAt?.let { "Played ${agoText(it)}" } ?: g.platformShort
+    // How long it has waited on the list, beside its system.
+    WidgetKind.UP_NEXT -> listOfNotNull(
+        g.platformShort,
+        g.statusAt?.let { io.github.matiyaaa.fuse.ui.shell.app.statusSince(io.github.matiyaaa.fuse.model.PlayStatus.WANT, it, kotlin.time.Clock.System.now().toEpochMilliseconds()) },
+    ).joinToString("  ·  ")
     WidgetKind.FAVORITES, WidgetKind.PINNED_GAMES -> listOfNotNull(
         g.platformShort,
         g.playSeconds.takeIf { it >= 60 }?.let { "${playtimeText(it)} played" },
@@ -176,6 +199,7 @@ private fun gameLine(kind: WidgetKind, g: GameCard, feed: HomeFeed): String = wh
 private fun emptyGamesText(kind: WidgetKind): String = when (kind) {
     WidgetKind.RECENTLY_PLAYED -> "Games you play show here"
     WidgetKind.FAVORITES -> "Add favourites from a game's options"
+    WidgetKind.UP_NEXT -> UP_NEXT_EMPTY
     WidgetKind.PINNED_GAMES -> "Pin games from their options"
     WidgetKind.RECENTLY_ADDED -> "New games show here after a scan"
     WidgetKind.FOR_YOU -> emptySuggestionNote(kind)

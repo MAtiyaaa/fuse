@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.desktop.capture
 
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.ui.shell.platform.CaptureResult
@@ -70,6 +72,16 @@ class DesktopScreenCapture(private val window: () -> Window?) : ScreenCapture {
         val file = File(dir, if (name.endsWith(".png")) name else "$name.png")
         if (!runCatching { ImageIO.write(image, "png", file) }.getOrDefault(false)) {
             return@withContext CaptureResult(picturesPlace, failure = "The screenshot couldn't be saved in ${dir.path}")
+        }
+        CaptureResult(picturesPlace, preview = runCatching { thumbnail(image).toComposeImageBitmap() }.getOrNull())
+    }
+
+    override suspend fun savePicture(name: String, picture: ImageBitmap): CaptureResult = withContext(Dispatchers.IO) {
+        val image = runCatching { picture.toAwtImage() }.getOrNull() ?: return@withContext CaptureResult(picturesPlace, failure = "The picture couldn't be made")
+        val dir = pictures.apply { mkdirs() }
+        val file = File(dir, if (name.endsWith(".png")) name else "$name.png")
+        if (!runCatching { ImageIO.write(image, "png", file) }.getOrDefault(false)) {
+            return@withContext CaptureResult(picturesPlace, failure = "The picture couldn't be saved in ${dir.path}")
         }
         CaptureResult(picturesPlace, preview = runCatching { thumbnail(image).toComposeImageBitmap() }.getOrNull())
     }

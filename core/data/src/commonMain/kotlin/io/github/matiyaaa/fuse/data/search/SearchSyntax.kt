@@ -20,6 +20,17 @@ sealed interface SearchFilter {
     data class Genre(val value: String, override val token: String) : SearchFilter
     data class Developer(val value: String, override val token: String) : SearchFilter
     data class Drive(val value: String, override val token: String) : SearchFilter
+
+    /** In the Journal with one of [statuses]; any status when [any], none when [none]. */
+    data class Status(
+        val statuses: Set<io.github.matiyaaa.fuse.model.PlayStatus>,
+        override val token: String,
+        val any: Boolean = false,
+        val none: Boolean = false,
+    ) : SearchFilter
+
+    /** Rated [from] to [to] out of ten (halves of five stars); 0 to 0 is not rated. */
+    data class Rating(val from: Int, val to: Int, override val token: String) : SearchFilter
 }
 
 /** The kinds of filter, each with the word it's typed as and the other words that mean it. */
@@ -34,6 +45,8 @@ enum class FilterKey(val word: String, vararg val aliases: String) {
     GENRE("genre"),
     DEVELOPER("developer", "dev", "studio"),
     DRIVE("drive", "disk", "card"),
+    STATUS("status", "journal"),
+    RATING("rating", "rated", "stars"),
     ;
 
     companion object {
@@ -64,7 +77,7 @@ data class SearchQuery(
  * The search language. Words are looked for in names; `key:value` narrows (`platform:snes`,
  * `year:1998`, `year:1995-1999`, `year:1990s`, `year:>2000`, `favorite:yes`, `played:week`,
  * `played:no`, `missing:yes`, `collection:"Couch games"`, `genre:rpg`, `developer:capcom`,
- * `drive:sd`). Quotes keep spaces in a value. A word that only looks like a filter (`re:volt`)
+ * `drive:sd`, `status:playing`, `status:backlog`, `rating:4`, `rating:>=3.5`, `rating:no`). Quotes keep spaces in a value. A word that only looks like a filter (`re:volt`)
  * stays part of the name.
  */
 object SearchSyntax {
@@ -125,6 +138,51 @@ object SearchSyntax {
         FilterKey.GENRE -> SearchFilter.Genre(value, token)
         FilterKey.DEVELOPER -> SearchFilter.Developer(value, token)
         FilterKey.DRIVE -> SearchFilter.Drive(value, token)
+        FilterKey.STATUS -> status(value, token)
+        FilterKey.RATING -> rating(value)?.let { (a, b) -> SearchFilter.Rating(a, b, token) }
+    }
+
+    /** `playing`, `backlog`, `next`, `hold`, `beaten`, `completed`, `dropped`; `yes` for any status, `no` for none. */
+    private fun status(value: String, token: String): SearchFilter.Status? {
+        val v = value.lowercase().replace("-", "").replace("_", "").replace(" ", "")
+        if (yesNo(v) == true || v == "any") return SearchFilter.Status(emptySet(), token, any = true)
+        if (yesNo(v) == false || v == "none") return SearchFilter.Status(emptySet(), token, none = true)
+        val s = when (v) {
+            "want", "wanttoplay", "backlog", "backlogged", "next", "upnext", "wishlist" -> io.github.matiyaaa.fuse.model.PlayStatus.WANT
+            "playing", "nowplaying", "current" -> io.github.matiyaaa.fuse.model.PlayStatus.PLAYING
+            "hold", "onhold", "paused", "pause", "shelved" -> io.github.matiyaaa.fuse.model.PlayStatus.PAUSED
+            "beaten", "beat", "finished", "done" -> io.github.matiyaaa.fuse.model.PlayStatus.BEATEN
+            "completed", "complete", "100", "100%" -> io.github.matiyaaa.fuse.model.PlayStatus.COMPLETED
+            "dropped", "abandoned", "retired", "quit" -> io.github.matiyaaa.fuse.model.PlayStatus.DROPPED
+            else -> return null
+        }
+        return SearchFilter.Status(setOf(s), token)
+    }
+
+    /**
+     * Stars as typed, out of ten: `4` is four stars and up to (not including) five, `4.5` exactly,
+     * `>=3.5`, `>3`, `<2`, `3-5`; `yes` any rating, `no` none.
+     */
+    internal fun rating(value: String): Pair<Int, Int>? {
+        val v = value.trim().lowercase().removeSuffix("stars").removeSuffix("star").trim()
+        when (yesNo(v)) {
+            true -> return 1 to 10
+            false -> return 0 to 0
+            null -> Unit
+        }
+        fun halves(s: String): Int? = s.trim().toDoubleOrNull()?.takeIf { it in 0.5..5.0 }?.let { (it * 2).toInt() }
+        return when {
+            v.startsWith(">=") -> halves(v.drop(2))?.let { it to 10 }
+            v.startsWith("<=") -> halves(v.drop(2))?.let { 1 to it }
+            v.startsWith(">") -> halves(v.drop(1))?.let { (it + 1).coerceAtMost(10) to 10 }
+            v.startsWith("<") -> halves(v.drop(1))?.let { 1 to (it - 1).coerceAtLeast(1) }
+            '-' in v -> {
+                val (a, b) = v.split('-', limit = 2).map { halves(it) }
+                if (a != null && b != null) minOf(a, b) to maxOf(a, b) else null
+            }
+            '.' in v -> halves(v)?.let { it to it }
+            else -> halves(v)?.let { it to (it + 1).coerceAtMost(10) }
+        }
     }
 
     private fun yesNo(value: String): Boolean? = when (value.lowercase()) {

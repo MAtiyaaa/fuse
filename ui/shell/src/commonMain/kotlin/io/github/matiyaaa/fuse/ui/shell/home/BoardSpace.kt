@@ -41,7 +41,15 @@ import io.github.matiyaaa.fuse.model.PlatformId
 internal class BoardLook(val labels: List<String>, val icons: List<ImageVector>, val editing: Int, val here: Int, val pick: (Int) -> Unit)
 
 /** Something that can be put on a board from its Add picker. */
-internal class Addable(val key: String, val title: String, val icon: ImageVector, val widget: HomeWidget, val detail: String? = null)
+internal class Addable(
+    val key: String,
+    val title: String,
+    val icon: ImageVector,
+    val widget: HomeWidget,
+    val detail: String? = null,
+    /** The heading it sits under where things are added; null for none. */
+    val section: String? = null,
+)
 
 /**
  * A board of items arranged by hand, with pages, like a phone's home screen: Home's widgets, or
@@ -248,7 +256,7 @@ internal class HomeSpace(
 
     override fun addable(c: HomeLayoutConfig, page: Int) = WidgetKind.entries
         .filter { k -> c.boardWidgets(page).none { it.kind == k } && app.offersToAdd(k) }
-        .map { k -> Addable("add.$k", k.title(), widgetIcon(k), HomeWidget(k.name.lowercase(), k, 0)) }
+        .map { k -> Addable("add.$k", k.title(), widgetIcon(k), HomeWidget(k.name.lowercase(), k, 0), detail = widgetBlurb(k), section = widgetSection(k)) }
 
     override fun resetTitle(page: Int) = if (page == 0) "Put Home back as it came?" else "Clear this page?"
     override fun resetMessage(page: Int) = if (page == 0) {

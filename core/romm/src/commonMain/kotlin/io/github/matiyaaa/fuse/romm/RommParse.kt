@@ -135,6 +135,23 @@ object RommParse {
             multi = o.bool("has_multiple_files") ?: o.bool("multi") ?: (files.size > 1),
             createdAt = o.str("created_at")?.let(::millis) ?: 0,
             updatedAt = o.str("updated_at")?.let(::millis) ?: 0,
+            marks = marks(o["rom_user"]),
+        )
+    }
+
+    /**
+     * The person's own marks on a game (`rom_user`), or null when they have none: RomM fills one
+     * in with id -1 for a game the person never marked, which says nothing.
+     */
+    fun marks(e: JsonElement?): RommMarks? {
+        val o = e as? JsonObject ?: return null
+        if ((o.long("id") ?: -1) < 0) return null
+        return RommMarks(
+            status = o.str("status"),
+            backlogged = o.bool("backlogged") ?: false,
+            nowPlaying = o.bool("now_playing") ?: false,
+            rating = (o.long("rating") ?: 0).toInt().coerceIn(0, 10),
+            updatedAt = o.str("updated_at")?.let(::millis) ?: 0,
         )
     }
 

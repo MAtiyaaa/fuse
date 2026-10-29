@@ -36,6 +36,8 @@ import io.github.matiyaaa.fuse.romm.ROMM_SOURCE
 import io.github.matiyaaa.fuse.romm.ROMM_UPLOAD_SOURCE
 import io.github.matiyaaa.fuse.romm.RommBios
 import io.github.matiyaaa.fuse.romm.RommClient
+import io.github.matiyaaa.fuse.romm.RommJournal
+import io.github.matiyaaa.fuse.romm.RommMarks
 import io.github.matiyaaa.fuse.romm.RommContent
 import io.github.matiyaaa.fuse.romm.RommCredential
 import io.github.matiyaaa.fuse.romm.RommDeviceCode
@@ -66,9 +68,13 @@ import io.github.matiyaaa.fuse.ui.shell.store.RommNotOnServer
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorChoice
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
+import io.github.matiyaaa.fuse.ui.shell.store.RommBatch
+import io.github.matiyaaa.fuse.ui.shell.store.RommBatchPlan
+import io.github.matiyaaa.fuse.ui.shell.store.RommBatchResult
 import io.github.matiyaaa.fuse.ui.shell.store.RommCollectionCard
 import io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat
 import io.github.matiyaaa.fuse.ui.shell.store.RommGame
+import io.github.matiyaaa.fuse.ui.shell.store.RommPage
 import io.github.matiyaaa.fuse.ui.shell.store.RommGameView
 import io.github.matiyaaa.fuse.ui.shell.store.RommLink
 import io.github.matiyaaa.fuse.ui.shell.store.RommOps
@@ -472,6 +478,7 @@ internal class DefaultRommOps(
             val result = mirror.sync(c, server, full = full) { p -> _state.update { it.copy(syncing = p) } }
             _state.update { it.copy(syncing = null, syncedAt = ctx.now(), games = result.total, route = c.route, problem = null) }
             rematch()
+            takeMarks(result.marks)
             mirrorRevision.update { it + 1 }
             publishLists()
             fillUnmatched(mirror.all(server))
@@ -693,7 +700,7 @@ internal class DefaultRommOps(
     /** Whether [c]'s server has the part of RomM [w] goes to ([RommClient.detect]). */
     private fun takes(c: RommClient, w: RommWrite): Boolean = when (w) {
         is RommWrite.Played -> c.capabilities.playSessions
-        is RommWrite.Hidden -> c.capabilities.userProps
+        is RommWrite.Hidden, is RommWrite.Journal -> c.capabilities.userProps
         is RommWrite.Trophies -> c.capabilities.notes
         is RommWrite.Favourite -> c.capabilities.collectionRoms
     }
@@ -705,6 +712,7 @@ internal class DefaultRommOps(
     private suspend fun send(c: RommClient, batch: List<RommWrite>, key: String): Boolean = when (val w = batch.first()) {
         is RommWrite.Played -> true.also { c.playSessions(batch.filterIsInstance<RommWrite.Played>().map { it.session }) }
         is RommWrite.Hidden -> true.also { c.setHidden(w.romId, w.on) }
+        is RommWrite.Journal -> true.also { c.setMarks(w.romId, RommJournal.marks(io.github.matiyaaa.fuse.model.PlayStatus.of(w.status), w.rating)) }
         is RommWrite.Trophies -> trophyNote(c, w.romId, w.game)
         is RommWrite.Favourite -> true.also {
             try {
@@ -716,6 +724,49 @@ internal class DefaultRommOps(
                 c.collectionRoms(favouritesOf(c, key), listOf(w.romId), into = w.on)
             }
         }
+    }
+
+    // ------------------------------------------------------------------ the Journal
+
+    /** When each game's marks were last asked for, so a page opened again soon doesn't ask again. */
+    private val markLooks = HashMap<Long, Long>()
+
+    override suspend fun freshenMarks(game: GameId) {
+        if (!settings.enabled || !settings.sendChanges) return
+        val c = client ?: return
+        if (_state.value.link != RommLink.ONLINE || !c.capabilities.userProps) return
+        val romId = romOf(game) ?: ctx.data.games.get(game)?.links?.rommRomId ?: return
+        val now = ctx.now()
+        val look = trophyLock.withLock {
+            val last = markLooks[romId]
+            if (last != null && now - last < TROPHY_LOOK_MS) false else true.also { markLooks[romId] = now }
+        }
+        if (!look) return
+        val marks = runCatching { c.rom(romId)?.marks }.getOrNull() ?: return
+        takeMarks(mapOf(romId to marks), mapOf(romId to game))
+    }
+
+    /**
+     * The person's marks in RomM brought into the Journal of the games they belong to here, while
+     * changes go both ways ([settings] sendChanges): a mark RomM changed after the status here was
+     * set wins (made in RomM's own pages, or another app), and a change made here that still waits
+     * to go to RomM is never undone by what RomM said before it.
+     */
+    private suspend fun takeMarks(marks: Map<Long, RommMarks>, games: Map<Long, GameId> = emptyMap()) {
+        if (marks.isEmpty() || !settings.sendChanges) return
+        val waiting = changesLock.withLock { loadChanges(server) }.filterIsInstance<RommWrite.Journal>().mapTo(HashSet()) { it.romId }
+        var took = false
+        for ((romId, m) in marks) {
+            if (romId in waiting) continue
+            val game = games[romId] ?: gameOf(romId) ?: continue
+            val here = ctx.data.games.get(game)?.journal ?: continue
+            val status = RommJournal.statusOf(m)
+            if (status == here.status && m.rating == here.rating) continue
+            if (m.updatedAt <= (here.statusAt ?: 0)) continue
+            ctx.data.games.setJournal(game, here.copy(status = status, statusAt = if (status != here.status) m.updatedAt else here.statusAt, rating = m.rating))
+            took = true
+        }
+        if (took) ctx.userChanged()
     }
 
     // ------------------------------------------------------------------ trophies
@@ -1146,11 +1197,21 @@ internal class DefaultRommOps(
             missing.map { ctx.summaryToCard(it, media[MediaOwner.OfGame(it.id)]) }
         }.flowOn(Dispatchers.Default)
 
-    override fun games(slug: String?): Flow<List<RommGame>> = combine(mirrorRevision, matches, transfers.items) { _, _, _ -> }.mapLatest {
+    /**
+     * RomM's downloads by key and where each stands: what a list's marks follow. Only a download
+     * added, finished or changing state moves it, never its bytes (saved every few seconds while it
+     * runs), so a system of thousands isn't drawn again for each.
+     */
+    private val rommTransferStates = transfers.items
+        .map { list -> list.filter { it.source == ROMM_SOURCE && !it.status.finished }.associate { it.key to it.status } }
+        .distinctUntilChanged()
+
+    override fun games(slug: String?): Flow<List<RommGame>> = combine(mirrorRevision, matches, rommTransferStates) { _, _, _ -> }.mapLatest {
         toGames(if (slug == null) mirror.all(server) else mirror.onPlatform(server, slug))
     }.flowOn(Dispatchers.Default)
 
-    override fun collection(id: String): Flow<List<RommGame>> = combine(mirrorRevision, matches) { _, _ -> }.mapLatest {
+    // With the transfers, as a system's page: a game queued from here shows it is on its way.
+    override fun collection(id: String): Flow<List<RommGame>> = combine(mirrorRevision, matches, rommTransferStates) { _, _, _ -> }.mapLatest {
         val c = mirror.collections(server).firstOrNull { it.id == id } ?: return@mapLatest emptyList()
         toGames(mirror.roms(server, c.romIds))
     }.flowOn(Dispatchers.Default)
@@ -1158,6 +1219,28 @@ internal class DefaultRommOps(
     override fun search(text: String): Flow<List<RommGame>> = flow {
         if (text.isBlank()) emit(emptyList()) else emit(toGames(mirror.search(server, text, 120)))
     }.flowOn(Dispatchers.Default)
+
+    override suspend fun browse(slug: String?, query: String, offset: Int, limit: Int): RommPage = withContext(Dispatchers.Default) {
+        val q = query.trim()
+        val take = limit.coerceIn(1, BROWSE_MOST)
+        when {
+            q.isNotEmpty() -> {
+                val found = mirror.search(server, q, BROWSE_SEARCH_MOST).filter { slug == null || it.platformSlug == slug }
+                RommPage(toGames(found.drop(offset.coerceIn(0, found.size)).take(take)), found.size)
+            }
+            // One system: the page from the mirror, and how many it has from the systems' list.
+            slug != null -> {
+                val total = systems.value.firstOrNull { it.slug == slug }?.games ?: mirror.onPlatform(server, slug).size
+                RommPage(toGames(mirror.onPlatform(server, slug, take, offset.coerceAtLeast(0))), total)
+            }
+            else -> {
+                val all = mirror.all(server)
+                RommPage(toGames(all.drop(offset.coerceIn(0, all.size)).take(take)), all.size)
+            }
+        }
+    }
+
+    override suspend fun artFile(model: Any): String? = (model as? RommArt)?.let { a -> runCatching { rommArtCache?.file(a.server, a.path) }.getOrNull() }
 
     override fun markNewSeen() {
         ctx.scope.launch {
@@ -1246,7 +1329,7 @@ internal class DefaultRommOps(
         }.flowOn(Dispatchers.Default)
     }
 
-    override fun forGame(game: GameId): Flow<RommGameView?> = combine(matches, transfers.items, mirrorRevision) { m, _, _ -> m.entries.firstOrNull { it.value.first == game } }
+    override fun forGame(game: GameId): Flow<RommGameView?> = combine(matches, rommTransferStates, mirrorRevision) { m, _, _ -> m.entries.firstOrNull { it.value.first == game } }
         .mapLatest { e ->
             if (!settings.enabled) return@mapLatest null
             val romId = e?.key ?: ctx.data.games.get(game)?.links?.rommRomId ?: return@mapLatest null
@@ -1301,7 +1384,7 @@ internal class DefaultRommOps(
         return added
     }
 
-    override fun forRom(romId: Long): Flow<RommGameView?> = combine(matches, transfers.items, mirrorRevision) { m, _, _ -> m[romId] }
+    override fun forRom(romId: Long): Flow<RommGameView?> = combine(matches, rommTransferStates, mirrorRevision) { m, _, _ -> m[romId] }
         .mapLatest { v -> view(romId, v?.first, v?.second) }.flowOn(Dispatchers.Default)
 
     private suspend fun view(romId: Long, game: GameId?, reason: MatchReason?): RommGameView? {
@@ -1340,15 +1423,81 @@ internal class DefaultRommOps(
 
     // ------------------------------------------------------------------ downloads
 
-    override suspend fun download(romId: Long, what: RommDownloadWhat): String? = withContext(Dispatchers.Default) {
-        if (!settings.enabled) return@withContext "Turn on RomM in Settings, Addons, RomM."
-        val listed = mirror.withFiles(clientFor(server), server, romId) ?: return@withContext "That game isn't in your RomM library any more."
+    override suspend fun download(romId: Long, what: RommDownloadWhat): String? = queue(romId, what, later = false)
+
+    override suspend fun downloadLater(romId: Long): String? = queue(romId, RommDownloadWhat.Game, later = true)
+
+    override suspend fun batchPlan(romIds: List<Long>): RommBatchPlan = withContext(Dispatchers.Default) {
+        if (!settings.enabled) return@withContext RommBatchPlan()
+        val m = matches.value
+        val pending = transfers.items.value.filter { !it.status.finished && !it.upload }
+        val coming = pending.filter { it.source == ROMM_SOURCE }.mapTo(HashSet()) { it.key }
+        val byId = mirror.roms(server, romIds.distinct()).associateBy { it.id }
+        val wanted = romIds.distinct().mapNotNull { byId[it] }.filter { it.id !in m && keyOf(it.id) !in coming }
+        val volumes = engine.drives.volumes.value
+        // Each system's folder once: a collection is mostly a few systems.
+        val folders = HashMap<String, String?>()
+        val freeAt = HashMap<String?, Long?>()
+        var unplaced = 0
+        val games = wanted.mapNotNull { r ->
+            val folder = folders.getOrPut(r.platformSlug) { ctx.platforms.resolveFolder(r.platformSlug)?.let { p -> systemFolder(p, r)?.first } }
+            if (folder == null) {
+                unplaced++
+                return@mapNotNull null
+            }
+            val drive = TransferPlaces.of(folder, volumes, ctx.now()).volume
+            if (drive?.id !in freeAt) freeAt[drive?.id] = runCatching { ctx.services.fs.freeSpace(folder) }.getOrNull()?.takeIf { it > 0 }
+            RommBatch.Game(r.id, r.sizeBytes, drive?.id, drive?.label ?: "This device")
+        }
+        // What is already on its way to each drive takes its room first.
+        val ahead = pending.groupBy { it.place?.volume?.id }.mapValues { (_, list) -> list.sumOf { ((it.totalBytes ?: 0) - it.doneBytes).coerceAtLeast(0) } }
+        RommBatch.plan(games, freeAt, ahead, unplaced)
+    }
+
+    override suspend fun downloadMany(romIds: List<Long>, later: Boolean): RommBatchResult {
+        var queued = 0
+        var failed = 0
+        var problem: String? = null
+        // A few at a time into the queue, each run written once: Downloads keeps one file of them all.
+        for (chunk in romIds.take(RommBatch.MOST).chunked(BATCH_CHUNK)) {
+            val ready = ArrayList<TransferItem>()
+            for (id in chunk) when (val p = prepare(id, RommDownloadWhat.Game, later)) {
+                is Prepared.Ready -> ready += p.item
+                is Prepared.Refused -> {
+                    failed++
+                    problem = problem ?: p.why
+                }
+            }
+            transfers.enqueueAll(ready)
+            queued += ready.size
+        }
+        return RommBatchResult(queued, failed, problem)
+    }
+
+    private suspend fun queue(romId: Long, what: RommDownloadWhat, later: Boolean): String? = when (val p = prepare(romId, what, later)) {
+        is Prepared.Ready -> {
+            transfers.enqueue(p.item)
+            null
+        }
+        is Prepared.Refused -> p.why
+    }
+
+    /** What a download of [romId] would be, or why there is none. */
+    private sealed interface Prepared {
+        class Ready(val item: TransferItem) : Prepared
+        class Refused(val why: String) : Prepared
+    }
+
+    private suspend fun prepare(romId: Long, what: RommDownloadWhat, later: Boolean): Prepared = withContext(Dispatchers.Default) {
+        fun no(why: String) = Prepared.Refused(why)
+        if (!settings.enabled) return@withContext no("Turn on RomM in Settings, Addons, RomM.")
+        val listed = mirror.withFiles(clientFor(server), server, romId) ?: return@withContext no("That game isn't in your RomM library any more.")
         // RomM didn't list its files (a PS4 package, a folder it hasn't scanned yet): the whole game, by its own name.
         val r = if (listed.files.isNotEmpty() || listed.fsName.isBlank()) listed else listed.copy(
             files = listOf(RommFile(id = 0, name = if (listed.multi && !listed.fsName.endsWith(".zip")) listed.fsName + ".zip" else listed.fsName, sizeBytes = listed.sizeBytes)),
         )
-        if (r.files.isEmpty()) return@withContext "RomM has no file for this game to send."
-        val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@withContext "Fuse doesn't know RomM's system \"${r.platformSlug}\", so it can't tell where this goes."
+        if (r.files.isEmpty()) return@withContext no("RomM has no file for this game to send.")
+        val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@withContext no("Fuse doesn't know RomM's system \"${r.platformSlug}\", so it can't tell where this goes.")
         val game = matches.value[romId]?.first
         val here = game?.let { localNames(it) }.orEmpty()
         val parts = RommContent.parts(r)
@@ -1360,13 +1509,13 @@ internal class DefaultRommOps(
             RommDownloadWhat.Dlc -> r.files.filter { it.kind == ContentKind.DLC }
             is RommDownloadWhat.Files -> r.files.filter { it.id in what.ids }
         }.filter { game == null || it.name.lowercase() !in here || what is RommDownloadWhat.Files }
-        if (files.isEmpty()) return@withContext if (game != null) "Everything of this is already here." else "RomM has no files for this game."
+        if (files.isEmpty()) return@withContext no(if (game != null) "Everything of this is already here." else "RomM has no files for this game.")
         // Where it goes: the game's own folder when Fuse has it, else the system's folder Fuse knows.
         val existing = game?.let { ctx.data.games.get(it) }
         val existingDir = existing?.location?.takeIf { it.kind == LocationKind.FOLDER }?.path
         val folder = existing?.location?.path?.let { if (existingDir != null) FsPath.parent(it) else FsPath.parent(it) }
             ?: systemFolder(platform, r)?.first
-            ?: return@withContext "Choose where games go first: Settings, Addons, RomM, Library."
+            ?: return@withContext no("Choose where games go first: Settings, Addons, RomM, Library.")
         val placement = RommPlacement.layout(r, files, folder, existingDir)
         val newFolder = existingDir == null && placement.gamePath != files.singleOrNull()?.let { placement.files[it.id] } && !fileExists(placement.gamePath)
         val placeRoot = placement.gamePath.takeIf { newFolder || existingDir != null } ?: folder
@@ -1384,7 +1533,7 @@ internal class DefaultRommOps(
             newFolder = newFolder, platform = platform.id.value,
         )
         val drive = TransferPlaces.of(placeRoot, volumes, ctx.now())
-        transfers.enqueue(
+        Prepared.Ready(
             TransferItem(
                 id = "", key = keyOf(r.id) + (if (label.isNotEmpty()) ":" + files.joinToString(",") { it.id.toString() } else ""),
                 source = ROMM_SOURCE, direction = TransferDirection.DOWNLOAD,
@@ -1392,10 +1541,9 @@ internal class DefaultRommOps(
                 title = r.name, detail = label, platform = platform.id.value,
                 art = TransferArt(logo = r.logo?.let { rommArtCache?.modelKey(server, it) }, cover = r.cover?.let { rommArtCache?.modelKey(server, it) }),
                 place = drive, target = "${drive.volume?.label ?: "This device"}  ·  ${shortPath(folder)}",
-                totalBytes = files.sumOf { it.sizeBytes }, payload = job.encode(),
+                totalBytes = files.sumOf { it.sizeBytes }, later = later, payload = job.encode(),
             ),
         )
-        null
     }
 
     private suspend fun fileExists(path: String) = runCatching { ctx.services.fs.stat(path) != null }.getOrDefault(false)
@@ -1627,6 +1775,13 @@ internal class DefaultRommOps(
 
         /** Library games not on RomM shown on the tab's shelf (the rest are counted). */
         private const val NOT_ON_SERVER_SHOWN = 60
+
+        /** Games of a batch put in the queue together. */
+        private const val BATCH_CHUNK = 25
+
+        /** The most games a page for the phone holds, and the most a search there looks through. */
+        private const val BROWSE_MOST = 120
+        private const val BROWSE_SEARCH_MOST = 600
 
         /** How long a burst of art arriving waits before the lists are drawn again. */
         private const val REDRAW_MS = 4_000L

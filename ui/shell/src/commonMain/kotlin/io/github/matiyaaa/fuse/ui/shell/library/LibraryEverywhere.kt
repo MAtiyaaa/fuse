@@ -37,6 +37,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import io.github.matiyaaa.fuse.ui.designsystem.effects.lightEdge
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -68,6 +70,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.SystemTile
+import io.github.matiyaaa.fuse.ui.shell.components.tileSize
 import io.github.matiyaaa.fuse.ui.shell.reach.HouseholdTile
 import io.github.matiyaaa.fuse.ui.shell.reach.holdersText
 import io.github.matiyaaa.fuse.ui.shell.reach.householdMenu
@@ -276,10 +279,10 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
     // Where the games are: this device, RomM, the household's other devices, the computers that
     // stream. Shown as the first row when there is more than one, each opening its whole list.
     val householdState by store.reach.state.collectAsState()
-    val sources = remember(platforms, rommOn, rommState.link, rommSystems, householdState, streamed, streamHosts) {
+    val sources = remember(platforms, rommOn, rommState.link, rommSystems, householdState, streamed, streamHosts, home.recentlyAdded, rommGames, householdRecent) {
         buildList {
             val here = platforms.filter { it.gameCount > 0 }
-            add(SourceCard(SRC_HERE, "This device", FuseIcons.HardDrive, gamesText(here.sumOf { it.gameCount }), if (here.size == 1) "1 system" else "${here.size} systems", live = null))
+            add(SourceCard(SRC_HERE, "This device", FuseIcons.HardDrive, gamesText(here.sumOf { it.gameCount }), if (here.size == 1) "1 system" else "${here.size} systems", live = null, covers = home.recentlyAdded.take(3)))
             // RomM once it is turned on and set up; turned off, it has no card.
             if (rommOn && rommState.link != RommLink.OFF) {
                 val (detail, live) = when (rommState.link) {
@@ -289,15 +292,15 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
                     RommLink.SIGNED_OUT -> "Sign in again in Settings" to false
                     else -> "Off" to false
                 }
-                add(SourceCard(SRC_ROMM, "RomM", FuseIcons.Cloud, gamesText(rommSystems.sumOf { it.games }), detail, live))
+                add(SourceCard(SRC_ROMM, "RomM", FuseIcons.Cloud, gamesText(rommSystems.sumOf { it.games }), detail, live, covers = rommGames.take(3).map { it.card }))
             }
             if (householdState.linked && householdState.devices.isNotEmpty()) {
                 val on = householdState.devices.count { it.online }
-                add(SourceCard(SRC_DEVICES, "Other devices", FuseIcons.MonitorSmartphone, gamesText(householdState.games), "$on of ${householdState.devices.size} on now", live = on > 0))
+                add(SourceCard(SRC_DEVICES, "Other devices", FuseIcons.MonitorSmartphone, gamesText(householdState.games), "$on of ${householdState.devices.size} on now", live = on > 0, covers = householdRecent.take(3).map { it.card }))
             }
             if (streamed.isNotEmpty()) {
                 val on = streamHosts.count { it.online == true }
-                add(SourceCard(SRC_STREAM, "Your computers", FuseIcons.Cast, if (streamed.size == 1) "1 app" else "${streamed.size} apps", if (streamHosts.size == 1) "1 computer streams" else "${streamHosts.size} computers stream", live = on > 0))
+                add(SourceCard(SRC_STREAM, "Your computers", FuseIcons.Cast, if (streamed.size == 1) "1 app" else "${streamed.size} apps", if (streamHosts.size == 1) "1 computer streams" else "${streamHosts.size} computers stream", live = on > 0, covers = streamed.take(3).map { it.card }))
             }
         }
     }
@@ -523,6 +526,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
             AllStage(
                 chosen, chosenSystem, chosenSource,
                 seeAllOf = if (row != null && chosen == null && chosenSystem == null && chosenSource == null) shelfName(row) else null,
+                seeAllGames = if (row != null && chosen == null) gamesOf(row).map { it.card } else emptyList(),
                 onPrimary = { row?.let { activate(it, col) } },
                 onOptions = chosen?.takeIf { it !is EverywhereGame.Streamed || it.app.hosts.size > 1 }?.let { c -> { options(c) } },
                 primaryLabel = when (chosen) {
@@ -598,7 +602,33 @@ private fun shelfIcon(key: String): ImageVector = when (key) {
 
 /** A place games are, for the row of them at the top of All. [live] is whether it answers now, when that means anything. */
 @Immutable
-internal data class SourceCard(val key: String, val title: String, val icon: ImageVector, val count: String, val detail: String, val live: Boolean?)
+internal data class SourceCard(
+    val key: String,
+    val title: String,
+    val icon: ImageVector,
+    val count: String,
+    val detail: String,
+    val live: Boolean?,
+    /** A few of the place's games, fanned on its card as a collection's are. */
+    val covers: List<GameCard> = emptyList(),
+)
+
+/**
+ * Each place's own colour, so the four read apart at a glance and the same everywhere they appear:
+ * this device in the theme's accent, RomM in violet, the household in teal, the computers that
+ * stream in the blue Moonlight's tile has.
+ */
+@Composable
+private fun placeTint(key: String): androidx.compose.ui.graphics.Color = when (key) {
+    SRC_HERE -> Fuse.colors.accent
+    SRC_ROMM -> ROMM_TINT
+    SRC_DEVICES -> DEVICES_TINT
+    else -> STREAM_TINT
+}
+
+private val ROMM_TINT = androidx.compose.ui.graphics.Color(0xFF8B6CF6)
+private val DEVICES_TINT = androidx.compose.ui.graphics.Color(0xFF1FB5A3)
+private val STREAM_TINT = androidx.compose.ui.graphics.Color(0xFF5B8DEF)
 
 private const val SRC_HERE = "here"
 private const val SRC_ROMM = "romm"
@@ -683,39 +713,70 @@ private fun SourcesBand(sources: List<SourceCard>, selected: Int, width: Dp, onO
     }
 }
 
+/**
+ * A place games are, as a card made of its own games: a few of them fanned at its right over their
+ * art (or the place's colour where there is none), and on the left its mark in the place's colour,
+ * its name, how many games it holds and whether it answers now. Never a flat panel: what a place
+ * holds is what it looks like.
+ */
 @Composable
 private fun SourceTile(s: SourceCard, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
-    val here = s.key == SRC_HERE
+    val tint = placeTint(s.key)
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(io.github.matiyaaa.fuse.ui.designsystem.theme.Radius.l)
     Tile(
         selected,
         modifier.height(SOURCE_H),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(io.github.matiyaaa.fuse.ui.designsystem.theme.Radius.l),
+        shape = shape,
         cornerFraction = 0.12f,
+        glow = tint,
         onClick = onClick,
         maxGrow = Space.s,
         label = "${s.title}, ${s.count}, ${s.detail}",
     ) {
+        io.github.matiyaaa.fuse.ui.shell.components.CoverCollage(
+            s.covers, SOURCE_H, fanAt = Alignment.BottomEnd, tint = tint, coverShare = SOURCE_COVER,
+            // The place's colour rising from the left, where its words sit, fading before the fan.
+            under = {
+                Box(
+                    Modifier.fillMaxSize().background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            0f to androidx.compose.ui.graphics.lerp(io.github.matiyaaa.fuse.ui.shell.components.ART_NIGHT, tint, 0.3f).copy(alpha = 0.94f),
+                            0.55f to androidx.compose.ui.graphics.lerp(io.github.matiyaaa.fuse.ui.shell.components.ART_NIGHT, tint, 0.2f).copy(alpha = 0.5f),
+                            1f to androidx.compose.ui.graphics.Color.Transparent,
+                        ),
+                    ),
+                )
+            },
+        )
+        if (s.covers.isEmpty()) {
+            // Nothing to fan yet (a place still answering): its mark, large and quiet, where the covers would be.
+            FuseIcon(s.icon, size = SOURCE_H * 0.62f, tint = tint.copy(alpha = 0.32f), modifier = Modifier.align(Alignment.CenterEnd).padding(end = Space.l))
+        }
         Row(
-            Modifier.fillMaxSize().background(c.surface).padding(horizontal = Space.l),
+            Modifier.fillMaxSize().padding(horizontal = Space.l),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                Modifier.size(Size.touch).clip(CircleShape).background(if (here) c.accentSoft else c.text.copy(alpha = if (c.isDark) 0.08f else 0.06f)),
+                Modifier
+                    .size(Size.touch)
+                    .clip(CircleShape)
+                    .background(tint.copy(alpha = 0.3f))
+                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.16f), androidx.compose.ui.graphics.Color.Transparent))),
                 contentAlignment = Alignment.Center,
             ) {
-                FuseIcon(s.icon, size = Size.iconL, tint = if (here) c.accent else c.text)
+                FuseIcon(s.icon, size = Size.iconL, tint = c.onArt)
             }
             Spacer(Modifier.width(Space.m))
             Column(Modifier.weight(1f)) {
-                FText(s.title, Fuse.type.label, color = c.textMuted, maxLines = 1)
-                FText(s.count, Fuse.type.titleSmall, maxLines = 1)
+                FText(s.title, Fuse.type.label, color = c.onArtMuted, maxLines = 1)
+                FText(s.count, Fuse.type.titleSmall, color = c.onArt, maxLines = 1)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (s.live != null) {
-                        Box(Modifier.size(STATUS_DOT).clip(CircleShape).background(if (s.live) c.success else c.textFaint))
+                        Box(Modifier.size(STATUS_DOT).clip(CircleShape).background(if (s.live) c.success else c.onArtMuted.copy(alpha = 0.5f)))
                         Spacer(Modifier.width(Space.xs))
                     }
-                    FText(s.detail, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                    FText(s.detail, Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
                 }
             }
         }
@@ -761,7 +822,7 @@ private fun EverywhereShelf(
                         is EverywhereGame.Streamed -> GameIconTile(g.card, selected == i, m, size = tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
                     }
                 }
-                item("seeall") { SeeAllTile(selected == games.size, tile, Modifier.mouseHover { onPoint(games.size) }, onSeeAll) }
+                item("seeall") { SeeAllTile(games.map { it.card }, if (games.size == 1) "1 $noun" else "${games.size} ${noun}s", selected == games.size, tile, Modifier.mouseHover { onPoint(games.size) }, onSeeAll) }
             }
         }
         if (!named) return@Column
@@ -839,19 +900,31 @@ private fun MouseScrolledRow(state: androidx.compose.foundation.lazy.LazyListSta
     }
 }
 
-/** The tile that ends a shelf: an arrow into the shelf's whole list. */
+/**
+ * The tile that ends a shelf, into its whole list: the shelf's own games fanned as a collection's
+ * are, "See all" and how many over them, and an arrow in a glass disc. The shelf's games are what
+ * it opens, so they are what it shows.
+ */
 @Composable
-private fun SeeAllTile(selected: Boolean, size: Dp, modifier: Modifier, onClick: () -> Unit) {
+private fun SeeAllTile(games: List<GameCard>, count: String, selected: Boolean, size: Dp, modifier: Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
-    Tile(selected, modifier.size(size).semantics { contentDescription = "See all" }, onClick = onClick) {
-        Box(Modifier.fillMaxSize().background(c.surface), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size(Size.touch).clip(CircleShape).background(c.text.copy(alpha = if (c.isDark) 0.1f else 0.06f)), contentAlignment = Alignment.Center) {
-                    FuseIcon(FuseIcons.ChevronRight, size = Size.iconM, tint = c.text)
-                }
-                Spacer(Modifier.height(Space.s))
-                FText("See all", Fuse.type.label, color = c.textMuted, maxLines = 1)
-            }
+    val dims = with(io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt.current) { tileSize(size) }
+    Tile(selected, modifier.size(dims).semantics { contentDescription = "See all, $count" }, onClick = onClick, label = "See all, $count") {
+        io.github.matiyaaa.fuse.ui.shell.components.CoverCollage(games, dims.height, coverShare = SEE_ALL_COVER)
+        Column(Modifier.align(Alignment.TopStart).padding(Space.m)) {
+            FText("See all", Fuse.type.bodyStrong, color = c.onArt, maxLines = 1)
+            FText(count, Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
+        }
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(Space.s)
+                .size(SEE_ALL_DISC)
+                .clip(CircleShape)
+                .background(androidx.compose.ui.graphics.Color.White.copy(alpha = if (selected) 0.28f else 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            FuseIcon(FuseIcons.ChevronRight, size = Size.iconS, tint = c.onArt)
         }
     }
 }
@@ -900,6 +973,7 @@ private fun AllStage(
     system: EverywhereSystem?,
     source: SourceCard?,
     seeAllOf: String?,
+    seeAllGames: List<GameCard>,
     onPrimary: () -> Unit,
     onOptions: (() -> Unit)?,
     primaryLabel: String,
@@ -920,12 +994,27 @@ private fun AllStage(
             label = "allStage",
         ) { _ ->
             Row(verticalAlignment = Alignment.Bottom) {
-                val shape = androidx.compose.foundation.shape.RoundedCornerShape(io.github.matiyaaa.fuse.ui.designsystem.theme.Radius.l)
-                when {
-                    chosen != null -> io.github.matiyaaa.fuse.ui.shell.components.GameThumb(chosen.card.art, thumb, shape, fallback = { MarkBox(FuseIcons.Gamepad, thumb) })
-                    system != null -> MarkBox(FuseIcons.Chip, thumb, system.card.platform.accent.toColor(), system.card.platform.shortName)
-                    source != null -> MarkBox(source.icon, thumb)
-                    else -> MarkBox(FuseIcons.ChevronsRight, thumb)
+                val corner = Fuse.geometry.tileCornerFraction
+                val shape = remember(corner) { io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape.fraction(corner) }
+                // What is chosen, as the object it is on its shelf, a little larger: the game's art
+                // (or the art its tile makes for it), the system's card, a place's games.
+                StageObject(shape) {
+                    when {
+                        chosen != null -> io.github.matiyaaa.fuse.ui.shell.components.GameThumb(chosen.card.art, thumb, shape, fallback = {
+                            io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt(
+                                chosen.card.title, chosen.card.accent.toColor(),
+                                slot = io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot.ICON, label = chosen.card.platformShort,
+                            )
+                        })
+                        system != null -> Box(Modifier.size(thumb).clip(shape)) { io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt(system.card) }
+                        source != null -> Box(Modifier.size(thumb).clip(shape)) {
+                            io.github.matiyaaa.fuse.ui.shell.components.CoverCollage(source.covers, thumb, tint = placeTint(source.key))
+                            if (source.covers.isEmpty()) FuseIcon(source.icon, size = thumb * 0.4f, tint = c.onArt, modifier = Modifier.align(Alignment.Center))
+                        }
+                        else -> Box(Modifier.size(thumb).clip(shape)) {
+                            io.github.matiyaaa.fuse.ui.shell.components.CoverCollage(seeAllGames, thumb)
+                        }
+                    }
                 }
                 Spacer(Modifier.width(Space.l))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.Bottom) {
@@ -975,17 +1064,25 @@ private fun AllStage(
     }
 }
 
-/** A square mark for what has no art of its own: an icon, or a system's short name, on a soft fill. */
+/**
+ * The stage's picture as an object standing over the room: the tiles' contact shadow at the raised
+ * level and their light edge along its top, so it reads as the chosen tile brought forward rather
+ * than a picture pasted on the page.
+ */
 @Composable
-private fun MarkBox(icon: ImageVector, size: Dp, tint: androidx.compose.ui.graphics.Color? = null, words: String? = null) {
-    val c = Fuse.colors
-    val fill = tint?.copy(alpha = 0.22f) ?: c.text.copy(alpha = if (c.isDark) 0.08f else 0.06f)
+private fun StageObject(shape: androidx.compose.ui.graphics.Shape, content: @Composable () -> Unit) {
+    val shadow = Fuse.colors.shadow
     Box(
-        Modifier.size(size).clip(androidx.compose.foundation.shape.RoundedCornerShape(io.github.matiyaaa.fuse.ui.designsystem.theme.Radius.l)).background(c.surface).background(fill),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (words != null) FText(words, Fuse.type.title, maxLines = 1) else FuseIcon(icon, size = size * 0.36f, tint = tint ?: c.text)
-    }
+        Modifier
+            .graphicsLayer {
+                shadowElevation = io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation.raised.shadow.toPx()
+                spotShadowColor = shadow
+                ambientShadowColor = shadow.copy(alpha = shadow.alpha * 0.5f)
+                this.shape = shape
+                clip = true
+            }
+            .lightEdge(shape, io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation.tile.edge),
+    ) { content() }
 }
 
 /** Where a game is, as a small chip: its icon and a word or two, in the accent when it is here. */
@@ -1030,10 +1127,15 @@ private val STAGE_THUMB_MAX = 196.dp
 /** The stage's buttons: a step under the standard height, so they sit with its words. */
 private val STAGE_BUTTON = 40.dp
 
-/** A source card's size. */
-private val SOURCE_H = 88.dp
-private val SOURCE_MIN_W = 220.dp
-private val SOURCE_MAX_W = 340.dp
+/** A place's card: its height, the share of it its covers stand, and its width's bounds. */
+private val SOURCE_H = 112.dp
+private const val SOURCE_COVER = 0.74f
+private val SOURCE_MIN_W = 240.dp
+private val SOURCE_MAX_W = 400.dp
+
+/** The covers at the end of a shelf, as a share of its height, and the arrow's disc. */
+private const val SEE_ALL_COVER = 0.52f
+private val SEE_ALL_DISC = 28.dp
 
 /** The dot saying whether a source answers now. */
 private val STATUS_DOT = 8.dp

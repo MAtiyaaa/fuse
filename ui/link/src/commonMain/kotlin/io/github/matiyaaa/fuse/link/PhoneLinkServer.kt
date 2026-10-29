@@ -283,6 +283,19 @@ class PhoneLinkServer(
                 }
             }
             get("/api/games/{id}") { call.signedIn(ExtensionScope.LIBRARY) { call.reply(api.game(call.gameId())) } }
+            get("/api/romm") {
+                call.signedIn(ExtensionScope.LIBRARY) {
+                    val q = call.request.queryParameters
+                    call.json(api.romm(q["system"].orEmpty(), q["query"].orEmpty(), q["offset"]?.toIntOrNull() ?: 0, q["limit"]?.toIntOrNull() ?: 60))
+                }
+            }
+            post("/api/romm/{romId}/download") {
+                call.signedIn(ExtensionScope.CHANGE_LIBRARY) {
+                    val romId = call.parameters["romId"]?.toLongOrNull()
+                    if (romId == null) call.json(buildJsonObject { put("error", "No such game on RomM.") }, HttpStatusCode.NotFound)
+                    else call.reply(api.rommDownload(romId, call.body()))
+                }
+            }
             put("/api/games/{id}/search-as") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.searchAs(call.gameId(), call.body())) } }
             get("/api/games/{id}/identify") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.identify(call.gameId())) } }
             post("/api/games/{id}/identify") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.accept(call.gameId(), call.body())) } }
@@ -294,6 +307,9 @@ class PhoneLinkServer(
             post("/api/system-art") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.systemArt()) } }
             post("/api/games/{id}/open") { call.signedIn(ExtensionScope.PLAY) { call.reply(api.openOnDevice(call.gameId())) } }
             put("/api/games/{id}/favorite") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.setFavorite(call.gameId(), call.body())) } }
+            put("/api/games/{id}/journal") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.setJournal(call.gameId(), call.body())) } }
+            get("/api/games/{id}/achievements") { call.signedIn(ExtensionScope.LIBRARY) { call.reply(api.achievements(call.gameId())) } }
+            post("/api/playing/quit") { call.signedIn(ExtensionScope.PLAY) { call.reply(api.quitPlaying()) } }
             post("/api/rescan") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.rescan()) } }
             post("/api/transfers/pause") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.pauseTransfers(true)) } }
             post("/api/transfers/resume") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.pauseTransfers(false)) } }

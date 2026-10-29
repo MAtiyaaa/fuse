@@ -99,6 +99,12 @@ interface FuseServices {
      */
     val online: StateFlow<Boolean> get() = io.github.matiyaaa.fuse.sync.Awake.always
 
+    /**
+     * Which app is in front, where the system says once the person allows it (Android's Usage
+     * access): play time then counts only the time the game was on screen. Null where there is none.
+     */
+    val usage: AppUsage? get() = null
+
     /** lsfg-vk is set up here (Linux, its configuration file there), so games can have frame generation. */
     fun frameGenerationReady(): Boolean = false
 
@@ -191,6 +197,14 @@ interface FuseServices {
      * could not be written (the folder can't be written to, or the name is taken).
      */
     suspend fun writeBeside(beside: String, name: String, bytes: ByteArray): String? = null
+
+    /**
+     * Copies the file at [from] as a new file named [name] in its folder, with [edits] written into
+     * the copy in their order: a patched copy of a disc image too large to hold in memory. Made under
+     * a temporary name and moved into place like [writeBeside], never over a file that is there.
+     * Returns its path, or null when it could not be made.
+     */
+    suspend fun copyBeside(from: String, name: String, edits: List<io.github.matiyaaa.fuse.library.patch.FileEdit>): String? = null
 
     /** Where the Store puts programs on a computer; null on Android (which has [packages]) and in tests. */
     val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller? get() = null
@@ -390,6 +404,15 @@ interface GameLauncher {
 
     /** The display to use for "Open games on the second screen", or null when there is none. */
     fun secondaryDisplayId(): Int? = null
+
+    /** Whether [quitGame] can ask a game to close here (never by force). */
+    val canQuit: Boolean get() = false
+
+    /**
+     * Asks the game Fuse started, and what it started, to close as closing its window would, so
+     * whatever it saves on the way out is saved; never forced. False when no game of Fuse's runs.
+     */
+    suspend fun quitGame(): Boolean = false
 }
 
 /** Talks to Cartridge: status provider or status file, and deep links. */

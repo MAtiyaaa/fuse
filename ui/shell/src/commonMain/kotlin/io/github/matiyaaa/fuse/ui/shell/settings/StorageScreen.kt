@@ -157,8 +157,10 @@ fun StorageScreen(app: AppState) {
         system = if (id == null || id == system) null else id
         sel.index = 0
     }
+    // Make Room: the games that can go, picked here for the person to look over before deleting.
+    val makeRoom = { makeRoomSheet(app) { ids -> picked = picked + ids } }
     val rows = remember(u, system, picked, canDelete, platforms, wideLayout, bare, drive, volumes, footprint, cacheBytes) {
-        ownRows(usesFuseOne, footprint, cacheBytes) + storageRows(
+        roomRows(canDelete && u?.finished == true, makeRoom) + ownRows(usesFuseOne, footprint, cacheBytes) + storageRows(
             app, u, system, picked, canDelete, wide = wideLayout, drives = volumes, drive = drive, bare = bare,
             onPick = { id -> picked = if (id in picked) picked - id else picked + id },
             onPickAll = { ids -> picked = if (ids.isNotEmpty() && picked.containsAll(ids)) picked - ids else picked + ids },
@@ -536,6 +538,60 @@ private fun storageRows(
                 onSelect = { onPick(g.card.id) },
             ))
         }
+    }
+}
+
+/** Make Room's row, once every game is measured and deleting is allowed here. */
+private fun roomRows(offered: Boolean, open: () -> Unit): List<MenuAction> = if (!offered) emptyList() else listOf(
+    MenuAction(
+        "room", "Make room", FuseIcons.Sparkles,
+        detail = "Games that come back in a press: an identical copy is on RomM or another device, and you haven't played them in three months",
+        trailing = Trailing.Chevron, section = "Make room", onSelect = open,
+    ),
+)
+
+/**
+ * The games that can go ([io.github.matiyaaa.fuse.ui.shell.store.StorageOps.roomToMake]), largest
+ * first, each with where its copy is kept; picking them ([onPick]) leaves them chosen in the list,
+ * for the person to look over and delete from the bar as with any game.
+ */
+private fun makeRoomSheet(app: AppState, onPick: (Set<GameId>) -> Unit) {
+    app.scope.launch {
+        val found = runCatching { app.store.storage.roomToMake() }.getOrDefault(emptyList())
+        if (found.isEmpty()) {
+            app.toasts.show("Nothing to suggest. Every game here is a favourite, played lately, or kept nowhere else")
+            return@launch
+        }
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        fun pick(ids: Set<GameId>, bytes: Long) {
+            onPick(ids)
+            app.choice = null
+            app.toasts.show("${if (ids.size == 1) "1 game" else "${ids.size} games"} picked, ${bytesText(bytes)}. Look them over, then Delete")
+        }
+        val total = found.sumOf { it.game.bytes }
+        app.choice = ChoiceSpec(
+            title = "Make room",
+            icon = FuseIcons.Sparkles,
+            message = "Each comes back in a press from where its identical copy is kept. Saves your emulators keep stay.",
+            options = listOf(
+                MenuAction(
+                    "all", "Pick all ${found.size}", FuseIcons.CheckCheck, detail = "${bytesText(total)} to free",
+                    onSelect = { pick(found.map { it.game.card.id }.toSet(), total) },
+                ),
+            ) + found.map { s ->
+                val g = s.game.card
+                MenuAction(
+                    "g${g.id.value}", g.title, null,
+                    detail = listOf(
+                        "On ${s.keptOn}",
+                        s.lastPlayedAt?.let { "played ${((now - it) / (30L * 24 * 60 * 60 * 1000)).coerceAtLeast(3)} months ago" } ?: "never played",
+                    ).joinToString("  ·  "),
+                    trailing = Trailing.Value(bytesText(s.game.bytes)),
+                    art = io.github.matiyaaa.fuse.ui.shell.components.gameMenuArt(g.art, g.title, g.accent, app.store.prefs.value.gameArt),
+                    onSelect = { pick(setOf(g.id), s.game.bytes) },
+                )
+            },
+        )
     }
 }
 

@@ -30,6 +30,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.AchievementsFeed
 import io.github.matiyaaa.fuse.ui.shell.store.LocalGameAchievements
 import io.github.matiyaaa.fuse.ui.shell.store.PlayUnlocks
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -692,6 +694,77 @@ internal class DefaultAchievementOps(
         }
     }
 
+    override suspend fun week(): io.github.matiyaaa.fuse.ui.shell.store.WeekAchievement? {
+        val client = client() ?: return null
+        val w = fetch(KEY_WEEK, io.github.matiyaaa.fuse.integrations.retroachievements.RaAchievementOfTheWeek.serializer(), WEEK_TTL, force = false) { client.achievementOfTheWeek() }
+            ?: return null
+        val raGame = w.game.id.takeIf { it > 0 } ?: return null
+        // The set, for its badge and whether the person has it (cached as the game page's is).
+        val set = fetch("$KEY_GAME$raGame", AchievementState.serializer(), RaCachePolicy.GAME_PROGRESS, force = false) { client.gameProgress(raGame) }
+        val a = set?.achievements?.firstOrNull { it.id == w.achievement.id }
+        val local = runCatching { ctx.data.games.idsForRetroAchievements(listOf(raGame))[raGame]?.firstOrNull() }.getOrNull()
+        return io.github.matiyaaa.fuse.ui.shell.store.WeekAchievement(
+            title = w.achievement.title,
+            description = w.achievement.description,
+            points = w.achievement.points,
+            game = w.game.title,
+            console = w.console.title,
+            badgeUrl = a?.let { if (it.earned) it.badgeUrl else it.badgeLockedUrl },
+            gameIconUrl = set?.iconUrl,
+            unlocks = w.unlocksCount,
+            players = w.totalPlayers,
+            earned = a?.earned == true,
+            localGame = local,
+        )
+    }
+
+    override suspend fun following(): List<io.github.matiyaaa.fuse.ui.shell.store.FollowedPlayer> {
+        val client = client() ?: return emptyList()
+        val page = fetch(KEY_FOLLOWING, io.github.matiyaaa.fuse.integrations.retroachievements.RaFollowing.serializer(), FOLLOWING_TTL, force = false) {
+            client.following(count = FOLLOWED_SHOWN)
+        } ?: return emptyList()
+        // What each is playing, from their summary: a few at most, one request each, each cached.
+        return page.results.take(FOLLOWED_SHOWN).map { f ->
+            val summary = fetch("$KEY_FOLLOWED${f.user.lowercase()}", io.github.matiyaaa.fuse.integrations.retroachievements.RaUserSummary.serializer(), FOLLOWING_TTL, force = false) {
+                client.userSummary(f.ulid ?: f.user, recentGames = 1, recentAchievements = 0)
+            }
+            io.github.matiyaaa.fuse.ui.shell.store.FollowedPlayer(
+                name = f.user,
+                points = f.points,
+                followsYou = f.followsMe,
+                avatarUrl = "$MEDIA/UserPic/${f.user}.png",
+                game = summary?.recentlyPlayed?.firstOrNull()?.title?.takeIf { it.isNotBlank() },
+                presence = summary?.richPresenceMsg?.takeIf { it.isNotBlank() && !it.startsWith("Unknown") },
+            )
+        }
+    }
+
+    override suspend fun leaderboards(game: GameId): List<io.github.matiyaaa.fuse.ui.shell.store.GameLeaderboard>? {
+        val client = client() ?: return null
+        val raId = ctx.data.games.get(game)?.links?.retroAchievementsGameId ?: return null
+        val serializer = io.github.matiyaaa.fuse.integrations.retroachievements.RaLeaderboards.serializer()
+        val all = fetch("$KEY_BOARDS$raId", serializer, FOLLOWING_TTL, force = false) { client.gameLeaderboards(raId) } ?: return null
+        val mine = fetch("$KEY_MY_BOARDS$raId", serializer, FOLLOWING_TTL, force = false) { client.myLeaderboards(raId) }
+            ?.results.orEmpty().associateBy { it.id }
+        return all.results.map { b ->
+            val m = mine[b.id]?.mine
+            io.github.matiyaaa.fuse.ui.shell.store.GameLeaderboard(b.title, b.description, b.top?.user, b.top?.formattedScore, m?.formattedScore, m?.rank)
+        }.sortedBy { it.myRank == null }
+    }
+
+    /**
+     * The person's Want to Play list on RetroAchievements, with their name there, for moving in
+     * ([MoveInWork]): null when no account is set up or RetroAchievements isn't answering.
+     */
+    internal suspend fun wantToPlay(): Pair<String, List<io.github.matiyaaa.fuse.integrations.retroachievements.RaWanted>>? {
+        val client = client() ?: return null
+        val user = account()?.first ?: return null
+        val list = fetch(KEY_WANT, kotlinx.serialization.builtins.ListSerializer(io.github.matiyaaa.fuse.integrations.retroachievements.RaWanted.serializer()), FOLLOWING_TTL, force = false) {
+            client.allWantToPlay()
+        } ?: return null
+        return user to list
+    }
+
     /** Cached value regardless of age (shown while offline or rate limited). */
     private suspend fun <T> cachedAny(key: String, serializer: KSerializer<T>): T? =
         runCatching { cache.get(userNs(), key, serializer, now = 0L) }.getOrNull()
@@ -738,6 +811,21 @@ internal class DefaultAchievementOps(
         /** A game nothing was found for, so it isn't hashed again on every visit. */
         const val KEY_MISS = "miss:"
         const val KEY_RARITY = "steam-rarity:"
+        /** The achievement of the week, asked at most every few hours (it changes on Mondays). */
+        const val KEY_WEEK = "week"
+        val WEEK_TTL: Duration = 6.hours
+        /** The people the person follows, and each one's summary, asked at most every few minutes. */
+        const val KEY_FOLLOWING = "following"
+        const val KEY_FOLLOWED = "followed:"
+        /** A game's leaderboards, and the person's own scores on them. */
+        const val KEY_BOARDS = "boards:"
+        const val KEY_MY_BOARDS = "myboards:"
+        /** The person's Want to Play list, for moving in. */
+        const val KEY_WANT = "wanttoplay"
+        val FOLLOWING_TTL: Duration = 15.minutes
+        /** How many of them are shown, so a long list asks no more than this many summaries. */
+        const val FOLLOWED_SHOWN = 8
+        const val MEDIA = io.github.matiyaaa.fuse.integrations.retroachievements.RaMedia.BASE
         const val RARITY_TTL_MS = 24 * 60 * 60 * 1000L
         const val MISS_TTL_MS = 24L * 60 * 60 * 1000
 

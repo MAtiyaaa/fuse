@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -207,11 +209,17 @@ internal fun MediaLibraryScreen(app: AppState, id: String, name: String, kind: S
         // The chosen row glides to a steady place as you move (held or pushed once), like the Library.
         val fade = with(LocalDensity.current) { Space.xl.roundToPx() }
         FollowSelection(grid, { if (page.top) 0 else page.index + 1 }, anchor = 0.12f, insetPx = fade, relayout = columns)
+        // The chosen title told whole above the grid, as the Library tells a game: moving through the
+        // posters shows each one's name, facts and story without opening it. A phone held upright
+        // gives its height to the posters.
+        val staged = maxWidth >= 600.dp && maxHeight >= 420.dp
+        Column(Modifier.fillMaxSize().padding(top = Size.hudHeight)) {
+        if (staged) MediaStage(current.takeIf { !page.top && focused }, compact, Modifier.padding(horizontal = Space.gutter, vertical = Space.s))
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = grid,
             // Below the top line, so the grid never scrolls under it.
-            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (grid.canScrollBackward) Space.xl else 0.dp).dragScroll(grid),
+            modifier = Modifier.weight(1f).fillMaxWidth().fadingEdges(top = if (grid.canScrollBackward) Space.xl else 0.dp).dragScroll(grid),
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.xl),
             horizontalArrangement = Arrangement.spacedBy(Space.l),
             verticalArrangement = Arrangement.spacedBy(Space.l),
@@ -256,5 +264,70 @@ internal fun MediaLibraryScreen(app: AppState, id: String, name: String, kind: S
                 }
             }
         }
+        }
     }
 }
+
+/**
+ * The chosen title above a library's grid: its logo (or name), a line of facts (year, length, age
+ * rating, the server's score, genres) and the start of its story. On a short screen it is one line,
+ * the name and its facts, so every poster below still shows whole with its title. It keeps one
+ * height whatever it shows, so the grid under it never moves; with nothing chosen it holds its place.
+ */
+@Composable
+private fun MediaStage(item: MediaItem?, compact: Boolean, modifier: Modifier) {
+    val c = Fuse.colors
+    val height = if (compact) STAGE_COMPACT else STAGE_TALL
+    io.github.matiyaaa.fuse.ui.fuseline.Crossfade(item, modifier.fillMaxWidth().height(height), animationSpec = Fuse.motion.fade(), label = "mediaStage") { it ->
+        val m = it ?: return@Crossfade
+        val facts = stageFacts(m)
+        val rating: @Composable () -> Unit = { StageRating(m) }
+        if (compact) {
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                FText(m.name, Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                rating()
+                if (facts.isNotEmpty()) FText(facts, Fuse.type.label, color = c.text.copy(alpha = 0.86f), maxLines = 1)
+            }
+            return@Crossfade
+        }
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Space.xs, Alignment.Bottom)) {
+            val name: @Composable () -> Unit = { FText(m.name, Fuse.type.title, maxLines = 1) }
+            val logo = m.logo
+            if (logo != null) {
+                io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(
+                    logo.at(640), Modifier.height(64.dp).fillMaxWidth(0.4f),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit, focusX = 0f, focusY = 1f, fallback = name,
+                )
+            } else {
+                name()
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                rating()
+                FText(facts, Fuse.type.label, color = c.text.copy(alpha = 0.86f), maxLines = 1)
+            }
+            m.overview?.let { FText(it, Fuse.type.body, color = c.textMuted, maxLines = 2, modifier = Modifier.widthIn(max = 760.dp)) }
+        }
+    }
+}
+
+/** A title's facts in one line: its years, its length, its age rating, two genres, and what is left of it. */
+internal fun stageFacts(m: MediaItem): String = listOfNotNull(
+    m.year?.let { y -> if (m.endYear != null && m.endYear != y) "$y to ${m.endYear}" else "$y" },
+    m.runtimeMs?.let { minutes(it) },
+    m.officialRating,
+    m.genres.take(2).joinToString(", ").ifEmpty { null },
+    m.leftMs?.takeIf { m.resumeMs > 0 }?.let { "${minutes(it)} left" },
+).joinToString("  \u00B7  ")
+
+/** The server's score for a title, after a gold star; nothing where it has none. */
+@Composable
+internal fun StageRating(m: MediaItem) {
+    val r = m.rating ?: return
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+        FuseIcon(FuseIcons.Star, size = 14.dp, tint = androidx.compose.ui.graphics.Color(0xFFFFC857))
+        FText(((r * 10).toInt() / 10.0).toString(), Fuse.type.label.tabular(), maxLines = 1)
+    }
+}
+
+private val STAGE_TALL = 156.dp
+private val STAGE_COMPACT = 36.dp

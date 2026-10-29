@@ -13,6 +13,9 @@ enum class PatchFormat(val label: String) {
 
     /** VCDIFF (RFC 3284) as xdelta3 writes it: copies and adds, with an Adler-32 of each part of the result. */
     XDELTA("xdelta"),
+
+    /** PlayStation Patch Format ([Ppf]): records of offset and bytes, some with a piece of the disc and what each record replaces. */
+    PPF("PPF"),
 }
 
 /** What applying a patch to a game came to. */
@@ -39,7 +42,7 @@ sealed interface PatchOutcome {
 }
 
 /**
- * Applies IPS, UPS and BPS patches to a game's bytes, never to its file: the original stays as it
+ * Applies IPS, UPS, BPS, xdelta and PPF patches to a game's bytes, never to its file: the original stays as it
  * is, and the result is the caller's to keep as a copy. UPS and BPS are checked against the CRC32
  * of the game they were made for and of the result they make, and their own; a patch for another
  * version of the game is refused rather than producing a broken copy.
@@ -51,11 +54,12 @@ object RomPatches {
         patch.startsWith("UPS1") -> PatchFormat.UPS
         patch.startsWith("BPS1") -> PatchFormat.BPS
         Vcdiff.isVcdiff(patch) -> PatchFormat.XDELTA
+        Ppf.isPpf(patch) -> PatchFormat.PPF
         else -> null
     }
 
     /** File extensions of patches Fuse applies. */
-    val EXTENSIONS = setOf("ips", "ups", "bps", "xdelta", "vcdiff")
+    val EXTENSIONS = setOf("ips", "ups", "bps", "xdelta", "vcdiff", "ppf")
 
     fun apply(source: ByteArray, patch: ByteArray): PatchOutcome = try {
         when (formatOf(patch)) {
@@ -63,7 +67,8 @@ object RomPatches {
             PatchFormat.UPS -> checkedWithHeader(source) { ups(it, patch) }
             PatchFormat.BPS -> checkedWithHeader(source) { bps(it, patch) }
             PatchFormat.XDELTA -> xdelta(source, patch)
-            null -> PatchOutcome.Unreadable("This isn't an IPS, UPS, BPS or xdelta patch.")
+            PatchFormat.PPF -> ppf(source, patch)
+            null -> PatchOutcome.Unreadable("This isn't an IPS, UPS, BPS, xdelta or PPF patch.")
         }
     } catch (e: Damaged) {
         PatchOutcome.Unreadable(e.message ?: "The patch is damaged.")
@@ -95,6 +100,26 @@ object RomPatches {
         val first = run(source, headerRemoved = false)
         if (first !is PatchOutcome.NotForThisGame || source.size % 1024 != COPIER_HEADER) return first
         return run(source.copyOfRange(COPIER_HEADER, source.size), headerRemoved = true).takeIf { it is PatchOutcome.Patched } ?: first
+    }
+
+    // ------------------------------------------------------------------------------------- PPF
+
+    /** A PPF patch on a game held in memory; a disc image too large for that is patched with [Ppf] on a copy of its file. */
+    private fun ppf(source: ByteArray, patch: ByteArray): PatchOutcome = try {
+        val parsed = Ppf.parse(patch)
+        when (val v = Ppf.check(parsed, source.size.toLong()) { at, length -> source.copyOfRange(minOf(at, source.size.toLong()).toInt(), minOf(at + length, source.size.toLong()).toInt()) }) {
+            is Ppf.Verdict.Ready -> {
+                val size = maxOf(source.size.toLong(), v.edits.maxOf { it.offset + it.bytes.size })
+                if (size > MAX_SIZE) throw Damaged("The patch makes a game larger than Fuse patches.")
+                val out = source.copyOf(size.toInt())
+                for (e in v.edits) e.bytes.copyInto(out, e.offset.toInt())
+                PatchOutcome.Patched(out, PatchFormat.PPF, v.checked)
+            }
+            Ppf.Verdict.AlreadyPatched -> PatchOutcome.AlreadyPatched(PatchFormat.PPF)
+            is Ppf.Verdict.NotForThisGame -> PatchOutcome.NotForThisGame(PatchFormat.PPF, v.reason)
+        }
+    } catch (e: Ppf.Problem) {
+        PatchOutcome.Unreadable(e.message.orEmpty())
     }
 
     // ------------------------------------------------------------------------------------- IPS

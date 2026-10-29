@@ -27,6 +27,8 @@ export interface Device {
   name: string;
   platform: string;
   lastSeen: number;
+  /** The game it is playing now; absent while it plays nothing (and from an older Fuse). */
+  playing?: string;
 }
 
 export interface Status extends Failure {
@@ -111,6 +113,20 @@ export interface ChangeArt extends Failure {
   data?: string;
 }
 
+/** A status in the person's Journal, as Fuse names it; NONE takes it out. */
+export type PlayStatus = "WANT" | "PLAYING" | "PAUSED" | "BEATEN" | "COMPLETED" | "DROPPED";
+
+/** The game being played in Fuse (While You Play); absent fields on an older Fuse, which has no such call. */
+export interface Playing extends Failure {
+  playing?: boolean;
+  id?: number;
+  name?: string;
+  system?: string;
+  since?: number;
+  status?: PlayStatus;
+  canQuit?: boolean;
+}
+
 export const hello = callable<[], Hello>("hello");
 export const status = callable<[], Status>("status");
 export const steamGame = callable<[appId: number], SteamGame>("steam_game");
@@ -120,6 +136,9 @@ export const openGame = callable<[appId: number], Result>("open_game");
 export const importGames = callable<[appIds: number[]], Result>("import_games");
 export const library = callable<[], Library>("library");
 export const openFuseGame = callable<[gameId: number], Result>("open_fuse_game");
+export const playing = callable<[], Playing>("playing");
+export const quitPlaying = callable<[], Result & { quit?: boolean }>("quit_playing");
+export const setPlayingStatus = callable<[status: PlayStatus | "NONE"], Result & { set?: boolean }>("set_playing_status");
 export const emulators = callable<[], Emulators>("emulators");
 export const updateAllEmulators = callable<[], Result>("emulators_update_all");
 export const installAllEmulators = callable<[], Result>("emulators_install_all");

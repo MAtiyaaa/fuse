@@ -1,5 +1,14 @@
 package io.github.matiyaaa.fuse.ui.shell.jellyfin
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
+import io.github.matiyaaa.fuse.jellyfin.QuickConnectStart
+import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
+import kotlinx.coroutines.Job
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -54,10 +63,11 @@ import kotlinx.coroutines.launch
  * this network (or typing an address), the address from outside for away from home, then signing
  * in. Every part says where it is; a problem is said under the title, never in a toast that goes.
  * Connected, Done goes back to where it was opened from (setup's Jellyfin step, or Settings).
- * The password goes to the server and nowhere else.
+ * The password goes to the server and nowhere else; with Quick Connect none is typed at all, only a
+ * code approved in Jellyfin on a phone or computer. With [code], that is offered first.
  */
 @Composable
-fun JellyfinSetupScreen(app: AppState) {
+fun JellyfinSetupScreen(app: AppState, code: Boolean = false) {
     val service = app.store.jellyfin
     val prefs by app.store.prefs.collectAsState()
     val j = prefs.jellyfin
@@ -70,6 +80,11 @@ fun JellyfinSetupScreen(app: AppState) {
     var signedInAs by remember { mutableStateOf<String?>(null) }
     val sel = remember { LinearSelection(0) }
     val address = j.localAddress.ifBlank { j.remoteAddress }
+    // A Quick Connect code on show, and the wait for it: leaving the page ends the wait.
+    var quick by remember { mutableStateOf<QuickConnectStart?>(null) }
+    var asking by remember { mutableStateOf(false) }
+    var quickJob by remember { mutableStateOf<Job?>(null) }
+    val pageScope = rememberCoroutineScope()
 
     LaunchedEffect(round) {
         if (service == null) return@LaunchedEffect
@@ -126,18 +141,63 @@ fun JellyfinSetupScreen(app: AppState) {
         }
     }
 
+    fun signInWithCode() {
+        val svc = service ?: return
+        if (asking || quick != null) return
+        asking = true
+        problem = null
+        quickJob = pageScope.launch {
+            svc.startQuickConnect()
+                .onSuccess { q ->
+                    asking = false
+                    quick = q
+                    svc.awaitQuickConnect(q)
+                        .onSuccess {
+                            signedInAs = it.userName ?: "you"
+                            app.toasts.show("Signed in to ${it.serverName ?: serverName ?: "Jellyfin"} as ${it.userName ?: "you"}", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
+                            sel.index = 0
+                        }
+                        .onFailure { problem = it.message }
+                    quick = null
+                }
+                .onFailure {
+                    asking = false
+                    problem = it.message ?: "The server couldn't start Quick Connect."
+                }
+        }
+    }
+
+    fun stopCode() {
+        quickJob?.cancel()
+        quickJob = null
+        quick = null
+        asking = false
+    }
+
+    // Opened to sign in with a code: once there is an address, it starts by itself.
+    LaunchedEffect(code, address.isNotBlank()) {
+        if (code && address.isNotBlank() && signedInAs == null) signInWithCode()
+    }
+
     val ready = address.isNotBlank()
     val rows = buildList {
         val who = signedInAs
         if (who != null) {
             add(MenuAction("j.done", "Done", FuseIcons.Check, detail = "Signed in as $who. Your films, shows and music are in Addons", onSelect = { app.back() }))
             add(MenuAction("j.again", "Sign In as Someone Else", FuseIcons.UserRound, onSelect = { signIn() }))
+            add(MenuAction("j.again.code", "Someone Else, with a Code", FuseIcons.QrCode, onSelect = { signInWithCode() }))
         } else {
             if (ready) {
                 add(MenuAction(
                     "j.signin", "Sign In", FuseIcons.UserRound,
                     detail = "To ${serverName ?: address.substringAfter("://")}, with your Jellyfin user name and password",
                     trailing = Trailing.Chevron, onSelect = { signIn() },
+                ))
+                add(MenuAction(
+                    "j.code", "Sign In with a Code", FuseIcons.QrCode,
+                    detail = "Approve a six-digit code in Jellyfin on your phone or computer (Quick Connect). Nothing to type here",
+                    trailing = if (asking) Trailing.Value("Asking") else if (quick != null) Trailing.Value("Waiting") else Trailing.Chevron,
+                    onSelect = { signInWithCode() },
                 ))
             }
             for (s in found) {
@@ -158,7 +218,19 @@ fun JellyfinSetupScreen(app: AppState) {
         }
     }
     sel.clamp(rows.size)
+    LaunchedEffect(quick != null) {
+        app.hints = if (quick != null) listOf(Hint(HintButton.BACK, "Cancel")) else listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
+    }
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
+        // While a code is on show, B takes it away and nothing else moves.
+        if (quick != null) {
+            return@InputLayer if (e.action == NavAction.BACK) {
+                stopCode()
+                NavResult.CONSUMED
+            } else {
+                NavResult.BLOCKED
+            }
+        }
         if (e.action == NavAction.LEFT) NavResult.BLOCKED else handleMenuAction(e, rows, sel)
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -178,14 +250,49 @@ fun JellyfinSetupScreen(app: AppState) {
             )
             Spacer(Modifier.height(if (compact) Space.m else Space.l))
             Row(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s), horizontalArrangement = Arrangement.spacedBy(Space.xl), verticalAlignment = Alignment.CenterVertically) {
-                Panel(Modifier.widthIn(max = Size.touch * 16).weight(1f).fillMaxHeight()) {
-                    MenuList(rows, sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT)
+                val q = quick
+                // Narrow, a code on show takes the page: beside the list it would be too thin to read.
+                if (wide || q == null) {
+                    Panel(Modifier.widthIn(max = Size.touch * 16).weight(1f).fillMaxHeight()) {
+                        MenuList(rows, sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT && quick == null)
+                    }
                 }
-                if (wide) {
+                if (q != null) {
+                    QuickConnectCard(app, q, if (wide) Modifier.width(340.dp).fillMaxHeight() else Modifier.weight(1f).fillMaxHeight())
+                } else if (wide) {
                     Column(Modifier.width(320.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         JellyfinStage(connected = signedInAs != null, server = serverName)
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * A Quick Connect code to approve in Jellyfin, large enough to read across a room, with a QR that
+ * opens Jellyfin's Quick Connect page on a phone on the same network.
+ */
+@Composable
+private fun QuickConnectCard(app: AppState, q: QuickConnectStart, modifier: Modifier) {
+    val c = Fuse.colors
+    val page = q.base.trimEnd('/') + "/web/#/quickconnect"
+    val modules = remember(page) { app.phoneLink?.qr(page) }
+    Panel(modifier) {
+        Column(Modifier.fillMaxSize().padding(Space.l), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.m, Alignment.CenterVertically)) {
+            FText("Approve in Jellyfin", Fuse.type.bodyStrong, maxLines = 1)
+            if (modules != null) io.github.matiyaaa.fuse.ui.shell.settings.QrCode(modules, 150.dp)
+            Box(Modifier.clip(RoundedCornerShape(Fuse.geometry.control)).background(c.text.copy(alpha = 0.07f)).padding(horizontal = Space.l, vertical = Space.s)) {
+                FText(q.code.code.chunked(3).joinToString(" "), Fuse.type.numericLarge, maxLines = 1)
+            }
+            FText(
+                "In Jellyfin on your phone or computer, open your profile, then Quick Connect, and enter this code. Or scan it on the same network.",
+                Fuse.type.caption, color = c.textMuted, align = TextAlign.Center, maxLines = 4,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spinner(size = 16.dp, color = c.textMuted)
+                Spacer(Modifier.width(Space.s))
+                FText("Waiting for approval on ${q.info.name ?: "your server"}", Fuse.type.caption, color = c.textMuted, maxLines = 1)
             }
         }
     }

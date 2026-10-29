@@ -70,6 +70,9 @@ const S = {
 
 const L = {
   started: false,
+  // 'device' (the library on the device) or 'romm' (the RomM server it reaches), once RomM answers.
+  source: 'device',
+  romm: null,
   query: '',
   system: '',
   sort: 'title',
@@ -1607,7 +1610,8 @@ function resetData() {
   S.scroll = {};
   L.gen += 1;
   if (L.ctrl) L.ctrl.abort();
-  Object.assign(L, { started: false, query: '', system: '', sort: 'title', items: [], total: null, loading: false, done: false, error: null, ctrl: null, skel: [] });
+  Object.assign(L, { started: false, source: 'device', romm: null, query: '', system: '', sort: 'title', items: [], total: null, loading: false, done: false, error: null, ctrl: null, skel: [] });
+  if (E.libSource) { E.libSource.hidden = true; E.libSource.replaceChildren(); E.libSource._seg = null; }
   L.cache.clear();
   nowUI = null;
   tools = null;
@@ -1993,16 +1997,18 @@ function renderNow() {
   if (!nowUI) {
     nowUI = {
       playing: h('section.section', { 'aria-label': 'Playing now' }),
+      upNext: h('section.section', { 'aria-label': 'Up next' }),
       transfers: h('section.section', { 'aria-label': 'Downloads' }),
       cart: h('section.section', { 'aria-label': 'Cartridge downloads' }),
       fill: h('section.section', { 'aria-label': 'Art fill' }),
       fillCard: createFillCard(),
     };
     nowUI.fill.append(sectionHead('Art fill'), nowUI.fillCard.el);
-    E.nowBody.replaceChildren(nowUI.playing, nowUI.transfers, nowUI.cart, nowUI.fill);
+    E.nowBody.replaceChildren(nowUI.playing, nowUI.upNext, nowUI.transfers, nowUI.cart, nowUI.fill);
     arriving = true;
   }
   updatePlaying();
+  updateUpNext();
   updateTransfers();
   updateCartridge();
   updateFillViews();
@@ -2014,9 +2020,45 @@ function updatePlaying() {
   const n = S.now || {};
   const g = n.playing && typeof n.playing === 'object' ? n.playing : null;
   const key = g
-    ? JSON.stringify([g.id, g.title, g.cover, g.hero, g.system, g.systemName, g.year, n.playingSince, S.systems.length])
+    ? JSON.stringify([g.id, g.title, g.cover, g.hero, g.system, g.systemName, g.year, n.playingSince, S.systems.length, !!n.canQuit])
     : `none|${deviceName()}`;
-  keyed(nowUI.playing, key, () => (g ? playingCard(g, n.playingSince) : playingEmpty()));
+  keyed(nowUI.playing, key, () => (g ? [playingCard(g, n.playingSince), n.canQuit ? playingActions(g) : null].filter(Boolean) : playingEmpty()));
+}
+
+/** Up next: the games the Journal says are wanted, as tiles in a row; nothing while there are none. */
+function updateUpNext() {
+  const slot = nowUI.upNext;
+  const list = (S.now && Array.isArray(S.now.upNext) ? S.now.upNext : []).filter((g) => g && typeof g === 'object');
+  slot.hidden = !list.length;
+  keyed(slot, JSON.stringify([list.map((g) => [g.id, g.title, g.cover]), S.systems.length]), () =>
+    list.length ? [sectionHead('Up next'), h('div.shelf', list.map((g) => tile(g, true)))] : null);
+}
+
+/** Closing the game from the phone: asked first, then the device asks the game to close as its window would. */
+function playingActions(g) {
+  const quit = btn('Quit the game', {
+    icon: 'power', kind: 'danger', size: 'sm',
+    onClick: async (b) => {
+      const ok = await confirmDialog({
+        title: `Quit ${g.title || 'the game'}?`,
+        text: `It closes on ${deviceName()} as when you close its window, and Fuse sends its saves as it ends. Anything not saved in the game is lost.`,
+        confirm: 'Quit', danger: true,
+      });
+      if (!ok) return;
+      setBusy(b, true);
+      try {
+        const r = await api('/api/playing/quit', { method: 'POST' });
+        if (r && r.error) throw new Error(r.error);
+        toast('Closing the game', 'success');
+        refreshNow();
+      } catch (e) {
+        toast(e.message || "Couldn't reach the device", 'error');
+      } finally {
+        setBusy(b, false);
+      }
+    },
+  });
+  return h('div.dl-actions', quit);
 }
 
 function playingCard(g, since) {
@@ -2062,7 +2104,7 @@ function updateTransfers() {
     return;
   }
   slot.hidden = false;
-  const key = JSON.stringify([items.map((i) => [i.title, !!i.upload, i.state]), num(t.queued), !!t.paused, num(t.failed)]);
+  const key = JSON.stringify([items.map((i) => [i.title, !!i.upload, i.state, !!i.later]), num(t.queued), !!t.paused, num(t.failed)]);
   keyed(slot, key, () => transfersSection(slot, t, items));
   (slot._rows || []).forEach((r, i) => {
     const it = items[i];
@@ -2073,7 +2115,9 @@ function updateTransfers() {
 }
 
 function transferWords(it) {
-  const state = { active: it.upload ? 'Uploading' : 'Downloading', queued: 'Waiting', waiting: 'Waiting', paused: 'Paused', failed: 'Stopped' }[it.state] || '';
+  // Kept for later: it goes once the device is charging on Wi-Fi.
+  const state = it.later && it.state === 'waiting' ? 'For later, once charging on Wi-Fi'
+    : { active: it.upload ? 'Uploading' : 'Downloading', queued: 'Waiting', waiting: 'Waiting', paused: 'Paused', failed: 'Stopped' }[it.state] || '';
   // Nothing in yet (one still waiting its turn): only how big it is.
   const size = num(it.total) > 0 ? (num(it.done) > 0 ? `${fmtBytes(it.done)} of ${fmtBytes(it.total)}` : fmtBytes(it.total)) : '';
   return [state, size].filter(Boolean).join(' \u00B7 ');
@@ -2370,6 +2414,52 @@ function ensureLibrary() {
     renderChips();
     reloadLibrary();
   });
+  // RomM, where the device reaches one: its games become a second place to look through.
+  api('/api/romm?limit=1').then((r) => {
+    if (!L.started || !r || !r.available) return;
+    L.romm = { systems: Array.isArray(r.systems) ? r.systems : [], offline: !!r.offline };
+    renderSource(false);
+  }).catch(() => {});
+}
+
+/** This device or RomM, as a segmented switch above the search; only once RomM answers. */
+function renderSource(animate) {
+  const el = E.libSource;
+  if (!L.romm) { el.hidden = true; return; }
+  el.hidden = false;
+  if (!el._seg) {
+    const glide = h('span.seg-glide', { 'aria-hidden': 'true' });
+    const btns = [['device', 'library', deviceName()], ['romm', 'server', 'On RomM']].map(([id, ic, label]) => {
+      const b = h('button.seg-btn', { type: 'button', 'aria-pressed': 'false' }, icon(ic), h('span', label));
+      b.dataset.id = id;
+      b.addEventListener('click', () => setSource(id));
+      return b;
+    });
+    el.replaceChildren(glide, ...btns);
+    el._seg = { glide, btns };
+  }
+  let current = null;
+  for (const b of el._seg.btns) {
+    const on = b.dataset.id === L.source;
+    b.setAttribute('aria-pressed', String(on));
+    if (on) current = b;
+  }
+  placeGlide(el._seg.glide, current, animate);
+}
+
+function setSource(id) {
+  if (L.source === id) return;
+  L.source = id;
+  L.system = '';
+  L.cache.clear();
+  E.libQ.placeholder = id === 'romm' ? 'Search RomM' : 'Search your library';
+  E.libQ.setAttribute('aria-label', E.libQ.placeholder);
+  // Sorting and looking for new games are the device's library's.
+  E.libSort.hidden = id === 'romm';
+  E.libRescan.hidden = id === 'romm';
+  renderSource(true);
+  renderChips();
+  reloadLibrary();
 }
 
 function renderChipSkeleton() {
@@ -2379,7 +2469,10 @@ function renderChipSkeleton() {
 }
 
 function renderChips() {
-  const chips = [chip('', 'All', null)].concat(S.systems.map((s) => chip(s.id, s.name || s.shortName || String(s.id), s)));
+  const systems = L.source === 'romm' && L.romm
+    ? L.romm.systems.map((s) => ({ id: s.slug, name: s.name, gameCount: s.games }))
+    : S.systems;
+  const chips = [chip('', 'All', null)].concat(systems.map((s) => chip(s.id, s.name || s.shortName || String(s.id), s)));
   // The chosen chip's pill is one element that glides from chip to chip.
   const glide = h('span.chip-glide', { 'aria-hidden': 'true' });
   E.libChips._glide = glide;
@@ -2482,11 +2575,14 @@ async function fetchPage(offset, limit, keep) {
     L.skel = skeletonTiles(6);
     E.grid.append(...L.skel);
   }
-  const qs = new URLSearchParams({ query: L.query, system: L.system, sort: L.sort, offset: String(offset), limit: String(limit) });
+  const romm = L.source === 'romm';
+  const qs = new URLSearchParams({ query: L.query, system: L.system, sort: L.sort, offset: String(offset), limit: String(Math.min(limit, romm ? 120 : limit)) });
   try {
-    const r = await api(`/api/games?${qs}`, { signal: ctrl.signal });
+    const r = await api(`${romm ? '/api/romm' : '/api/games'}?${qs}`, { signal: ctrl.signal });
     if (gen !== L.gen) return;
-    const items = (Array.isArray(r && r.items) ? r.items : []).filter((g) => g && g.id != null);
+    const items = (Array.isArray(r && r.items) ? r.items : [])
+      .filter((g) => g && (romm ? g.romId != null : g.id != null))
+      .map((g) => (romm ? Object.assign(g, { id: `romm-${g.romId}`, romm: true }) : g));
     L.total = r && Number.isFinite(Number(r.total)) ? Number(r.total) : null;
     removeSkel();
     if (offset === 0) {
@@ -2529,13 +2625,13 @@ function removeSkel() {
 }
 
 function tileFor(g) {
-  const sig = JSON.stringify([g.title, g.cover, g.system, g.systemName, g.year, g.favorite, L.system === '', S.systems.length]);
+  const sig = JSON.stringify([g.title, g.cover, g.system, g.systemName, g.year, g.favorite, g.state, L.system === '', S.systems.length]);
   const hit = L.cache.get(g.id);
   if (hit && hit.sig === sig) {
     hit.el._game = g;
     return hit.el;
   }
-  const el = tile(g, L.system === '');
+  const el = g.romm ? rommTile(g, L.system === '') : tile(g, L.system === '');
   L.cache.set(g.id, { sig, el });
   if (L.cache.size > 1500) L.cache.delete(L.cache.keys().next().value);
   return el;
@@ -2555,6 +2651,80 @@ function tile(g, showSystem) {
   return b;
 }
 
+/** How a RomM game stands here, as its tile's mark and its sheet say it. */
+const ROMM_STATES = {
+  here: { icon: 'circle-check', words: 'On this device' },
+  partly: { icon: 'circle-check', words: 'Partly here' },
+  coming: { icon: 'download', words: 'On its way' },
+  server: { icon: 'cloud-download', words: 'On RomM' },
+};
+
+/** A RomM game: its art, a mark for how it stands here, its name, and its system and size. */
+function rommTile(g, showSystem) {
+  const title = g.title || 'Untitled';
+  const st = ROMM_STATES[g.state] || ROMM_STATES.server;
+  const meta = [showSystem ? g.system : null, g.sizeBytes ? fmtBytes(g.sizeBytes) : null].filter(Boolean).join(' \u00B7 ');
+  const b = h('button.tile', { type: 'button', 'aria-label': [title, g.system, st.words].filter(Boolean).join(', ') },
+    h('span.tile-art',
+      art(g.cover, { title, system: g.system, fit: true, ar: 0.72, tag: g.system }),
+      h('span.fav.romm-mark', { 'aria-hidden': 'true', 'data-state': g.state || 'server' }, icon(st.icon))),
+    h('span.tile-title', { 'aria-hidden': 'true' }, title),
+    meta ? h('span.tile-meta', { 'aria-hidden': 'true' }, meta) : null);
+  b._game = g;
+  b.addEventListener('click', () => openRommGame(b._game));
+  return b;
+}
+
+/**
+ * A RomM game's sheet: open it in the library where it is here; otherwise bring it to the device now,
+ * or keep it for later (charging on Wi-Fi with no game running, never keeping the device awake).
+ */
+function openRommGame(g) {
+  const st = ROMM_STATES[g.state] || ROMM_STATES.server;
+  const items = [];
+  if (g.gameId != null) items.push({ id: 'open', icon: 'library', label: 'Open in your library', detail: st.words });
+  if (g.state === 'server' || g.state === 'partly') {
+    items.push({ id: 'now', icon: 'download', label: 'Download now', detail: [g.sizeBytes ? fmtBytes(g.sizeBytes) : null, `to ${deviceName()}`].filter(Boolean).join(' \u00B7 ') });
+    items.push({ id: 'later', icon: 'plug-zap', label: 'Download later', detail: 'Once it\u2019s charging on Wi-Fi, with no game running' });
+  }
+  if (!items.length) {
+    toast(`${g.title} is ${st.words.toLowerCase()}.`, 'info');
+    return;
+  }
+  let layer = null;
+  const list = h('div.menu.action-list', { role: 'group', 'aria-label': g.title });
+  for (const it of items) {
+    const b = h('button.menu-item.is-action', { type: 'button' },
+      h('span.action-ic', { 'aria-hidden': 'true' }, icon(it.icon)),
+      h('span.menu-item-main',
+        h('span.menu-item-title', it.label),
+        it.detail ? h('span.menu-item-sub', it.detail) : null),
+      icon('chevron-right', 'action-go'));
+    b.addEventListener('click', async () => {
+      await closeLayer(layer);
+      pick(it.id);
+    });
+    list.append(b);
+  }
+  layer = openModal({ title: g.title, subtitle: [g.system, g.year, st.words].filter(Boolean).join(' \u00B7 '), body: list });
+  layer.focus = list.firstElementChild;
+  reveal(list.children, 1);
+
+  async function pick(id) {
+    if (id === 'open') { openGame(g.gameId); return; }
+    try {
+      await api(`/api/romm/${encodeURIComponent(g.romId)}/download`, { method: 'POST', body: { later: id === 'later' } });
+      toast(id === 'later' ? `${g.title} waits for the charger and Wi-Fi` : `${g.title} is on its way to ${deviceName()}`, 'success');
+      g.state = 'coming';
+      L.cache.delete(g.id);
+      const old = $$('.tile', E.grid).find((t) => t._game === g);
+      if (old) old.replaceWith(tileFor(g));
+    } catch (e) {
+      if (e.status !== 401) toast(e.message, 'error');
+    }
+  }
+}
+
 function updateLibCount() {
   if (L.total == null) {
     E.libCount.textContent = L.loading ? 'Loading games' : '';
@@ -2568,9 +2738,12 @@ function updateLibCount() {
     E.libCount.textContent = '';
     return;
   }
-  if (L.query) text = `${plural(n, 'game', 'games')} for ${quote(L.query)}`;
-  else if (sys) text = `${nf.format(n)} ${sys.name} ${n === 1 ? 'game' : 'games'}`;
-  else text = plural(n, 'game', 'games');
+  const where = L.source === 'romm' ? ' on RomM' : '';
+  const rommSys = L.source === 'romm' && L.romm && L.system ? L.romm.systems.find((x) => x.slug === L.system) : null;
+  if (L.query) text = `${plural(n, 'game', 'games')}${where} for ${quote(L.query)}`;
+  else if (rommSys) text = `${nf.format(n)} ${rommSys.name} ${n === 1 ? 'game' : 'games'} on RomM`;
+  else if (sys && L.source !== 'romm') text = `${nf.format(n)} ${sys.name} ${n === 1 ? 'game' : 'games'}`;
+  else text = plural(n, 'game', 'games') + where;
   E.libCount.textContent = text;
 }
 
@@ -2597,6 +2770,8 @@ function updateLibStatus() {
           L.query = '';
           reloadLibrary();
         } }));
+    } else if (L.source === 'romm') {
+      node = emptyState('server', 'Nothing on RomM here', 'Games on your RomM server show up here once it has some.');
     } else if (sys) {
       node = emptyState('library', `No ${sys.name} games yet`, `Games you add on ${deviceName()} show up here.`);
     } else {
@@ -2682,6 +2857,7 @@ async function loadGame(opts = {}) {
     }
     g.data = d;
     renderGame();
+    loadAchievements(g);
   } catch (e) {
     if (G !== g || gen !== g.gen || e.status === 401) return;
     if (opts.quiet && g.data) return;
@@ -2821,6 +2997,9 @@ function gameSections(d) {
     stat('clock', 'Play time', fmtMinutes(d.playMinutes)),
     stat('history', 'Last played', d.lastPlayedAt ? fmtAgo(d.lastPlayedAt) : 'Never')));
 
+  if (d.journal && typeof d.journal === 'object') out.push(journalSection(d));
+  if (G && G.ach) out.push(achievementsSection(G.ach));
+
   // About
   const aboutKids = [];
   const description = typeof d.description === 'string' ? d.description.trim() : '';
@@ -2860,6 +3039,284 @@ function gameSections(d) {
     artCard(d),
     fillGameBlock(d)));
   return out;
+}
+
+/**
+ * The game's achievements, asked once as its page opens (the device may have to ask
+ * RetroAchievements): drawn in when they come, and left out when it has none or can't say.
+ */
+async function loadAchievements(g) {
+  if (g.achAsked) return;
+  g.achAsked = true;
+  try {
+    const a = await api(gamePath(g.id, '/achievements'));
+    if (G !== g || !a || a.available !== true) return;
+    g.ach = a;
+    renderGame();
+  } catch (_) {
+    /* Achievements are extra: the page stays as it is. */
+  }
+}
+
+/** A set's highest award, as the device names it, with its mark. */
+const AWARDS = {
+  'mastered': ['Mastered', 'crown'],
+  'completed': ['Completed', 'crown'],
+  'beaten-hardcore': ['Beaten', 'flag'],
+  'beaten-softcore': ['Beaten', 'flag'],
+};
+
+/** How many badges show before Show all. */
+const BADGES_SHOWN = 24;
+
+/** A ring filled to [frac] in the accent on a faint track, [label] in its middle. */
+function progressRing(frac, label) {
+  const r = 26;
+  const c = 2 * Math.PI * r;
+  const f = Math.max(0, Math.min(1, Number(frac) || 0));
+  const svg = svgEl('svg', { viewBox: '0 0 64 64', class: 'ring', 'aria-hidden': 'true' });
+  svg.append(svgEl('circle', { cx: 32, cy: 32, r, class: 'ring-track' }));
+  svg.append(svgEl('circle', { cx: 32, cy: 32, r, class: 'ring-arc', 'stroke-dasharray': c.toFixed(2), 'stroke-dashoffset': (c * (1 - f)).toFixed(2) }));
+  return h('div.ring-box', svg, h('span.ring-label.num', label));
+}
+
+/**
+ * The game's achievements as the device knows them: how much of the set is the person's, its
+ * award, and every badge (the earned ones newest first), each a tap away from what it asks.
+ */
+function achievementsSection(a) {
+  const total = num(a.total);
+  const earned = num(a.earned);
+  const pct = total ? Math.round(earned * 100 / total) : 0;
+  const award = AWARDS[a.award];
+  const sub = [
+    a.points != null ? `${num(a.pointsEarned)} of ${num(a.points)} points` : null,
+    num(a.earnedHardcore) > 0 ? `${num(a.earnedHardcore)} in hardcore` : null,
+  ].filter(Boolean).join(' \u00B7 ');
+  const head = h('div.ach-head',
+    progressRing(total ? earned / total : 0, `${pct}%`),
+    h('div.ach-head-main',
+      h('div.ach-count-row',
+        h('p.ach-count', h('span.num', String(earned)), ` of ${total}`),
+        award ? h('span.pill.is-award', icon(award[1]), award[0]) : null),
+      sub ? h('p.ach-sub', sub) : null));
+  const items = Array.isArray(a.items) ? a.items : [];
+  const grid = h('div.ach-grid');
+  const fill = (all) => grid.replaceChildren(...(all ? items : items.slice(0, BADGES_SHOWN)).map(badgeButton));
+  fill(false);
+  const more = items.length > BADGES_SHOWN
+    ? btn(`Show all ${items.length}`, { kind: 'ghost', block: true, onClick: (b) => { fill(true); b.remove(); } })
+    : null;
+  return h('section.g-section',
+    sectionHead(a.noun || 'Achievements', a.source ? h('span.pill', a.source) : null),
+    h('div.card.ach-card', head, items.length ? grid : null, more));
+}
+
+function badgeButton(it) {
+  const got = !!it.earnedAt;
+  const url = safeUrl(it.badge);
+  const b = h('button', { type: 'button', class: 'ach-badge' + (got ? '' : ' is-locked'), 'aria-label': `${it.title || 'Achievement'}, ${got ? 'earned' : 'not yet'}` },
+    url ? h('img', { src: url, alt: '', loading: 'lazy', decoding: 'async' }) : icon('trophy'));
+  b.addEventListener('click', () => openAchievement(it));
+  return b;
+}
+
+/** [fmtAgo]'s words inside a sentence: "just now" and "yesterday" in lower case, dates as they are. */
+function agoWords(ms) {
+  const w = fmtAgo(ms);
+  return /^(Just|Yesterday)/.test(w) ? w[0].toLowerCase() + w.slice(1) : w;
+}
+
+/** One achievement on its own: its badge large, what it asks, its points and when it was earned. */
+function openAchievement(it) {
+  const got = !!it.earnedAt;
+  const url = safeUrl(it.badge);
+  const facts = [
+    it.points != null ? metaPill('star', `${num(it.points)} points`) : null,
+    got ? metaPill('circle-check', `Earned${it.hardcore ? ' in hardcore,' : ''} ${agoWords(it.earnedAt)}`, 'is-earned') : metaPill('lock', 'Not yet'),
+    it.rarity != null ? metaPill('users', `${Number(it.rarity).toFixed(1)}% of players`) : null,
+  ].filter(Boolean);
+  openModal({
+    title: it.title || 'Achievement',
+    body: h('div.ach-detail',
+      h('div', { class: 'ach-detail-badge' + (got ? '' : ' is-locked') }, url ? h('img', { src: url, alt: '' }) : icon('trophy')),
+      it.description ? h('p.ach-detail-text', it.description) : null,
+      h('div.meta-chips', facts)),
+  });
+}
+
+/** The Journal's statuses in its own order, each with the mark Fuse gives it on the device. */
+const STATUSES = [
+  ['PLAYING', 'Playing', 'joystick'],
+  ['WANT', 'Want to play', 'bookmark'],
+  ['PAUSED', 'On hold', 'circle-pause'],
+  ['BEATEN', 'Beaten', 'flag'],
+  ['COMPLETED', 'Completed', 'crown'],
+  ['DROPPED', 'Dropped', 'circle-slash'],
+];
+
+/** A rating out of ten in words: "3½ stars", "Half a star"; empty when not rated. */
+function ratingWords(r) {
+  const whole = Math.floor(r / 2);
+  const half = r % 2 === 1;
+  if (r <= 0) return '';
+  if (whole === 0) return 'half a star';
+  if (half) return `${whole}\u00BD stars`;
+  return whole === 1 ? '1 star' : `${whole} stars`;
+}
+
+const STAR_PATH = (() => {
+  // A five-pointed star in a 24 unit square, points up, as the device draws it.
+  const pts = [];
+  for (let k = 0; k < 10; k++) {
+    const r = k % 2 === 0 ? 12 : 6;
+    const a = -Math.PI / 2 + (k * Math.PI) / 5;
+    pts.push(`${(12 + r * Math.cos(a)).toFixed(2)},${(12.72 + r * Math.sin(a)).toFixed(2)}`);
+  }
+  return `M${pts.join('L')}Z`;
+})();
+
+/**
+ * Five stars to rate by, as on Letterboxd: each half of a star is a step. A tap or a drag across them
+ * gives the rating as the finger lifts, a mouse over them shows what a click would give, a tap on the
+ * rating already given takes it away, and the arrow keys step it half a star.
+ */
+function starRating(value, onRate) {
+  let current = value;
+  let shown = value;
+  const ns = 'http://www.w3.org/2000/svg';
+  const id = uid('stars');
+  const el = h('div.rate', { role: 'slider', tabindex: '0', 'aria-label': 'Your rating', 'aria-valuemin': '0', 'aria-valuemax': '10' });
+  const words = h('span.rate-words');
+  const fills = [];
+  const row = h('div.rate-stars');
+  for (let i = 0; i < 5; i++) {
+    const svg = svgEl('svg', { viewBox: '0 0 24 24', class: 'rate-star', 'aria-hidden': 'true' });
+    const clip = document.createElementNS(ns, 'clipPath');
+    clip.setAttribute('id', `${id}-${i}`);
+    const rect = document.createElementNS(ns, 'rect');
+    rect.setAttribute('x', '0'); rect.setAttribute('y', '0'); rect.setAttribute('height', '24'); rect.setAttribute('width', '0');
+    clip.appendChild(rect);
+    const defs = document.createElementNS(ns, 'defs');
+    defs.appendChild(clip);
+    const base = document.createElementNS(ns, 'path');
+    base.setAttribute('d', STAR_PATH); base.setAttribute('class', 'rate-empty');
+    const fill = document.createElementNS(ns, 'path');
+    fill.setAttribute('d', STAR_PATH); fill.setAttribute('class', 'rate-fill'); fill.setAttribute('clip-path', `url(#${id}-${i})`);
+    svg.append(defs, base, fill);
+    fills.push(rect);
+    row.appendChild(svg);
+  }
+  function draw(v, previewing) {
+    shown = v;
+    fills.forEach((rect, i) => { rect.setAttribute('width', String(Math.max(0, Math.min(2, v - i * 2)) * 12)); });
+    el.classList.toggle('is-preview', !!previewing && v !== current);
+    words.textContent = v ? ratingWords(v).replace(/^h/, 'H') : 'Not rated';
+    el.setAttribute('aria-valuenow', String(v));
+    el.setAttribute('aria-valuetext', v ? ratingWords(v) : 'Not rated');
+  }
+  function valueAt(x) {
+    const stars = row.children;
+    for (let i = 0; i < stars.length; i++) {
+      const r = stars[i].getBoundingClientRect();
+      if (x < r.right || i === stars.length - 1) return i * 2 + (x < r.left + r.width / 2 ? 1 : 2);
+    }
+    return 10;
+  }
+  let pressed = false;
+  let moved = false;
+  let start = 0;
+  row.addEventListener('pointerdown', (e) => {
+    pressed = true; moved = false;
+    start = valueAt(e.clientX);
+    row.setPointerCapture(e.pointerId);
+    draw(start, true);
+    e.preventDefault();
+  });
+  row.addEventListener('pointermove', (e) => {
+    if (!pressed && e.pointerType !== 'mouse') return;
+    const v = valueAt(e.clientX);
+    if (pressed && v !== start) moved = true;
+    draw(v, true);
+  });
+  row.addEventListener('pointerup', (e) => {
+    if (!pressed) return;
+    pressed = false;
+    const v = valueAt(e.clientX);
+    const next = !moved && v === current ? 0 : v;
+    current = next;
+    draw(next, false);
+    if (navigator.vibrate) navigator.vibrate(8);
+    onRate(next);
+  });
+  row.addEventListener('pointercancel', () => { pressed = false; draw(current, false); });
+  row.addEventListener('pointerleave', (e) => { if (!pressed && e.pointerType === 'mouse') draw(current, false); });
+  // The keys step half a star, and give it a moment after the last press.
+  let keyTimer = 0;
+  el.addEventListener('keydown', (e) => {
+    const by = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+    if (by == null) return;
+    e.preventDefault();
+    const next = Math.max(0, Math.min(10, shown + by));
+    draw(next, true);
+    clearTimeout(keyTimer);
+    keyTimer = setTimeout(() => { current = next; draw(next, false); onRate(next); }, 700);
+  });
+  el.append(row, words);
+  draw(value, false);
+  return el;
+}
+
+/**
+ * The game's Journal, as on the device: where the person is with it, their rating in half stars,
+ * and their note, written on the phone's own keyboard. Each change is kept on the device at once.
+ */
+function journalSection(d) {
+  const j = d.journal;
+  const status = STATUSES.find((s) => s[0] === j.status);
+  async function save(change, done, b) {
+    if (b) setBusy(b, true);
+    try {
+      const r = await api(gamePath(d.id, '/journal'), { method: 'PUT', body: change });
+      if (r && r.error) throw new Error(r.error);
+      d.journal = Object.assign({}, j, change, 'status' in change ? { statusAt: change.status ? nowMs() : null } : {});
+      toast(done, 'success');
+      renderGame();
+    } catch (e) {
+      if (b) setBusy(b, false);
+      if (e.status !== 401) toast(e.message || "Couldn't reach the device", 'error');
+    }
+  }
+  // A status chosen again is taken back off: the Journal then holds no status for it.
+  const statuses = h('div.journal-statuses', { role: 'group', 'aria-label': 'Where you are with it' },
+    STATUSES.map(([id, label, ic]) => {
+      const on = j.status === id;
+      const b = h('button.chip', { type: 'button', 'aria-pressed': String(on) }, icon(ic), label);
+      b.addEventListener('click', () => save({ status: on ? null : id }, on ? 'Taken out of your Journal' : `${label}, kept in your Journal`));
+      return b;
+    }));
+  const stars = starRating(num(j.rating), (next) => {
+    save({ rating: next }, next ? `Rated ${ratingWords(next)}` : 'Rating cleared');
+  });
+  const note = h('textarea', { rows: '3', maxlength: '2000', 'aria-label': 'Your note', placeholder: 'Where you left off, what to try next, what you thought' });
+  note.value = j.note || '';
+  const saveNote = btn('Save note', {
+    kind: 'primary', size: 'sm', icon: 'check',
+    onClick: (b) => save({ note: note.value }, note.value.trim() ? 'Note kept' : 'Note cleared', b),
+  });
+  saveNote.disabled = true;
+  note.addEventListener('input', () => { saveNote.disabled = note.value === (j.note || ''); });
+  const set = status && j.statusAt ? fmtAgo(j.statusAt) : '';
+  const since = set ? `Set ${set.charAt(0).toLowerCase()}${set.slice(1)}` : null;
+  return h('section.g-section', sectionHead('Journal'),
+    h('div.card.journal',
+      cardHead(status ? status[2] : 'notebook-pen', status ? status[1] : 'Not in your Journal', since || 'Where you are with it, a rating and a note.'),
+      statuses,
+      h('div.journal-row', h('span.field-label', 'Your rating'), stars),
+      h('div.journal-row',
+        h('span.field-label', 'Your note'),
+        h('div.input.is-area', note),
+        h('div.edit-actions', h('span.spacer'), saveNote))));
 }
 
 function searchAsCard(d) {
@@ -3933,6 +4390,8 @@ function init() {
   E.libQ = $('#lib-q');
   E.libQClear = $('#lib-q-clear');
   E.libChips = $('#lib-chips');
+  E.libSource = $('#lib-source');
+  E.libRescan = $('#lib-rescan');
   E.libSort = $('#lib-sort');
   E.libSortLabel = $('#lib-sort-label');
   E.libBar = $('#lib-bar');

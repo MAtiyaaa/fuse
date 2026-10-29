@@ -58,6 +58,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
@@ -81,7 +82,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
 import kotlinx.coroutines.delay
 
 /** The player's sheets. */
-private enum class PlayerSheet { AUDIO, SUBTITLES, SETTINGS, QUEUE }
+private enum class PlayerSheet { AUDIO, SUBTITLES, FIND_SUBTITLES, SETTINGS, QUEUE }
 
 /**
  * Fuse Player, full screen: the picture with Fuse's subtitles over it, and controls that come and
@@ -118,6 +119,10 @@ fun PlayerScreen(
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
     var touched by remember { mutableLongStateOf(0L) }
     var flash by remember { mutableStateOf<Flash?>(null) }
+    // Where the controller's steps along the timeline land, shown above it for a moment.
+    var aim by remember { mutableStateOf<Long?>(null) }
+    // A song's words: shown by themselves when they follow the song, else when asked for; the choice is kept from song to song.
+    var lyricsOn by remember { mutableStateOf<Boolean?>(null) }
     // How tall the controls at the bottom are, so subtitles can rise above them.
     var controlsHeight by remember { mutableIntStateOf(0) }
     val settings = session.settings
@@ -147,8 +152,22 @@ fun PlayerScreen(
             flash = null
         }
     }
+    LaunchedEffect(aim) {
+        if (aim != null) {
+            delay(AIM_MS)
+            aim = null
+        }
+    }
+    // Looking for subtitles lasts as long as its sheet; a subtitle coming in closes the sheet as it starts showing.
+    LaunchedEffect(sheet) { if (sheet != PlayerSheet.FIND_SUBTITLES) session.leaveSubtitleSearch() }
+    LaunchedEffect(session.subtitleSearch) { if (sheet == PlayerSheet.FIND_SUBTITLES && session.subtitleSearch == null) sheet = null }
 
     val duration = session.durationMs()
+    // The part to skip playing now, where the settings offer it; and how long until the end.
+    val left = rememberLeft(session, playing)
+    val skip = session.segment?.takeIf { session.isVideo && session.settings.skipFor(it.kind) != SkipMode.OFF }
+    // In the last half minute the Up next card says the same as a credits button, so it alone stays.
+    val skipShown = skip != null && !(left in 0..UP_NEXT_MS && session.upNext != null) && session.error == null && !session.finished
     val hasPrevious = session.queue.size > 1 && session.queueIndex > 0 || item?.season != null
     val hasNext = session.upNext != null
     val buttons = buildList {
@@ -158,9 +177,12 @@ fun PlayerScreen(
         add(PlayerButton("fwd", FuseIcons.RotateCw, "Forward ${settings.seekSeconds} seconds", badge = settings.seekSeconds.toString()) { session.seekBy(settings.seekSeconds * 1000L) })
         if (hasNext || item?.chapters?.isNotEmpty() == true) add(PlayerButton("next", FuseIcons.SkipForward, "Next") { session.next() })
     }
+    val words = session.lyrics.takeIf { !session.isVideo }
+    val showLyrics = words != null && (lyricsOn ?: words.synced)
     val tools = buildList {
         val src = session.source
         if (!session.isVideo) {
+            if (words != null) add(PlayerButton("lyrics", FuseIcons.MicVocal, if (showLyrics) "Hide lyrics" else "Lyrics", active = showLyrics) { lyricsOn = !showLyrics })
             if (session.queue.size > 1) add(PlayerButton("queue", FuseIcons.ListMusic, "Queue") { sheet = PlayerSheet.QUEUE })
             add(PlayerButton(
                 "repeat",
@@ -200,7 +222,9 @@ fun PlayerScreen(
                     NavResult.CONSUMED
                 }
                 NavAction.SELECT -> {
-                    if (shown && row == TOP && topFocus == 1 && swap != null) swap()
+                    // With the controls away, A takes the skip on offer (as on a television).
+                    if (!shown && skipShown) session.skipSegment()
+                    else if (shown && row == TOP && topFocus == 1 && swap != null) swap()
                     else if (shown && row == TOP) onExit() else if (shown && row == BUTTONS) all.getOrNull(focus)?.onClick?.invoke() else session.toggle()
                     NavResult.ACTIVATED
                 }
@@ -215,8 +239,11 @@ fun PlayerScreen(
                         NavResult.MOVED
                     } else {
                         val step = seekStep(e.repeat)
+                        val onTimeline = shown && row == TIMELINE
+                        if (onTimeline) aim = (session.positionMs() + if (forward) step else -step).coerceIn(0, session.durationMs() ?: Long.MAX_VALUE)
                         session.seekBy(if (forward) step else -step)
-                        flash = Flash(if (forward) "+${step / 1000} s" else "-${step / 1000} s", forward)
+                        // On the timeline, the time above it says where it went; the flash would say it twice.
+                        if (!onTimeline) flash = Flash(if (forward) "+${step / 1000} s" else "-${step / 1000} s", forward)
                         if (!shown) row = TIMELINE
                         NavResult.MOVED
                     }
@@ -293,7 +320,7 @@ fun PlayerScreen(
                 SubtitleLayer(engineCues, session.fileCues, { session.positionMs() }, settings.copy(subtitleLift = maxOf(settings.subtitleLift, above)))
             }
         } else {
-            NowPlaying(session, narrow, short, if (visible) CONTROLS_HEIGHT else 0.dp)
+            NowPlaying(session, narrow, short, if (visible) CONTROLS_HEIGHT else 0.dp, words.takeIf { showLyrics }, playing)
         }
 
         // Taps: one shows or hides the controls; two on either side skip.
@@ -354,13 +381,25 @@ fun PlayerScreen(
                 onFocusButton = { focus = it; row = BUTTONS },
                 onBottomHeight = { controlsHeight = it },
                 onSeek = { ms -> session.seekTo(ms); poke() },
+                aim = aim,
                 onExit = onExit,
                 topFocus = topFocus,
                 onSwap = swap,
             )
         }
 
-        UpNextCard(session, visible, Modifier.align(Alignment.BottomEnd).padding(end = Space.xl, bottom = if (visible) CONTROLS_HEIGHT else Space.xl))
+        UpNextCard(session, left, Modifier.align(Alignment.BottomEnd).padding(end = Space.xl, bottom = if (visible) CONTROLS_HEIGHT else Space.xl))
+
+        val skipping = remember { arrayOfNulls<io.github.matiyaaa.fuse.playback.Segment>(1) }
+        skip?.let { skipping[0] = it }
+        Appear(
+            skipShown,
+            Modifier.align(Alignment.BottomEnd).padding(end = if (narrow) Space.l else Space.xxl, bottom = if (visible) CONTROLS_HEIGHT else if (short) Space.l else Space.xxl),
+            enter = fadeIn() + slideInHorizontally(Fuse.motion.enter(Durations.BASE)) { it / 4 },
+            exit = fadeOut(),
+        ) {
+            skipping[0]?.let { s -> SkipPill(s, toNext = session.upNext != null && (s.kind == io.github.matiyaaa.fuse.playback.SegmentKind.OUTRO || s.kind == io.github.matiyaaa.fuse.playback.SegmentKind.PREVIEW), glyph = !visible) { session.skipSegment(s); poke() } }
+        }
 
         session.error?.let { message ->
             Problem(message, onRetry = { session.retry() }, onExit = onExit, Modifier.align(Alignment.Center))
@@ -387,7 +426,7 @@ fun PlayerScreen(
         ) {
             shown[0]?.let { s ->
                 PlayerSheetPanel(
-                    s, session, inputEnabled && sheet != null, onSettings = ::change, onClose = { sheet = null; poke() },
+                    s, session, inputEnabled && sheet != null, onSettings = ::change, onClose = { sheet = null; poke() }, onSheet = { sheet = it },
                     // Taps on the sheet's own empty space stay on it.
                     modifier = Modifier.pointerInput(Unit) { detectTapGestures { } },
                 )
@@ -423,6 +462,7 @@ private fun Controls(
     onFocusButton: (Int) -> Unit,
     onBottomHeight: (Int) -> Unit,
     onSeek: (Long) -> Unit,
+    aim: Long?,
     onExit: () -> Unit,
     topFocus: Int,
     onSwap: (() -> Unit)?,
@@ -486,6 +526,8 @@ private fun Controls(
                 chapters = item?.chapters.orEmpty(),
                 focused = row == TIMELINE,
                 onSeek = onSeek,
+                previews = session.previews,
+                aim = aim,
             )
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TimeText({ session.positionMs() })
@@ -619,19 +661,59 @@ private fun SeekFlash(f: Flash, modifier: Modifier) {
     }
 }
 
-/** The next episode, in the last moments: what it is, a bar running down to it, and RB to go now. */
+/**
+ * How long until the item ends, followed closely only in its last [UP_NEXT_MS], where the Up next
+ * card counts down. Until then it sleeps until that moment (worked out from where the picture is
+ * and how fast it plays), and paused it waits for the next play, so nothing ticks through a film.
+ */
 @Composable
-private fun UpNextCard(session: PlayerSession, controls: Boolean, modifier: Modifier) {
-    val next = session.upNext ?: return
-    if (!session.isVideo) return
+private fun rememberLeft(session: PlayerSession, playing: Boolean): Long {
     var left by remember { mutableLongStateOf(Long.MAX_VALUE) }
-    LaunchedEffect(next.id) {
+    LaunchedEffect(session.item?.id, session.seeks, playing) {
         while (true) {
             val d = session.durationMs()
-            left = if (d == null) Long.MAX_VALUE else d - session.positionMs()
-            delay(250)
+            val l = if (d == null) Long.MAX_VALUE else d - session.positionMs()
+            left = l
+            if (!playing) break
+            val wait = if (l > UP_NEXT_MS) ((l - UP_NEXT_MS) / session.speed.coerceAtLeast(PlayerSession.MIN_SPEED)).toLong() else COUNTDOWN_MS
+            delay(wait.coerceIn(COUNTDOWN_MS, PlayerSession.SEGMENT_WAIT_MAX_MS))
         }
     }
+    return left
+}
+
+/**
+ * The skip on offer while a marked part plays: "Skip Intro", "Skip Recap", or at the credits of an
+ * episode with another after it, "Next Episode". Solid white, so it reads over any picture; with
+ * the controls away it shows A, which takes it.
+ */
+@Composable
+private fun SkipPill(s: io.github.matiyaaa.fuse.playback.Segment, toNext: Boolean, glyph: Boolean, onClick: () -> Unit) {
+    val ink = Color(0xFF101114)
+    Row(
+        Modifier
+            .height(48.dp)
+            .clip(RoundedCornerShape(50))
+            .background(Color.White)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(start = Space.l, end = if (glyph) Space.s else Space.l),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FuseIcon(if (toNext) FuseIcons.SkipForward else FuseIcons.ChevronsRight, size = 18.dp, tint = ink)
+        Spacer(Modifier.width(Space.s))
+        FText(if (toNext) "Next Episode" else "Skip ${segmentName(s.kind)}", Fuse.type.bodyStrong, color = ink, maxLines = 1)
+        if (glyph) {
+            Spacer(Modifier.width(Space.m))
+            ButtonGlyph(HintButton.CONFIRM, size = 24.dp, color = ink.copy(alpha = 0.72f))
+        }
+    }
+}
+
+/** The next episode, in the last moments: what it is, a bar running down to it, and RB to go now. */
+@Composable
+private fun UpNextCard(session: PlayerSession, left: Long, modifier: Modifier) {
+    val next = session.upNext ?: return
+    if (!session.isVideo) return
     val shown = left in 0..UP_NEXT_MS && session.error == null
     Appear(shown, modifier, enter = fadeIn(), exit = fadeOut()) {
         Panel(Modifier.width(320.dp).clickable { session.next() }) {
@@ -658,13 +740,13 @@ private fun UpNextCard(session: PlayerSession, controls: Boolean, modifier: Modi
     }
 }
 
-/** Music: the cover, large, with the title under it, over a blur of itself. */
 /**
  * Music: the album art large, with the song, the artist and album, and what plays next. Wide, the
- * art sits beside the words; narrow, above them. The room behind is the art again, blurred.
+ * art sits beside the words; narrow, above them. The room behind is the art again, blurred. With
+ * [lyrics], the song's words take the place of what plays next (wide) or of the large art (narrow).
  */
 @Composable
-private fun NowPlaying(session: PlayerSession, narrow: Boolean, short: Boolean, controls: Dp) {
+private fun NowPlaying(session: PlayerSession, narrow: Boolean, short: Boolean, controls: Dp, lyrics: io.github.matiyaaa.fuse.playback.Lyrics?, playing: Boolean) {
     val item = session.item ?: return
     val upcoming = session.queue.drop(session.queueIndex + 1).take(if (short) 2 else 4)
     Box(Modifier.fillMaxSize()) {
@@ -672,6 +754,10 @@ private fun NowPlaying(session: PlayerSession, narrow: Boolean, short: Boolean, 
         Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.7f)))))
         BoxWithConstraints(Modifier.fillMaxSize().padding(top = if (short) 72.dp else 104.dp, bottom = maxOf(controls, Space.xl)).padding(horizontal = if (narrow) Space.l else Space.xxl)) {
             val side = !narrow && maxWidth > maxHeight * 1.2f
+            if (lyrics != null) {
+                SongWithLyrics(session, item, lyrics, side, playing)
+                return@BoxWithConstraints
+            }
             val art = if (side) minOf(maxHeight, maxWidth * 0.4f, 440.dp) else minOf(maxWidth * 0.7f, maxHeight * 0.55f, 320.dp)
             val cover = @Composable {
                 Box(Modifier.size(art).clip(RoundedCornerShape(art * 0.04f)).background(Color.White.copy(alpha = 0.08f))) {
@@ -713,6 +799,106 @@ private fun NowPlaying(session: PlayerSession, narrow: Boolean, short: Boolean, 
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.l)) {
                     cover()
                     words(Alignment.CenterHorizontally)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The song with its words: wide, the art beside the song's name and its words under it; narrow,
+ * the art small beside the name, and the words filling the rest.
+ */
+@Composable
+private fun androidx.compose.foundation.layout.BoxWithConstraintsScope.SongWithLyrics(
+    session: PlayerSession,
+    item: io.github.matiyaaa.fuse.playback.PlayItem,
+    lyrics: io.github.matiyaaa.fuse.playback.Lyrics,
+    side: Boolean,
+    playing: Boolean,
+) {
+    val byline = listOfNotNull(item.artist, item.album).joinToString("  ·  ").takeIf { it.isNotEmpty() }
+    if (side) {
+        val art = minOf(maxHeight * 0.86f, maxWidth * 0.34f, 420.dp)
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xxl)) {
+            Box(Modifier.size(art).clip(RoundedCornerShape(art * 0.04f)).background(Color.White.copy(alpha = 0.08f))) {
+                Artwork(item.artwork, Modifier.fillMaxSize())
+            }
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                FText(item.title, Fuse.type.titleSmall, color = Color.White, maxLines = 1)
+                byline?.let { FText(it, Fuse.type.label, color = Color.White.copy(alpha = 0.62f), maxLines = 1) }
+                Spacer(Modifier.height(Space.l))
+                LyricsView(session, lyrics, big = true, playing = playing, modifier = Modifier.weight(1f).fillMaxWidth())
+            }
+        }
+    } else {
+        Column(Modifier.fillMaxSize()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(LYRICS_THUMB).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.08f))) {
+                    Artwork(item.artwork, Modifier.fillMaxSize())
+                }
+                Spacer(Modifier.width(Space.m))
+                Column(Modifier.weight(1f)) {
+                    FText(item.title, Fuse.type.bodyStrong, color = Color.White, maxLines = 1)
+                    byline?.let { FText(it, Fuse.type.caption, color = Color.White.copy(alpha = 0.62f), maxLines = 1) }
+                }
+            }
+            Spacer(Modifier.height(Space.l))
+            LyricsView(session, lyrics, big = false, playing = playing, modifier = Modifier.weight(1f).fillMaxWidth())
+        }
+    }
+}
+
+/**
+ * A song's words. Timed to the song, the line being sung is bright and held a third of the way
+ * down, the ones sung dimmer and the ones to come between; the words move only when the line
+ * changes. Without times they follow the song roughly, a line at a time across its length, all
+ * alike. A gap in the singing is a quiet note. Nothing here ticks: both wait for their next change.
+ */
+@Composable
+private fun LyricsView(session: PlayerSession, lyrics: io.github.matiyaaa.fuse.playback.Lyrics, big: Boolean, playing: Boolean, modifier: Modifier) {
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    val line = session.lyricLine
+    val timed = lyrics.synced
+    if (timed) {
+        LaunchedEffect(lyrics, line) { list.animateScrollToItem(line.coerceAtLeast(0)) }
+    } else {
+        // Words without times: where the song is through its length, a line at a time.
+        LaunchedEffect(lyrics, playing, session.seeks) {
+            val n = lyrics.lines.size
+            while (true) {
+                val d = session.durationMs()?.takeIf { it > 0 } ?: return@LaunchedEffect
+                val p = session.positionMs().coerceIn(0, d)
+                val i = (p * n / d).toInt().coerceIn(0, n - 1)
+                list.animateScrollToItem(i)
+                if (!playing) return@LaunchedEffect
+                delay(((d * (i + 1) / n - p) / session.speed.coerceAtLeast(0.25f)).toLong().coerceIn(UNTIMED_WAIT_MIN_MS, UNTIMED_WAIT_MAX_MS))
+            }
+        }
+    }
+    val style = if (big) Fuse.type.title else Fuse.type.titleSmall
+    BoxWithConstraints(modifier) {
+        val lead = maxHeight * LYRIC_LEAD
+        androidx.compose.foundation.lazy.LazyColumn(
+            state = list,
+            modifier = Modifier.fillMaxSize().fadingEdges(top = Space.xxl, bottom = Space.xxl),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = lead, bottom = maxHeight - lead),
+            verticalArrangement = Arrangement.spacedBy(if (big) Space.l else Space.m),
+            userScrollEnabled = false,
+        ) {
+            items(lyrics.lines.size) { i ->
+                val target = when {
+                    !timed -> LYRIC_PLAIN
+                    i == line -> 1f
+                    i < line -> LYRIC_SUNG
+                    else -> LYRIC_TO_COME
+                }
+                val alpha by fuselineFloat(target, Fuse.motion.focusSpring(), label = "lyric")
+                val text = lyrics.lines[i].text
+                if (text.isEmpty()) {
+                    FuseIcon(FuseIcons.Music, size = if (big) 28.dp else 22.dp, tint = Color.White.copy(alpha = alpha * 0.8f))
+                } else {
+                    FText(text, style, color = Color.White.copy(alpha = alpha), maxLines = 4)
                 }
             }
         }
@@ -771,7 +957,15 @@ private fun Finished(session: PlayerSession, onExit: () -> Unit, modifier: Modif
 
 /** Audio, subtitles or settings, as a side sheet over the picture. */
 @Composable
-private fun PlayerSheetPanel(sheet: PlayerSheet, session: PlayerSession, inputEnabled: Boolean, onSettings: (PlayerSettings) -> Unit, onClose: () -> Unit, modifier: Modifier) {
+private fun PlayerSheetPanel(
+    sheet: PlayerSheet,
+    session: PlayerSession,
+    inputEnabled: Boolean,
+    onSettings: (PlayerSettings) -> Unit,
+    onClose: () -> Unit,
+    onSheet: (PlayerSheet) -> Unit,
+    modifier: Modifier,
+) {
     val sel = remember(sheet) { LinearSelection(if (sheet == PlayerSheet.QUEUE) session.queueIndex else 0) }
     val src = session.source
     val s = session.settings
@@ -789,7 +983,18 @@ private fun PlayerSheetPanel(sheet: PlayerSheet, session: PlayerSession, inputEn
                     if (t.delivery == SubtitleDelivery.BurnIn) "Drawn into the picture by the server" else null,
                 ).joinToString("  ·  ").ifEmpty { null }
                 MenuAction("s${t.id}", t.label, detail = note, trailing = Trailing.Check(src?.subtitle == t.id)) { session.chooseSubtitle(t) }
-            }
+            } +
+            listOfNotNull(
+                if (session.findsSubtitles) {
+                    MenuAction("find", "Find subtitles online", FuseIcons.Search, section = "More", detail = "From your server's subtitle plugins, such as OpenSubtitles", trailing = Trailing.Chevron) {
+                        session.findSubtitles()
+                        onSheet(PlayerSheet.FIND_SUBTITLES)
+                    }
+                } else {
+                    null
+                },
+            )
+        PlayerSheet.FIND_SUBTITLES -> foundSubtitleRows(session)
         PlayerSheet.QUEUE -> session.queue.mapIndexed { i, q ->
             MenuAction("q$i.${q.id}", q.title, detail = listOfNotNull(q.artist, q.durationMs?.let { clock(it) }).joinToString("  ·  ").ifEmpty { null }, trailing = if (i == session.queueIndex) Trailing.Badge("Playing") else Trailing.None) {
                 if (i != session.queueIndex) session.playQueueIndex(i)
@@ -833,6 +1038,7 @@ private fun PlayerSheetPanel(sheet: PlayerSheet, session: PlayerSession, inputEn
     val title = when (sheet) {
         PlayerSheet.AUDIO -> "Audio"
         PlayerSheet.SUBTITLES -> "Subtitles"
+        PlayerSheet.FIND_SUBTITLES -> "Find subtitles"
         PlayerSheet.SETTINGS -> "Settings"
         PlayerSheet.QUEUE -> "Queue"
     }
@@ -841,12 +1047,56 @@ private fun PlayerSheetPanel(sheet: PlayerSheet, session: PlayerSession, inputEn
             MenuHeader(title, icon = when (sheet) {
                 PlayerSheet.AUDIO -> FuseIcons.AudioLines
                 PlayerSheet.SUBTITLES -> FuseIcons.Captions
+                PlayerSheet.FIND_SUBTITLES -> FuseIcons.Search
                 PlayerSheet.SETTINGS -> FuseIcons.Settings2
                 PlayerSheet.QUEUE -> FuseIcons.ListMusic
             })
             MenuList(rows, sel, modifier = Modifier.weight(1f, fill = false), fill = false)
         }
     }
+}
+
+/**
+ * What looking for subtitles shows: a bar while the server's plugins look, what they found (the
+ * ones made for this file first, each with where it is from and how much it is used), the one on
+ * its way, or what went wrong with a way to look again.
+ */
+private fun foundSubtitleRows(session: PlayerSession): List<MenuAction> = when (val search = session.subtitleSearch) {
+    null, SubtitleSearch.Looking -> listOf(
+        MenuAction("looking", "Asking your server", detail = "Its subtitle plugins search the internet, which can take a moment", enabled = false, trailing = Trailing.Progress(null, "Looking")),
+    )
+    is SubtitleSearch.Found -> if (search.subtitles.isEmpty()) {
+        listOf(
+            MenuAction("none", "None found", detail = "Your server looks with its subtitle plugins, such as OpenSubtitles. Without one, or for a rare film, nothing turns up", enabled = false),
+            MenuAction("again", "Look again", FuseIcons.RotateCw) { session.findSubtitles() },
+        )
+    } else search.subtitles.map { r ->
+        MenuAction(
+            "r${r.id}", r.name,
+            detail = listOfNotNull(
+                r.provider,
+                r.format?.uppercase(),
+                r.downloads?.takeIf { it > 0 }?.let { "${countText(it)} downloads" },
+                if (r.hearingImpaired) "For the hard of hearing" else null,
+                if (r.machineTranslated) "Machine translated" else null,
+            ).joinToString("  ·  ").ifEmpty { null },
+            trailing = if (r.hashMatch) Trailing.Badge("Made for this file") else Trailing.None,
+        ) { session.fetchSubtitle(r) }
+    }
+    is SubtitleSearch.Fetching -> listOf(
+        MenuAction("fetching", search.subtitle.name, detail = "Adding it to your server; it shows as soon as it's there", enabled = false, trailing = Trailing.Progress(null, "Adding")),
+    )
+    is SubtitleSearch.Failed -> listOf(
+        MenuAction("failed", "Couldn't get subtitles", detail = search.message, enabled = false),
+        MenuAction("again", "Look again", FuseIcons.RotateCw) { session.findSubtitles() },
+    )
+}
+
+/** 1,234 as 1.2k and 45,600 as 46k: enough to tell a popular subtitle from a rare one. */
+private fun countText(n: Int): String = when {
+    n >= 10_000 -> "${(n + 500) / 1_000}k"
+    n >= 1_000 -> "${n / 1_000}.${(n % 1_000) / 100}k"
+    else -> n.toString()
 }
 
 private fun channelsText(n: Int) = when (n) {
@@ -878,12 +1128,33 @@ private val SUB_DELAYS = listOf(0L, 250L, 500L, 1_000L, 2_000L, -2_000L, -1_000L
 
 /** Up next shows in the last half minute. */
 private const val UP_NEXT_MS = 30_000L
+
+/** How often the last half minute's countdown looks at the clock. */
+private const val COUNTDOWN_MS = 250L
 private const val FLASH_MS = 700L
+
+/** How long the picture above the timeline stays after the controller's last step along it. */
+private const val AIM_MS = 1_200L
 
 /** The subtitle layer's own bottom margin, which the lift above the controls already includes. */
 private const val SUBTITLE_MARGIN = 0.04f
 
 private fun Modifier.androidxOnSize(block: (Int) -> Unit): Modifier = this.then(Modifier.onSizeChanged { block(it.height) })
 private val CONTROLS_HEIGHT = 190.dp
+
+/** How far down the line being sung is held, as a share of the words' height. */
+private const val LYRIC_LEAD = 0.32f
+
+/** How bright a line is: sung already, still to come, and every line of words without times. */
+private const val LYRIC_SUNG = 0.34f
+private const val LYRIC_TO_COME = 0.5f
+private const val LYRIC_PLAIN = 0.86f
+
+/** The shortest and longest waits for words without times to move on a line. */
+private const val UNTIMED_WAIT_MIN_MS = 1_000L
+private const val UNTIMED_WAIT_MAX_MS = 60_000L
+
+/** The art beside a song's name above its words, on a narrow screen. */
+private val LYRICS_THUMB = 56.dp
 private val NARROW = 600.dp
 private val SHORT = 480.dp

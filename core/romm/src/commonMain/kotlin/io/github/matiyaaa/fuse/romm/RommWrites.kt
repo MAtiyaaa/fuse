@@ -5,8 +5,8 @@ import kotlinx.serialization.Serializable
 
 /**
  * A change the person made in Fuse to a game from RomM, on its way to RomM through RomM's own API:
- * a favourite (RomM's favourites collection), a game hidden or shown, a play session, trophies
- * earned. Kept, in the order made, until RomM takes it, so a change made while RomM is away goes
+ * a favourite (RomM's favourites collection), a game hidden or shown, its Journal (status and
+ * rating), a play session, trophies earned. Kept, in the order made, until RomM takes it, so a change made while RomM is away goes
  * once it answers.
  */
 @Serializable
@@ -23,6 +23,14 @@ sealed interface RommWrite {
     @Serializable
     @SerialName("hidden")
     data class Hidden(override val romId: Long, val on: Boolean) : RommWrite
+
+    /**
+     * Where the person is with it and their rating ([RommJournal], [RommClient.setMarks]): a
+     * [io.github.matiyaaa.fuse.model.PlayStatus] name, or null for none.
+     */
+    @Serializable
+    @SerialName("journal")
+    data class Journal(override val romId: Long, val status: String?, val rating: Int) : RommWrite
 
     /** Played, from [startedAt] to [endedAt] (epoch milliseconds, [RommClient.playSessions]). */
     @Serializable
@@ -49,9 +57,9 @@ object RommWrites {
     const val SHORTEST_SESSION_MS = 1_000L
 
     /**
-     * [queue] with [w] at its end. A later favourite or hide of the same game replaces one not sent
-     * yet (only where the person left it goes), and so does a game's trophies (they are read when
-     * they go); every play session is its own.
+     * [queue] with [w] at its end. A later favourite, hide or Journal of the same game replaces one
+     * not sent yet (only where the person left it goes), and so does a game's trophies (they are
+     * read when they go); every play session is its own.
      */
     fun add(queue: List<RommWrite>, w: RommWrite): List<RommWrite> {
         // A session too short for RomM, or one already waiting (counted twice), adds nothing.
@@ -60,6 +68,7 @@ object RommWrites {
             is RommWrite.Favourite -> queue.filterNot { it is RommWrite.Favourite && it.romId == w.romId }
             is RommWrite.Hidden -> queue.filterNot { it is RommWrite.Hidden && it.romId == w.romId }
             is RommWrite.Trophies -> queue.filterNot { it is RommWrite.Trophies && it.romId == w.romId }
+            is RommWrite.Journal -> queue.filterNot { it is RommWrite.Journal && it.romId == w.romId }
             is RommWrite.Played -> queue
         }
         return (kept + w).takeLast(MOST)

@@ -38,7 +38,7 @@ interface PlatformUi {
     /** Window and login controls on desktop Linux; null where the system manages Fuse's window. */
     val windowControls: WindowControls? get() = null
 
-    /** Screenshots and recordings of Fuse's own screen; null where Fuse can't capture it (desktop for now). */
+    /** Screenshots and recordings of Fuse's own screen (Android's, the desktop's window); null where Fuse can't capture it. */
     val capture: ScreenCapture? get() = null
 
     /** Steam on a computer: Fuse in Steam's library, for Game Mode. Null where there is no Steam (Android). */
@@ -475,6 +475,10 @@ interface ScreenCapture {
     /** Saves what Fuse shows right now as a picture called [name]. */
     suspend fun screenshot(name: String): CaptureResult
 
+    /** Saves [picture], one Fuse drew to keep (a recap), as a picture called [name] where screenshots go. */
+    suspend fun savePicture(name: String, picture: ImageBitmap): CaptureResult =
+        CaptureResult(picturesPlace, failure = "Pictures can't be saved on this device")
+
     /**
      * Gets what a recording needs: the system's permission to record the screen (asked every time),
      * and with [withSound] the permission to capture Fuse's own sound.
@@ -518,6 +522,8 @@ data class CaptureResult(
     val video: Boolean = false,
     /** Why nothing was saved; null when it was. */
     val failure: String? = null,
+    /** A picture Fuse drew to keep (a recap), not a screenshot. */
+    val picture: Boolean = false,
 )
 
 interface HomeRole {
@@ -552,7 +558,7 @@ interface StorageAccess {
     suspend fun pickAudio(title: String): PickedFile? = null
     /** A save file or archive, copied into temporary app storage where document access needs it. */
     suspend fun pickSave(title: String): String? = null
-    /** An IPS, UPS, BPS or xdelta patch, readable by Fuse (copied into temporary app storage where document access needs it). */
+    /** An IPS, UPS, BPS, xdelta or PPF patch, readable by Fuse (copied into temporary app storage where document access needs it). */
     suspend fun pickPatch(title: String): String? = null
     /** A file of one of [extensions] (described as [label]), read where it is; null where Fuse can't open files that way. */
     suspend fun pickFile(title: String, label: String, extensions: List<String>): String? = null

@@ -89,6 +89,65 @@ internal fun WideCard(item: MediaItem, selected: Boolean, width: Dp, onClick: ()
     }
 }
 
+/**
+ * Something to carry on with or watch next, as a scene: the show's or film's wide art, its logo (or
+ * name) over a shade at the foot, what it is ("S2:E5  ·  The Long Night"), and how far in as a slim
+ * bar with the time left beside it. Everything sits inside the art, so a shelf of them reads as a
+ * row of scenes rather than pictures with captions. Chosen, a play mark shows what A does.
+ */
+@Composable
+internal fun ContinueCard(item: MediaItem, selected: Boolean, width: Dp, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+    val episode = item.type == MediaType.EPISODE
+    // The show's own wide art reads better behind its logo than an episode's random frame.
+    val art = item.backdrop ?: item.thumb ?: item.poster
+    val title = if (episode) item.seriesName ?: item.name else item.name
+    val line = when {
+        episode -> listOfNotNull(item.episodeLabel, item.name.takeIf { it != title }).joinToString("  \u00B7  ")
+        else -> listOfNotNull(item.year?.toString(), item.runtimeMs?.let { minutes(it) }).joinToString("  \u00B7  ")
+    }.ifEmpty { null }
+    Tile(
+        selected = selected, label = listOfNotNull(title, line).joinToString(", "),
+        modifier = Modifier.width(width).aspectRatio(16f / 9f), glow = accentOf(title), onClick = onClick, onLongClick = onLongClick,
+    ) {
+        Artwork(art.at(WIDE_WIDTH), Modifier.fillMaxSize(), fallback = { GeneratedArt(title, accentOf(title), Modifier.fillMaxSize(), slot = ArtSlot.WIDE, showText = false) })
+        Box(
+            Modifier.fillMaxSize().ditheredBackground(
+                Brush.verticalGradient(0.3f to Color.Transparent, 0.62f to Color.Black.copy(alpha = 0.42f), 1f to Color.Black.copy(alpha = 0.86f)),
+            ),
+        )
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+            val name: @Composable () -> Unit = { FText(title, Fuse.type.titleSmall, color = Color.White, maxLines = 1) }
+            val logo = item.logo
+            if (logo != null) {
+                Artwork(
+                    logo.at(LOGO_WIDTH), Modifier.height(width * LOGO_SHARE).fillMaxWidth(0.62f),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit, focusX = 0f, focusY = 1f, fallback = name,
+                )
+            } else {
+                name()
+            }
+            line?.let { FText(it, Fuse.type.caption, color = Color.White.copy(alpha = 0.86f), maxLines = 1) }
+            val progress = item.progress
+            if (progress != null) {
+                Row(Modifier.padding(top = Space.xxs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    Box(Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.24f))) {
+                        Box(Modifier.fillMaxWidth(progress).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Fuse.colors.accent))
+                    }
+                    item.leftMs?.let { FText("${minutes(it)} left", Fuse.type.caption.tabular(), color = Color.White.copy(alpha = 0.86f), maxLines = 1) }
+                }
+            }
+        }
+        // What A does, where the eye already is.
+        if (selected) {
+            Box(Modifier.align(Alignment.TopEnd).padding(Space.m).size(36.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+                FuseIcon(FuseIcons.Play, size = 16.dp, tint = Color(0xFF101114))
+            }
+        } else {
+            Badges(item, Modifier.align(Alignment.TopEnd).padding(Space.s))
+        }
+    }
+}
+
 /** A library: its own picture with its name over it, or a calm placeholder with an icon. */
 @Composable
 internal fun LibraryCard(item: MediaItem, selected: Boolean, width: Dp, onClick: () -> Unit) {
@@ -175,3 +234,9 @@ internal fun minutes(ms: Long): String {
         else -> "${m / 60} h ${m % 60} min"
     }
 }
+
+/** How wide a logo is asked for, for the cards that show one. */
+private const val LOGO_WIDTH = 480
+
+/** A logo's height on a [ContinueCard], as a share of the card's width. */
+private const val LOGO_SHARE = 0.15f

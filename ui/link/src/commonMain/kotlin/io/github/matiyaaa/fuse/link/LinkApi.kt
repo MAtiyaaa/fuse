@@ -123,6 +123,10 @@ internal class LinkApi(
         return buildJsonObject {
             put("playing", home.playtime.currentGame?.let { summary(it) } ?: JsonNull)
             put("playingSince", home.playtime.currentSince)
+            // Whether the phone can ask the game to close (on a computer that can).
+            put("canQuit", home.playtime.currentGame != null && store.library.canQuitPlaying)
+            // Up next: the games the Journal says are wanted, the latest first.
+            putJsonArray("upNext") { home.upNext.take(UP_NEXT_SHOWN).forEach { add(summary(it)) } }
             put("cartridge", buildJsonObject {
                 put("enabled", prefs.cartridgeEnabled)
                 if (!prefs.cartridgeEnabled) return@buildJsonObject
@@ -188,6 +192,7 @@ internal class LinkApi(
                         put("title", t.title)
                         put("upload", t.upload)
                         put("state", t.status.name.lowercase())
+                        put("later", t.later)
                         put("done", done)
                         put("total", total)
                         put("progress", total?.takeIf { it > 0 }?.let { (done.toDouble() / it).coerceIn(0.0, 1.0) })
@@ -226,6 +231,37 @@ internal class LinkApi(
         store.library.game(GameId(id)).first() ?: return notFound()
         store.library.setFavorite(GameId(id), favorite)
         return Reply(buildJsonObject { put("ok", true); put("favorite", favorite) })
+    }
+
+    /**
+     * [id]'s Journal changed as [body] says: any of `status` (a PlayStatus name, or null for none),
+     * `rating` (0 to 10, halves of five stars) and `note`; what isn't there stays as it is.
+     */
+    suspend fun setJournal(id: Long, body: JsonElement?): Reply {
+        val o = body as? JsonObject ?: return Reply(error("Say what to change."), HttpStatusCode.BadRequest)
+        val d = store.library.game(GameId(id)).first() ?: return notFound()
+        var j = d.game.journal
+        if ("status" in o) {
+            val s = (o["status"] as? JsonPrimitive)?.contentOrNull
+            j = j.copy(status = if (s == null) null else io.github.matiyaaa.fuse.model.PlayStatus.of(s) ?: return Reply(error("There is no such status."), HttpStatusCode.BadRequest))
+        }
+        if ("rating" in o) {
+            val r = (o["rating"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()?.takeIf { it in 0..io.github.matiyaaa.fuse.model.GameJournal.MOST_RATING }
+                ?: return Reply(error("A rating is 0 to 10."), HttpStatusCode.BadRequest)
+            j = j.copy(rating = r)
+        }
+        if ("note" in o) {
+            val n = (o["note"] as? JsonPrimitive)?.contentOrNull?.trim()?.take(io.github.matiyaaa.fuse.model.GameJournal.LONGEST_NOTE)
+            j = j.copy(note = n?.ifEmpty { null })
+        }
+        store.library.setJournal(GameId(id), j)
+        return Reply(buildJsonObject { put("ok", true) })
+    }
+
+    /** Asks the game being played on the device to close, as its own window would; never by force. */
+    suspend fun quitPlaying(): Reply {
+        if (!store.library.canQuitPlaying) return Reply(error("$deviceName can't close games from here. Close it in the game."))
+        return if (store.library.quitPlaying()) Reply(buildJsonObject { put("ok", true) }) else Reply(error("No game is running on $deviceName."))
     }
 
     fun pauseTransfers(pause: Boolean): Reply {
@@ -317,6 +353,13 @@ internal class LinkApi(
             put("logo", url(d.art.logo))
             put("favorite", g.favorite)
             put("lastPlayedAt", g.play.lastPlayedAt)
+            // Where the person is with it: best written on a phone's keyboard.
+            put("journal", buildJsonObject {
+                put("status", g.journal.status?.name)
+                put("statusAt", g.journal.statusAt)
+                put("rating", g.journal.rating)
+                put("note", g.journal.note)
+            })
             put("description", g.metadata.description)
             put("developer", g.metadata.developer)
             put("publisher", g.metadata.publisher)
@@ -432,11 +475,73 @@ internal class LinkApi(
         return ok()
     }
 
+    // RomM -----------------------------------------------------------------------------------------
+
+    /**
+     * A page of the RomM server's games, to look through and queue from the phone: on one system or
+     * all, matching [query], each with whether it is here, on its way, or only on the server. Its
+     * systems come with it, for narrowing. Not set up (or no RomM here): said so.
+     */
+    suspend fun romm(system: String, query: String, offset: Int, limit: Int): JsonObject {
+        val romm = store.romm
+        val state = romm.state.value
+        if (!romm.supported || !state.usable) {
+            return buildJsonObject {
+                put("available", false)
+                put("message", if (!romm.supported) "RomM isn't part of Fuse on $deviceName." else state.problem ?: "Set up RomM on $deviceName to look through it here.")
+            }
+        }
+        val page = romm.browse(system.ifBlank { null }, query, offset.coerceAtLeast(0), limit.coerceIn(1, 120))
+        return buildJsonObject {
+            put("available", true)
+            put("offline", state.link == io.github.matiyaaa.fuse.ui.shell.store.RommLink.OFFLINE)
+            put("total", page.total)
+            putJsonArray("systems") {
+                romm.systems.value.filter { it.games > 0 }.forEach { s ->
+                    add(buildJsonObject {
+                        put("slug", s.slug)
+                        put("name", s.name)
+                        put("games", s.games)
+                        put("here", s.installed)
+                    })
+                }
+            }
+            putJsonArray("items") { page.games.forEach { add(rommItem(it)) } }
+        }
+    }
+
+    /** Queues RomM game [romId] on the device: now, or kept for a charger and Wi-Fi ([body]'s `later`). */
+    suspend fun rommDownload(romId: Long, body: JsonElement?): Reply {
+        val later = ((body as? JsonObject)?.get("later") as? JsonPrimitive)?.content == "true"
+        val why = if (later) store.romm.downloadLater(romId) else store.romm.download(romId)
+        return if (why == null) Reply(buildJsonObject { put("ok", true); put("later", later) }) else Reply(error(why), HttpStatusCode.Conflict)
+    }
+
+    private fun rommItem(g: io.github.matiyaaa.fuse.ui.shell.store.RommGame) = buildJsonObject {
+        put("romId", g.romId)
+        put("title", g.card.title)
+        put("system", g.card.platformShort)
+        put("year", g.card.year)
+        put("cover", artUrl(g.card.art.boxart ?: g.card.art.grid ?: g.card.art.square ?: g.card.art.icon))
+        put("sizeBytes", g.sizeBytes)
+        put("state", when (g.presence) {
+            io.github.matiyaaa.fuse.ui.shell.store.RommPresence.INSTALLED -> "here"
+            io.github.matiyaaa.fuse.ui.shell.store.RommPresence.PARTLY_INSTALLED -> "partly"
+            io.github.matiyaaa.fuse.ui.shell.store.RommPresence.DOWNLOADING, io.github.matiyaaa.fuse.ui.shell.store.RommPresence.QUEUED -> "coming"
+            io.github.matiyaaa.fuse.ui.shell.store.RommPresence.ON_SERVER -> "server"
+        })
+        g.game?.let { put("gameId", it.value) }
+    }
+
+    /** [url], or for a picture that isn't a file yet (RomM's), a token the phone's request fetches it by. */
+    private fun artUrl(model: Any?): String? = url(model) ?: model?.takeIf { it !is String }?.let { "/api/img/${images.tokenForModel(it.toString(), it)}" }
+
     // Images ---------------------------------------------------------------------------------------
 
     /** The picture behind a token this server handed out, with its type. */
     suspend fun image(token: String): Pair<ContentType, ByteArray>? {
-        val model = images.resolve(token) ?: return null
+        // RomM's pictures are fetched into Fuse's cache the first time the phone asks for one.
+        val model = images.resolve(token) ?: images.model(token)?.let { store.romm.artFile(it) } ?: return null
         val bytes = when {
             FsPath.isAbsolute(model) -> readFile(model, MAX_IMAGE)
             model.startsWith("file://") -> readFile(model.removePrefix("file://"), MAX_IMAGE)
@@ -491,6 +596,47 @@ internal class LinkApi(
 
     private fun ok() = Reply(buildJsonObject { put("ok", true) })
     private fun bad(message: String) = Reply(error(message), HttpStatusCode.BadRequest)
+    /**
+     * [id]'s achievements as the device knows them (RetroAchievements', or the trophies its own
+     * platform keeps there): how much of the set the person has, and each one with its badge, the
+     * earned ones newest first, then the rest in the set's order. `available` is false when the game
+     * has none Fuse knows of. Asked only when a game's page opens on the phone.
+     */
+    suspend fun achievements(id: Long): Reply {
+        val gameId = GameId(id)
+        store.library.game(gameId).first() ?: return notFound()
+        val s = runCatching { store.achievements.forGame(gameId) }.getOrNull()?.takeIf { it.total > 0 }
+            ?: return Reply(buildJsonObject { put("available", false) })
+        val ordered = s.achievements.filter { it.earned }.sortedByDescending { maxOf(it.earnedAt ?: 0, it.earnedHardcoreAt ?: 0) } +
+            s.achievements.filter { !it.earned }.sortedBy { it.displayOrder }
+        return Reply(buildJsonObject {
+            put("available", true)
+            put("source", s.source.label)
+            put("noun", s.source.noun)
+            put("total", s.total)
+            put("earned", s.earned)
+            put("earnedHardcore", s.earnedHardcore)
+            if (s.source.hasPoints) {
+                put("points", s.points)
+                put("pointsEarned", s.pointsEarned)
+            }
+            put("award", s.highestAward)
+            putJsonArray("items") {
+                ordered.take(ACHIEVEMENTS_SHOWN).forEach { a ->
+                    add(buildJsonObject {
+                        put("title", a.title)
+                        put("description", a.description)
+                        if (s.source.hasPoints) put("points", a.points)
+                        put("badge", url(if (a.earned) a.badgeUrl else a.badgeLockedUrl.ifBlank { a.badgeUrl }))
+                        put("earnedAt", a.earnedHardcoreAt ?: a.earnedAt)
+                        put("hardcore", a.earnedHardcoreAt != null)
+                        a.rarity?.let { put("rarity", it) }
+                    })
+                }
+            }
+        })
+    }
+
     private fun notFound() = Reply(error("This game is no longer in the library."), HttpStatusCode.NotFound)
     private fun error(message: String) = buildJsonObject { put("error", message) }
 
@@ -536,6 +682,17 @@ internal class ImageTokens {
     }
 
     fun resolve(token: String): String? = if (token.length in 8..40) byToken[token] else null
+
+    // Pictures not yet files (RomM's), kept as the model they are, by what they say they are.
+    private val modelByToken = BoundedMap<String, Any>(4_000)
+    private val tokenByKey = BoundedMap<String, String>(4_000)
+
+    fun tokenForModel(key: String, model: Any): String = tokenByKey[key] ?: base64(secureRandom(12)).replace('+', '-').replace('/', '_').trimEnd('=').also {
+        tokenByKey[key] = it
+        modelByToken[it] = model
+    }
+
+    fun model(token: String): Any? = if (token.length in 8..40) modelByToken[token] else null
 }
 
 /** A small map that forgets its oldest entries past [capacity]. */
@@ -552,3 +709,9 @@ internal class BoundedMap<K, V>(private val capacity: Int) {
         while (map.size > capacity) map.remove(map.keys.first())
     }
 }
+
+/** How many of the Journal's wanted games the phone's Now shows. */
+private const val UP_NEXT_SHOWN = 8
+
+/** The most achievements a phone is sent for one game: more than any set shows at once. */
+private const val ACHIEVEMENTS_SHOWN = 400

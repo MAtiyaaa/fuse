@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,7 +23,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -38,7 +42,8 @@ import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 /**
  * The timeline: what is played (in the accent), what is loaded ahead (lighter), chapters as small
  * breaks, and a thumb that grows when the controller is on it. Drag or tap to seek; while dragging
- * the time to land on rides above the thumb. The played part follows the clock every frame.
+ * (or while the controller steps along it, [aim]) the time to land on rides above the thumb, with
+ * the picture there where the server made [previews]. The played part follows the clock every frame.
  */
 @Composable
 internal fun PlayerTimeline(
@@ -49,6 +54,8 @@ internal fun PlayerTimeline(
     focused: Boolean,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    previews: io.github.matiyaaa.fuse.playback.ScrubPreviews? = null,
+    aim: Long? = null,
 ) {
     val c = Fuse.colors
     val accent = c.accent
@@ -110,25 +117,65 @@ internal fun PlayerTimeline(
                     drawCircle(Color.White, thumb, Offset(size.width * shown, size.height / 2))
                 },
         )
-        // The time to land on, above the thumb, while dragging.
-        val drag = dragging
+        // The time to land on, above the thumb, while dragging or stepping: with its picture where there is one.
+        val drag = dragging ?: aim?.let { (it.toFloat() / total).coerceIn(0f, 1f) }
         if (drag != null) {
-            Box(
+            val ms = (drag * total).toLong()
+            androidx.compose.foundation.layout.Column(
                 Modifier
                     .align(Alignment.TopStart)
                     .layout { m, cons ->
-                        val p = m.measure(cons.copy(minWidth = 0))
+                        // Its own height, above the timeline's: the picture is taller than the track.
+                        val p = m.measure(cons.copy(minWidth = 0, minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
                         val x = (drag * width - p.width / 2).coerceIn(0f, width - p.width)
-                        layout(cons.maxWidth, p.height) { p.place(x.toInt(), -p.height - 6.dp.roundToPx()) }
-                    }
-                    .background(Color.Black.copy(alpha = 0.78f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                        layout(cons.maxWidth, 0) { p.place(x.toInt(), -p.height - 6.dp.roundToPx()) }
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                FText(clock((drag * total).toLong()), Fuse.type.label.tabular(), color = Color.White, maxLines = 1)
+                previews?.let { PreviewFrame(it, ms) }
+                Box(Modifier.padding(top = 6.dp).background(Color.Black.copy(alpha = 0.78f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                    FText(clock(ms), Fuse.type.label.tabular(), color = Color.White, maxLines = 1)
+                }
             }
         }
     }
 }
+
+/**
+ * The picture at [ms] from the sheets of [previews]: the whole sheet drawn at the frame's size over,
+ * moved so only that one frame shows through a rounded window.
+ */
+@Composable
+private fun PreviewFrame(previews: io.github.matiyaaa.fuse.playback.ScrubPreviews, ms: Long) {
+    val (sheet, col, row) = previews.at(ms) ?: return
+    val w = PREVIEW_WIDTH
+    val h = w * (previews.height.toFloat() / previews.width)
+    val context = coil3.compose.LocalPlatformContext.current
+    // The sheet decoded at its own size: each frame keeps its pixels, and every frame on it is one decode.
+    val request = remember(sheet) {
+        coil3.request.ImageRequest.Builder(context).data(sheet).size(previews.columns * previews.width, previews.rows * previews.height).build()
+    }
+    val painter = coil3.compose.rememberAsyncImagePainter(request, filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium)
+    Box(
+        Modifier
+            .width(w)
+            .height(h)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.Black)
+            .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(8.dp))
+            .drawBehind {
+                // The sheet scaled so one frame fills the window, shifted to the frame wanted.
+                val fw = size.width
+                val fh = size.height
+                translate(-col * fw, -row * fh) {
+                    with(painter) { draw(androidx.compose.ui.geometry.Size(fw * previews.columns, fh * previews.rows)) }
+                }
+            },
+    )
+}
+
+/** How wide the picture above the thumb is. */
+private val PREVIEW_WIDTH = 192.dp
 
 /** 1:02:03 or 12:34. */
 internal fun clock(ms: Long): String {

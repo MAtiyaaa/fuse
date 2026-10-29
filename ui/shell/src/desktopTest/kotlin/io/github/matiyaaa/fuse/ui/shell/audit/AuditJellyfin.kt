@@ -56,6 +56,9 @@ internal object AuditJellyfin {
         val logo: Boolean = false,
         val children: Int? = null,
         val unplayed: Int? = null,
+        /** A person's birth date and birthplace. */
+        val born: String? = null,
+        val place: String? = null,
     )
 
     private val films = listOf(
@@ -111,7 +114,15 @@ internal object AuditJellyfin {
         .take(album.children ?: 8).mapIndexed { i, t -> Fx("${album.id}t${i + 1}", t, "Audio", album.year, 3 + i % 3, parent = album.id, episode = i + 1, artist = album.artist) }
 
     private val people = listOf("Ines Calder" to "Mara Quill", "Tomas Reyes" to "The Surveyor", "Maya Okafor" to "Harbourmaster", "Jonah Pike" to "Elias Fenn", "Lena Varga" to "Dr. Ostrow", "Ravi Anand" to "Captain Hale")
-        .mapIndexed { i, (n, _) -> Fx("p${i + 1}", n, "Person") }
+        .mapIndexed { i, (n, _) ->
+            // The first has what a server usually knows of an actor: when and where they were born, and a few lines about them.
+            if (i == 0) {
+                Fx("p1", n, "Person", born = "1984-03-11T00:00:00.0000000Z", place = "Leith, Scotland",
+                    overview = "Ines Calder began on stage in Edinburgh before her first film role in The Long Meridian. She is known for quiet, watchful parts, and for Mara Quill in Harbour Lights.")
+            } else {
+                Fx("p${i + 1}", n, "Person")
+            }
+        }
 
     private val all: Map<String, Fx> by lazy {
         val eps = shows.flatMap { s -> seasonsOf(s).flatMap { se -> episodesOf(s, se.season!!) } }
@@ -134,6 +145,10 @@ internal object AuditJellyfin {
         })
         val parts = path.trim('/').split('/')
         when {
+            path.endsWith("/QuickConnect/Enabled") -> json(JsonPrimitive(true))
+            path.endsWith("/QuickConnect/Initiate") -> json(buildJsonObject { put("Secret", "audit-secret"); put("Code", "482913"); put("Authenticated", false) })
+            // Never approved here: the code stays on show for the render.
+            path.endsWith("/QuickConnect/Connect") -> json(buildJsonObject { put("Secret", "audit-secret"); put("Code", "482913"); put("Authenticated", false) })
             path.endsWith("/System/Info/Public") -> json(buildJsonObject { put("ServerName", "Living Room"); put("Version", "10.11.11"); put("Id", "srv-audit") })
             path.endsWith("/Users/AuthenticateByName") -> json(buildJsonObject {
                 put("User", buildJsonObject { put("Id", "u1"); put("Name", USER) })
@@ -206,6 +221,8 @@ internal object AuditJellyfin {
         put("Name", f.name)
         put("Type", f.type)
         f.year?.let { put("ProductionYear", it) }
+        f.born?.let { put("PremiereDate", it) }
+        f.place?.let { put("ProductionLocations", buildJsonArray { add(JsonPrimitive(it)) }) }
         f.minutes?.let { put("RunTimeTicks", it * 60L * 10_000_000L) }
         f.parent?.let { put("ParentId", it) }
         f.series?.let { s ->

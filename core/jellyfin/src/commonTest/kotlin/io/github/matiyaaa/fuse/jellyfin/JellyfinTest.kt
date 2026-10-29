@@ -6,6 +6,8 @@ import io.github.matiyaaa.fuse.playback.HdrFormat
 import io.github.matiyaaa.fuse.playback.PlayItem
 import io.github.matiyaaa.fuse.playback.PlayMethod
 import io.github.matiyaaa.fuse.playback.PlayRequest
+import io.github.matiyaaa.fuse.playback.Segment
+import io.github.matiyaaa.fuse.playback.SegmentKind
 import io.github.matiyaaa.fuse.playback.SubtitleDelivery
 import io.github.matiyaaa.fuse.playback.SubtitleFormat
 import io.github.matiyaaa.fuse.playback.VideoCodec
@@ -335,6 +337,151 @@ class JellyfinTest {
         assertEquals("2", src.audio)
         assertEquals("4", src.subtitle)
         scope.cancel()
+    }
+
+    @Test
+    fun introsAndCreditsComeFromMediaSegmentsOrAnOlderIntroSkipper() = runTest {
+        val server = FakeServer()
+        val scope = CoroutineScope(SupervisorJob())
+        val s = service(server, MemorySecrets(), scope)
+        s.configure(true, JellyfinConnection(ConnectionMode.REMOTE, remoteAddress = "media.example.com"))
+        s.signIn("pat", "pw").getOrThrow()
+        server.routes = { r ->
+            val path = r.url.encodedPath
+            when {
+                // Jellyfin 10.10: the intro, the credits, a stray mark too short to offer, and a kind Fuse doesn't skip.
+                path.endsWith("/MediaSegments/e1") -> 200 to """{"Items":[
+                    {"Type":"Outro","StartTicks":12000000000,"EndTicks":13200000000},
+                    {"Type":"Intro","StartTicks":300000000,"EndTicks":1200000000},
+                    {"Type":"Recap","StartTicks":0,"EndTicks":5000000},
+                    {"Type":"Unknown","StartTicks":0,"EndTicks":100000000}]}"""
+                path.endsWith("/MediaSegments/m1") -> 200 to """{"Items":[]}"""
+                // Jellyfin 10.9 has no media segments; an older Intro Skipper there answers in seconds.
+                path.contains("/MediaSegments/") -> 404 to ""
+                path.endsWith("/Episode/e2/IntroTimestamps/v1") -> 200 to """{"EpisodeId":"e2","Valid":true,"IntroStart":30.5,"IntroEnd":90.25,"ShowSkipPromptAt":25.5,"HideSkipPromptAt":40.5}"""
+                path.endsWith("/Episode/e3/IntroTimestamps/v1") -> 404 to ""
+                else -> null
+            }
+        }
+        val resolver = JellyfinResolver(s) { JellyfinQuality() }
+        assertEquals(
+            listOf(Segment(SegmentKind.INTRO, 30_000, 120_000), Segment(SegmentKind.OUTRO, 1_200_000, 1_320_000)),
+            resolver.segments(PlayItem("e1", "Pilot", seriesId = "show1")),
+        )
+        // A film with none: nothing to offer.
+        assertEquals(emptyList(), resolver.segments(PlayItem("m1", "Dune")))
+
+        // A server before media segments: an episode's intro from Intro Skipper, or none found.
+        assertEquals(listOf(Segment(SegmentKind.INTRO, 30_500, 90_250)), resolver.segments(PlayItem("e2", "Second", seriesId = "show1")))
+        assertEquals(emptyList(), resolver.segments(PlayItem("e3", "Third", seriesId = "show1")))
+        // There a film asks no further, and music never asks at all.
+        val before = server.requests.size
+        assertEquals(emptyList(), resolver.segments(PlayItem("m2", "Arrival")))
+        assertFalse(server.requests.drop(before).any { it.url.encodedPath.contains("IntroTimestamps") })
+        val asked = server.requests.size
+        assertEquals(emptyList(), resolver.segments(PlayItem("s1", "Song", kind = io.github.matiyaaa.fuse.playback.MediaKind.AUDIO)))
+        assertEquals(asked, server.requests.size)
+        scope.cancel()
+    }
+
+    @Test
+    fun quickConnectShowsACodeThenSignsInOnceItIsApprovedWithNoPassword() = runTest {
+        val server = FakeServer()
+        val scope = CoroutineScope(SupervisorJob())
+        val s = service(server, MemorySecrets(), scope)
+        s.configure(true, JellyfinConnection(ConnectionMode.REMOTE, remoteAddress = "media.example.com"))
+        var asks = 0
+        var secretSent: String? = null
+        server.routes = { r ->
+            val path = r.url.encodedPath
+            when {
+                path.endsWith("/QuickConnect/Enabled") -> 200 to "true"
+                // A server before 10.9 starts it with a GET only.
+                path.endsWith("/QuickConnect/Initiate") -> if (r.method == io.ktor.http.HttpMethod.Get) 200 to """{"Secret":"sec1","Code":"482913","Authenticated":false}""" else 405 to ""
+                path.endsWith("/QuickConnect/Connect") -> {
+                    asks++
+                    200 to """{"Secret":"sec1","Code":"482913","Authenticated":${asks >= 2}}"""
+                }
+                path.endsWith("/Users/AuthenticateWithQuickConnect") -> {
+                    secretSent = (r.body as TextContent).text
+                    200 to """{"User":{"Id":"u2","Name":"sam"},"AccessToken":"tokqc","ServerId":"srv1"}"""
+                }
+                else -> null
+            }
+        }
+        val start = s.startQuickConnect().getOrThrow()
+        assertEquals("482913", start.code.code)
+        assertEquals("Living Room PC", start.info.name)
+        val account = s.awaitQuickConnect(start).getOrThrow()
+        assertEquals("sam", account.userName)
+        assertEquals(2, asks)
+        assertTrue(secretSent!!.contains("sec1"))
+        assertEquals("tokqc", s.state.value.account?.token)
+        // No password anywhere in what was sent.
+        assertFalse(server.requests.any { it.url.encodedPath.endsWith("/Users/AuthenticateByName") })
+
+        // Turned off on the server: said so, with where to turn it on.
+        server.routes = { r -> if (r.url.encodedPath.endsWith("/QuickConnect/Enabled")) 200 to "false" else null }
+        val off = s.startQuickConnect()
+        assertTrue(off.exceptionOrNull()?.message.orEmpty().contains("Quick Connect is off"))
+        scope.cancel()
+    }
+
+    @Test
+    fun subtitlesFoundElsewhereMadeForTheFileComeFirstThenTheMostUsed() {
+        val found = JellyfinClient.remoteSubtitlesOf(
+            listOf(
+                RemoteSubtitleInfoDto("a", "Popular", "Open Subtitles", "eng", "srt", downloadCount = 9_000),
+                RemoteSubtitleInfoDto("b", "Machine", "Open Subtitles", "eng", "srt", downloadCount = 50_000, machineTranslated = true),
+                RemoteSubtitleInfoDto("c", "Exact", "Open Subtitles", "eng", "srt", downloadCount = 10, isHashMatch = true),
+                RemoteSubtitleInfoDto(null, "No id"),
+                RemoteSubtitleInfoDto("d", "", "Podnapisi", "eng", "srt", downloadCount = 100, hearingImpaired = true),
+            ),
+        )
+        assertEquals(listOf("c", "a", "d", "b"), found.map { it.id })
+        assertTrue(found.first().hashMatch)
+        assertEquals("Subtitles", found[2].name)
+        assertTrue(found[2].hearingImpaired)
+        assertTrue(found.last().machineTranslated)
+    }
+
+    @Test
+    fun aSongsWordsAreTimedOnlyWhenEveryLineIs() {
+        // Ticks to milliseconds, in order; a gap in the singing stays as an empty line.
+        val timed = JellyfinClient.lyricsOf(LyricDto(listOf(LyricLineDto("Second", 52_000_000), LyricLineDto(" First ", 12_000_000), LyricLineDto(null, 30_000_000))))!!
+        assertTrue(timed.synced)
+        assertEquals(listOf("First", "", "Second"), timed.lines.map { it.text })
+        assertEquals(listOf(1_200L, 3_000L, 5_200L), timed.lines.map { it.startMs })
+        // Timed in places only: shown as words, in the file's order.
+        val plain = JellyfinClient.lyricsOf(LyricDto(listOf(LyricLineDto("Verse", 10_000_000), LyricLineDto("Chorus", null))))!!
+        assertFalse(plain.synced)
+        assertEquals(listOf("Verse", "Chorus"), plain.lines.map { it.text })
+        // Nothing to sing: none at all.
+        assertNull(JellyfinClient.lyricsOf(LyricDto(listOf(LyricLineDto("  ", 0)))))
+        assertNull(JellyfinClient.lyricsOf(LyricDto()))
+    }
+
+    @Test
+    fun trickplayPicturesBecomeSheetsOfFrames() {
+        val info = mapOf(
+            "ms1" to mapOf(
+                "160" to TrickplayInfoDto(160, 90, 10, 10, 264, 10_000),
+                "320" to TrickplayInfoDto(320, 180, 10, 10, 264, 10_000),
+            ),
+        )
+        val p = JellyfinClient.previewsOf("e1", info, want = 300)!!
+        assertEquals(320, p.width)
+        // 264 frames, a hundred to a sheet: three sheets, the last part full.
+        assertEquals(listOf(0, 1, 2), p.sheets.map { (it as JellyfinTrickplay).index })
+        assertEquals(JellyfinTrickplay("e1", "ms1", 320, 2), p.sheets.last())
+        // Two minutes and five seconds in: frame 12, on the first sheet's second row.
+        assertEquals(Triple(p.sheets[0], 2, 1), p.at(125_000))
+        // Past the end, the last frame; frame 150 on the second sheet.
+        assertEquals(Triple(p.sheets[2], 3, 6), p.at(10_000_000))
+        assertEquals(Triple(p.sheets[1], 0, 5), p.at(1_500_000))
+        // None made, or none usable: nothing.
+        assertNull(JellyfinClient.previewsOf("e1", null, 320))
+        assertNull(JellyfinClient.previewsOf("e1", mapOf("ms1" to mapOf("320" to TrickplayInfoDto(320, 180, 10, 10, 0, 10_000))), 320))
     }
 
     @Test

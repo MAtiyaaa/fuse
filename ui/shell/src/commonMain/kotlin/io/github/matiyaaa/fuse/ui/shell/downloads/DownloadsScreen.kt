@@ -140,7 +140,7 @@ fun DownloadsScreen(app: AppState) {
     fun primary(row: TransferRow) {
         // A game that came in: what confirming a game does anywhere (play it, or open its page).
         if (finishedGame(row) != null) { app.openDownloadedGame(row); return }
-        val first = row.actions.firstOrNull { it == TransferAction.PAUSE || it == TransferAction.RESUME || it == TransferAction.RETRY || it == TransferAction.OPEN }
+        val first = row.actions.firstOrNull { it in PRIMARY }
         if (first != null) ops.act(row.item.id, first) else openOptions(row)
     }
     val current = rows.getOrNull(sel.index)
@@ -241,7 +241,8 @@ fun DownloadsScreen(app: AppState) {
 
 private const val HEAD_ITEMS = 2
 
-internal class TopAction(val label: String, val icon: ImageVector, val run: () -> Unit)
+/** One of a page's own actions beside its title (Pause All, Download All), drawn as an [ActionPill]. */
+class TopAction(val label: String, val icon: ImageVector, val run: () -> Unit)
 
 /** The page's title line: how many move each way, at what speed, and the few things to do. */
 @Composable
@@ -257,7 +258,8 @@ private fun Header(summary: io.github.matiyaaa.fuse.transfer.TransferSummary, ac
             val words = listOfNotNull(
                 "${summary.activeDownloads} downloading".takeIf { summary.activeDownloads > 0 },
                 "${summary.activeUploads} uploading".takeIf { summary.activeUploads > 0 },
-                "${summary.queued} waiting".takeIf { summary.queued + summary.waiting > 0 }?.let { "${summary.queued + summary.waiting} waiting" },
+                "${summary.queued + summary.waiting - summary.later} waiting".takeIf { summary.queued + summary.waiting - summary.later > 0 },
+                "${summary.later} for later".takeIf { summary.later > 0 },
                 "${summary.failed} failed".takeIf { summary.failed > 0 },
             ).joinToString("  ·  ").ifEmpty { "Nothing moving" }
             FText(words, Fuse.type.caption, color = c.textMuted, maxLines = 1)
@@ -390,8 +392,11 @@ private fun AppState.openDownloadedGame(row: TransferRow) {
     }
 }
 
+/** What confirming a row does, the first of these it offers (one kept for later leads with Download Now). */
+private val PRIMARY = setOf(TransferAction.PAUSE, TransferAction.RESUME, TransferAction.RETRY, TransferAction.OPEN, TransferAction.NOW)
+
 private fun primaryLabel(row: TransferRow, openPage: Boolean): String? = if (finishedGame(row) != null) (if (openPage) "Open" else "Play") else row.actions.firstOrNull {
-    it == TransferAction.PAUSE || it == TransferAction.RESUME || it == TransferAction.RETRY || it == TransferAction.OPEN
+    it in PRIMARY
 }?.let { if (it == TransferAction.OPEN) "Open ${row.mirrored ?: ""}".trim() else it.label } ?: "Options"
 
 /** Everything that can be done with [row], with what it is and where it goes. */
@@ -408,6 +413,8 @@ private fun optionsFor(app: AppState, row: TransferRow, systems: Map<PlatformId,
             TransferAction.MOVE_TO_TOP -> FuseIcons.ChevronsUp
             TransferAction.REMOVE -> FuseIcons.Trash
             TransferAction.OPEN -> FuseIcons.External
+            TransferAction.LATER -> FuseIcons.PlugZap
+            TransferAction.NOW -> FuseIcons.Zap
         }
     }
     val sys = system(systems, t.platform)
@@ -438,6 +445,8 @@ private fun optionsFor(app: AppState, row: TransferRow, systems: Map<PlatformId,
                     TransferAction.CANCEL -> if (t.upload) "Stops sending; nothing on the server changes" else "What was downloaded so far is removed"
                     TransferAction.PAUSE -> "Keeps what is done, to carry on later"
                     TransferAction.RETRY -> if (t.status == io.github.matiyaaa.fuse.transfer.TransferStatus.WAITING) "Carries on from where it stopped, now instead of in a moment" else null
+                    TransferAction.LATER -> "Goes once this device is charging on Wi-Fi, with no game running"
+                    TransferAction.NOW -> "Takes its turn now, on battery or not"
                     else -> null
                 },
                 onSelect = { app.closeOverlays(); app.store.transfers.act(t.id, a) },
@@ -514,6 +523,9 @@ private fun TransferRowView(
                     // Stopped for good: how far it got isn't news ("99%" read as nearly done).
                     t.status == TransferStatus.CANCELLED -> FuseIcon(FuseIcons.CircleSlash, size = Size.iconM, tint = c.textMuted)
                     t.status == TransferStatus.ACTIVE && live.progress == null -> Spinner(size = 18.dp, color = c.textMuted)
+                    // Kept for later and not begun: a plug says what it waits for better than "0%".
+                    t.waiting == WaitReason.LATER && t.status == TransferStatus.WAITING && (live.progress ?: 0f) <= 0f ->
+                        FuseIcon(FuseIcons.PlugZap, size = Size.iconM, tint = c.textMuted)
                     else -> live.progress?.let { FText("${(it * 100).toInt()}%", Fuse.type.numeric, maxLines = 1) }
                 }
                 if (wide && t.status == TransferStatus.ACTIVE && live.speed > 0) {
@@ -661,8 +673,9 @@ internal fun statusWords(t: io.github.matiyaaa.fuse.transfer.TransferItem, live:
             WaitReason.POWER -> "Waiting for a charger"
             WaitReason.QUIET -> "Waiting for quiet hours to end"
             WaitReason.DEVICE -> "Waiting for ${t.waitingFor ?: "the other device"} to be back"
+            WaitReason.LATER -> "For later  ·  goes once it's charging on Wi-Fi"
             null -> "Waiting"
-        }.let { w -> listOfNotNull(w, amount).joinToString("  ·  ") }
+        }.let { w -> listOfNotNull(w, if (done > 0) amount else amount?.let { sizeOf(total ?: 0) }).joinToString("  ·  ") }
         TransferStatus.PAUSED -> listOfNotNull("Paused", amount).joinToString("  ·  ")
         TransferStatus.FAILED -> t.error ?: "It didn't work"
         TransferStatus.DONE -> listOfNotNull(if (t.upload) "Sent" else "Done", total?.let(::sizeOf), where).joinToString("  ·  ")

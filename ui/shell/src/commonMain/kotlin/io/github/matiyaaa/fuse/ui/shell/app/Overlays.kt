@@ -94,6 +94,7 @@ fun OverlayHost(app: AppState) {
     io.github.matiyaaa.fuse.ui.shell.sync.JoinRequestOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.sync.SyncNotices(app)
     ConfirmOverlay(app)
+    RatingOverlay(app)
     TextInputOverlay(app)
     PhoneTypingOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.settings.ButtonDetectOverlay(app)
@@ -369,6 +370,92 @@ private fun ConfirmOverlay(app: AppState) {
         }
     }
 }
+
+/**
+ * Stars to give, as on Letterboxd: left and right (the D-pad, a stick or the arrow keys) step half a
+ * star, Confirm gives it, Options takes it away, Back leaves it as it was. A touch, a click or a drag
+ * across the stars gives the rating at once; touching the rating already given takes it away.
+ */
+@Composable
+private fun RatingOverlay(app: AppState) {
+    val spec = app.rating
+    var shown by remember { mutableStateOf(spec) }
+    if (spec != null) shown = spec
+    var value by remember(spec) { mutableIntStateOf(spec?.rating ?: 0) }
+    var pointing by remember(spec) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(spec != null) { if (spec != null) app.platform.sounds.play(SoundCue.OPEN) }
+    fun give(r: Int) {
+        val s = spec ?: return
+        app.rating = null
+        app.platform.haptics.confirm()
+        s.onRate(r.coerceIn(0, MOST_STARS))
+    }
+    fun back() {
+        val s = spec ?: return
+        app.rating = null
+        s.onBack()
+    }
+    fun step(by: Int): NavResult {
+        val next = (value + by).coerceIn(0, MOST_STARS)
+        if (next == value) return NavResult.BLOCKED
+        value = next
+        app.platform.haptics.tick()
+        app.platform.sounds.play(SoundCue.MOVE)
+        return NavResult.MOVED
+    }
+    if (spec != null) {
+        InputLayer(priority = LayerPriority.DIALOG + 2, modal = true) { e ->
+            when (e.action) {
+                NavAction.LEFT -> step(-1)
+                NavAction.RIGHT -> step(1)
+                // Up and down step a whole star, for a quick way from one end to the other.
+                NavAction.UP -> step(2)
+                NavAction.DOWN -> step(-2)
+                NavAction.SELECT -> { give(value); NavResult.ACTIVATED }
+                NavAction.CONTEXT -> { give(0); NavResult.ACTIVATED }
+                NavAction.BACK -> { back(); NavResult.CONSUMED }
+                else -> NavResult.CONSUMED
+            }
+        }
+    }
+    Overlay(visible = spec != null, onDismiss = { back() }, edge = OverlayEdge.CENTER) {
+        val s = shown ?: return@Overlay
+        DialogPanel(maxWidth = 460.dp) { compact ->
+            Column(Modifier.padding(if (compact) Space.l else Space.xl), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    if (s.art != null) {
+                        Artwork(s.art, Modifier.width(44.dp).height(44.dp).clip(RoundedCornerShape(Fuse.geometry.control)))
+                        Spacer(Modifier.width(Space.m))
+                    }
+                    Column(Modifier.weight(1f)) {
+                        FText("Your rating", Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
+                        FText(s.title, Fuse.type.titleSmall, maxLines = 2)
+                    }
+                }
+                Spacer(Modifier.height(if (compact) Space.l else Space.xl))
+                io.github.matiyaaa.fuse.ui.designsystem.components.StarRating(
+                    value, onRate = { r -> value = r; give(r) },
+                    size = if (compact) 40.dp else 48.dp,
+                    onPreview = { pointing = it },
+                )
+                Spacer(Modifier.height(Space.m))
+                val words = io.github.matiyaaa.fuse.ui.designsystem.components.RatingWords.stars(pointing ?: value)
+                FText(words ?: "Not rated", Fuse.type.bodyStrong, color = if (words == null) Fuse.colors.textMuted else Fuse.colors.text, maxLines = 1)
+                Spacer(Modifier.height(if (compact) Space.l else Space.xl))
+                io.github.matiyaaa.fuse.ui.designsystem.components.HintBar(
+                    listOf(
+                        io.github.matiyaaa.fuse.ui.designsystem.components.Hint(io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton.DPAD, "Half a star"),
+                        io.github.matiyaaa.fuse.ui.designsystem.components.Hint(io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton.CONFIRM, "Rate"),
+                        io.github.matiyaaa.fuse.ui.designsystem.components.Hint(io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton.OPTIONS, "Clear"),
+                    ),
+                )
+            }
+        }
+    }
+}
+
+/** A rating's top: five stars of two halves. */
+private const val MOST_STARS = 10
 
 @Composable
 private fun TextInputOverlay(app: AppState) {

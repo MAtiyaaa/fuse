@@ -261,6 +261,17 @@ class UiAudit {
 
     @Test fun rommD() = audit(AuditSize.D) { rommScreens() }
 
+    @Test fun fuse046M() = audit(AuditSize.M) { fuse046Screens() }
+
+    @Test fun fuse046H() = audit(AuditSize.H) { fuse046Screens() }
+
+    @Test fun fuse046V() = audit(AuditSize.V) { fuse046Screens() }
+
+    /** The second screen's own: a game running, with its Journal and Quit. */
+    @Test fun fuse046C() = audit(AuditSize.C) { fuse046Screens() }
+
+    @Test fun fuse046L() = audit(AuditSize.L) { fuse046Screens() }
+
     @Test fun reachM() = audit(AuditSize.M) { reachScreens() }
 
     @Test fun reachV() = audit(AuditSize.V) { reachScreens() }

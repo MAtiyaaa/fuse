@@ -105,6 +105,10 @@ internal fun AuditDriver.jellyfinScreens() {
             router.textInput?.submit()
             waitFor("Sign in with your Jellyfin account")
             shoot("the server found: Sign In", 1_200)
+            // Quick Connect: a code to approve on a phone, nothing typed with the controller.
+            tapText("Sign In with a Code")
+            waitFor("Approve in Jellyfin")
+            shoot("a code to approve in Jellyfin", 1_200)
         }
 
         scenario("jellyfin", "addons home") {
@@ -163,6 +167,11 @@ internal fun AuditDriver.jellyfinScreens() {
             shoot("a film's page", 1_500)
             tap(PadButton.DPAD_DOWN, 2)
             shoot("cast", 1_200)
+            // Someone in it: their photo, their dates, and their films and shows.
+            tap(PadButton.A)
+            waitFor("Films", 20_000)
+            settle(2_000)
+            shoot("a person's page", 1_500)
         }
 
         scenario("jellyfin", "show page") {

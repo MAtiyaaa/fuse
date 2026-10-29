@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.audit
 
+import androidx.compose.ui.graphics.toAwtImage
 import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.data.db.DesktopDatabase
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
@@ -422,6 +423,17 @@ internal class AuditCapture : io.github.matiyaaa.fuse.ui.shell.platform.ScreenCa
     }
 
     override suspend fun screenshot(name: String) = io.github.matiyaaa.fuse.ui.shell.platform.CaptureResult(picturesPlace, preview())
+
+    /** A picture Fuse drew to keep (a recap), written beside the audit's shots as it would be saved. */
+    override suspend fun savePicture(name: String, picture: androidx.compose.ui.graphics.ImageBitmap): io.github.matiyaaa.fuse.ui.shell.platform.CaptureResult {
+        Audit.dir?.let { dir ->
+            val file = File(dir, "pictures/${Audit.slug(name)}.png")
+            file.parentFile.mkdirs()
+            javax.imageio.ImageIO.write(picture.toAwtImage(), "png", file)
+            println("Audit picture: ${file.absolutePath} (${picture.width}x${picture.height})")
+        }
+        return io.github.matiyaaa.fuse.ui.shell.platform.CaptureResult(picturesPlace, picture)
+    }
     override suspend fun prepareRecording(withSound: Boolean) = io.github.matiyaaa.fuse.ui.shell.platform.RecordingReady.READY
     override fun startRecording(name: String) { recording = true }
     override suspend fun stopRecording(): io.github.matiyaaa.fuse.ui.shell.platform.CaptureResult? {

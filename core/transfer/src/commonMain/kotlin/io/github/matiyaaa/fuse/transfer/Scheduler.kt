@@ -12,12 +12,14 @@ import io.github.matiyaaa.fuse.model.StorageVolume
 object TransferScheduler {
     /**
      * The ids to start now, first first. [items] is the whole list; [now] decides which waits are
-     * over; [held] says whether a direction is held entirely (paused while playing, not on Wi-Fi).
+     * over; [held] says whether a direction is held entirely (paused while playing, not on Wi-Fi),
+     * and [laterWaits] whether transfers kept for later wait now.
      */
     fun next(
         items: List<TransferItem>,
         settings: TransferSettings,
         now: Long,
+        laterWaits: Boolean = false,
         held: (TransferDirection) -> WaitReason? = { null },
     ): List<String> {
         val out = ArrayList<String>()
@@ -27,7 +29,7 @@ object TransferScheduler {
             val room = settings.limit(direction) - mine.count { it.status == TransferStatus.ACTIVE }
             if (room <= 0) continue
             mine.asSequence()
-                .filter { startable(it, now) }
+                .filter { startable(it, now) && !(it.later && laterWaits) }
                 .sortedWith(compareBy({ it.order }, { it.createdAt }))
                 .take(room)
                 .forEach { out += it.id }
@@ -93,6 +95,7 @@ object TransferScheduler {
             failed = items.count { it.status == TransferStatus.FAILED },
             progress = if (known && total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else null,
             retrying = items.count { it.status == TransferStatus.WAITING && it.waiting == WaitReason.NETWORK },
+            later = items.count { it.status == TransferStatus.WAITING && it.waiting == WaitReason.LATER },
         )
     }
 }

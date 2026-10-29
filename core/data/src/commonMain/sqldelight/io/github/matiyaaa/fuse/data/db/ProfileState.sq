@@ -2,12 +2,14 @@
 -- switching profiles. The library itself (which games, their files) is never touched here.
 
 userGames:
-SELECT id, platform_id, title_original, title_custom, tags_json, favorite, hidden, pinned, last_played_at, tracked_seconds, session_count, emulator_override, platform_scanned
+SELECT id, platform_id, title_original, title_custom, tags_json, favorite, hidden, pinned, last_played_at, tracked_seconds, session_count, emulator_override, platform_scanned,
+    play_status, status_at, rating, note
 FROM game WHERE removed_at IS NULL;
 
 setUserState:
 UPDATE game SET favorite = :favorite, hidden = :hidden, pinned = :pinned, last_played_at = :lastPlayed,
-    tracked_seconds = :tracked, session_count = :sessions, title_custom = :titleCustom, emulator_override = :emulator, updated_at = :now
+    tracked_seconds = :tracked, session_count = :sessions, title_custom = :titleCustom, emulator_override = :emulator,
+    play_status = :status, status_at = :statusAt, rating = :rating, note = :note, updated_at = :now
 WHERE id = :id;
 
 endedSessions:

@@ -37,6 +37,8 @@ internal fun JellyfinSettings.toPlayerSettings() = PlayerSettings(
     seekSeconds = seekSeconds,
     controlsTimeoutMs = controlsTimeoutSeconds * 1000L,
     autoplayNext = autoplayNext,
+    skipIntros = io.github.matiyaaa.fuse.ui.player.SkipMode.of(skipIntros),
+    skipCredits = io.github.matiyaaa.fuse.ui.player.SkipMode.of(skipCredits),
     rememberSpeed = rememberSpeed,
     hardwareDecoding = hardwareDecoding,
 )

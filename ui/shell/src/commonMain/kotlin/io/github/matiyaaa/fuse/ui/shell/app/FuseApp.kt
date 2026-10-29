@@ -1065,6 +1065,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
             is Route.ReleaseNotes -> io.github.matiyaaa.fuse.ui.shell.notes.ReleaseNotesScreen(app, route)
             Route.PlayTime -> io.github.matiyaaa.fuse.ui.shell.library.PlayTimeScreen(app)
+            is Route.Recap -> io.github.matiyaaa.fuse.ui.shell.library.RecapScreen(app, route.period)
             Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
             Route.Onboarding -> OnboardingScreen(app)
             is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
@@ -1085,7 +1086,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             Route.Downloads -> io.github.matiyaaa.fuse.ui.shell.downloads.DownloadsScreen(app)
             Route.OfflineMedia -> io.github.matiyaaa.fuse.ui.shell.jellyfin.OfflineMediaScreen(app)
             Route.RommSettings -> io.github.matiyaaa.fuse.ui.shell.romm.RommSettingsScreen(app)
-            Route.JellyfinSetup -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinSetupScreen(app)
+            is Route.JellyfinSetup -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinSetupScreen(app, route.code)
             is Route.RommSetup -> io.github.matiyaaa.fuse.ui.shell.romm.RommSetupScreen(app, route.pairing)
             is Route.RommGames -> io.github.matiyaaa.fuse.ui.shell.romm.RommGamesScreen(app, route.slug, route.name, route.collection)
             Route.HouseholdLibrary -> io.github.matiyaaa.fuse.ui.shell.reach.HouseholdLibraryScreen(app)
@@ -1107,7 +1108,7 @@ internal fun hudPage(stack: List<Route>): HudButton? {
         when (route) {
             Route.Downloads -> return HudButton.DOWNLOADS
             Route.Search -> return HudButton.SEARCH
-            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncthingSettings, Route.SaveFolders, is Route.SyncSetup, Route.RommSettings, is Route.RommSetup, Route.JellyfinSetup ->
+            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncthingSettings, Route.SaveFolders, is Route.SyncSetup, Route.RommSettings, is Route.RommSetup, is Route.JellyfinSetup ->
                 return HudButton.SETTINGS
             else -> Unit
         }

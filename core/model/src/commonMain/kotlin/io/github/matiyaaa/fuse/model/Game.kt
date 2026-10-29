@@ -31,6 +31,8 @@ data class Game(
     val platformOverride: PlatformId? = null,
     /** The system the game's folder says, which [platformOverride] replaces. */
     val scannedPlatformId: PlatformId? = null,
+    /** Where the person is with it, what they think of it and their note (the Journal). */
+    val journal: GameJournal = GameJournal(),
 ) {
     val displayTitle: String get() = titles.display
 
@@ -192,6 +194,61 @@ data class GameMetadata(
 
 @Serializable
 enum class MetadataSource { LOCAL, ROMM, CARTRIDGE, STEAMGRIDDB, IGDB, THEGAMESDB, SCREENSCRAPER, LIBRETRO, USER }
+
+/**
+ * Where the person is with a game, in their own words (the Journal). Only ever what they set: Fuse
+ * never works it out from play time. RomM keeps the same marks in its own words (RommJournal).
+ */
+@Serializable
+enum class PlayStatus {
+    /** Meant to be played: the backlog, Up Next. */
+    WANT,
+    PLAYING,
+
+    /** Put down for now, to be picked up again. */
+    PAUSED,
+
+    /** Played to its end. */
+    BEATEN,
+
+    /** Everything in it done. */
+    COMPLETED,
+
+    /** Put down for good. */
+    DROPPED,
+    ;
+
+    /** Done with: beaten, completed or dropped (not suggested again, not in Up Next). */
+    val settled: Boolean get() = this == BEATEN || this == COMPLETED || this == DROPPED
+
+    companion object {
+        fun of(name: String?): PlayStatus? = name?.let { n -> entries.firstOrNull { it.name == n } }
+    }
+}
+
+/**
+ * What the person wrote down about a game: where they are with it ([status], since [statusAt]),
+ * what they think of it ([rating]) and a [note] of their own.
+ */
+@Serializable
+data class GameJournal(
+    val status: PlayStatus? = null,
+    /** When [status] was set (epoch ms): "Beaten in March", and Up Next's newest first. */
+    val statusAt: Long? = null,
+    /** Out of [MOST_RATING], shown as five stars in halves. 0 is not rated. */
+    val rating: Int = 0,
+    val note: String? = null,
+) {
+    val isEmpty: Boolean get() = status == null && rating == 0 && note.isNullOrBlank()
+
+    companion object {
+        /** The top rating: ten halves of five stars, as RomM keeps it. */
+        const val MOST_RATING = 10
+
+        /** A note is a few lines, not a diary: longer is cut here. */
+        const val LONGEST_NOTE = 2_000
+    }
+}
 
 @Serializable
 data class PlayStats(

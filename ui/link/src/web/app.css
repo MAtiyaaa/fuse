@@ -926,6 +926,92 @@ button.playing:active { transform: scale(.985); transition-duration: var(--d-ins
 .section > .dl-current + .dl-current { margin-top: var(--s-s); }
 .dl-actions { display: flex; justify-content: flex-end; margin-top: var(--s-s); }
 
+/* A row of tiles that scrolls sideways (Up next), edge to edge like the chips. */
+.shelf {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100px;
+  gap: var(--s-l);
+  margin: 0 calc(-1 * var(--gutter));
+  padding: var(--s-xxs) var(--gutter) var(--s-s);
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  scroll-padding: 0 var(--gutter);
+}
+.shelf::-webkit-scrollbar { display: none; }
+.shelf > .tile { scroll-snap-align: start; }
+
+/* The Journal: where you are with a game (chips that wrap), your rating in half stars, your note. */
+/* Achievements: the share of the set as a ring, then every badge, the locked ones faded to grey. */
+.ach-head { display: flex; align-items: center; gap: 14px; }
+.ach-head-main { flex: 1; min-width: 0; }
+.ach-count-row { display: flex; align-items: center; gap: var(--s-s); flex-wrap: wrap; }
+.ach-count { font: 600 22px/28px var(--display); letter-spacing: -.01em; }
+.ach-count .num { color: var(--text); }
+.ach-sub { margin-top: var(--s-xxs); font: 500 13px/18px var(--sans); color: var(--muted); font-variant-numeric: tabular-nums; }
+.pill.is-award { background: var(--accent-soft); color: var(--accent); }
+.ring-box { position: relative; width: 64px; height: 64px; flex: none; }
+.ring { width: 64px; height: 64px; transform: rotate(-90deg); }
+.ring-track { fill: none; stroke: var(--raised); stroke-width: 6; }
+.ring-arc { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset var(--d-slow) var(--e-standard); }
+.ring-label { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; }
+.ach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: var(--s-s); margin-top: var(--s-l); }
+.ach-badge {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-s);
+  background: var(--raised);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.ach-badge img { width: 100%; height: 100%; object-fit: cover; }
+.ach-badge .i { width: 22px; height: 22px; color: var(--faint); }
+.ach-badge.is-locked img { filter: grayscale(1); opacity: .45; }
+.ach-badge:active { transform: scale(.92); transition-duration: var(--d-instant); }
+.ach-card .btn-block { margin-top: var(--s-m); }
+.ach-detail { display: flex; flex-direction: column; align-items: center; gap: var(--s-l); text-align: center; padding-bottom: var(--s-s); }
+.ach-detail-badge { width: 96px; height: 96px; border-radius: var(--r-l); overflow: hidden; background: var(--raised); display: grid; place-items: center; box-shadow: var(--sh-raised); }
+.ach-detail-badge img { width: 100%; height: 100%; object-fit: cover; }
+.ach-detail-badge .i { width: 40px; height: 40px; color: var(--faint); }
+.ach-detail-badge.is-locked img { filter: grayscale(1); opacity: .5; }
+.ach-detail-text { font: 500 15px/22px var(--sans); color: var(--muted); text-wrap: pretty; }
+.ach-detail .meta-chips { justify-content: center; }
+.meta-chips .pill.is-earned .i { color: var(--success); }
+
+.journal-statuses { display: flex; flex-wrap: wrap; gap: var(--s-s); margin-top: 14px; }
+.journal-statuses .chip .i { width: 16px; height: 16px; }
+.journal-statuses .chip[aria-pressed="true"] { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent-line); }
+.journal-statuses .chip[aria-pressed="true"] .i { color: var(--accent); }
+.journal-row { margin-top: var(--s-l); }
+/* Five stars to rate by, as the device draws them: solid, a quiet shape where not given. */
+.rate { display: flex; align-items: center; gap: var(--s-m); margin-top: var(--s-xs); outline: none; border-radius: 12px; }
+.rate:focus-visible { box-shadow: 0 0 0 2px var(--accent-line); }
+.rate-stars { display: flex; gap: 6px; touch-action: none; cursor: pointer; padding: 6px 0; }
+.rate-star { width: 36px; height: 36px; overflow: visible; }
+.rate-empty, .rate-fill { stroke-width: 1.8px; stroke-linejoin: round; }
+.rate-empty { fill: var(--text); stroke: var(--text); opacity: .14; }
+.rate-fill { fill: var(--accent); stroke: var(--accent); transition: fill var(--d-fast) var(--e-standard); }
+.rate.is-preview .rate-fill { opacity: .78; }
+.rate-words { font: 600 15px/20px var(--sans); color: var(--muted); min-width: 92px; }
+.input.is-area { height: auto; align-items: stretch; }
+.input.is-area textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 96px;
+  padding: 14px var(--s-m);
+  background: none;
+  border: 0;
+  outline: none;
+  resize: vertical;
+  font: 500 16px/22px var(--sans);
+  color: inherit;
+}
+.input.is-area textarea::placeholder { color: var(--faint); opacity: 1; }
+
+
 /* A game's page: what the phone can do with it on the device. */
 .game-actions { display: flex; flex-wrap: wrap; gap: var(--s-s); margin-top: 20px; }
 .game-actions .btn { flex: 1 1 160px; }
@@ -2147,3 +2233,25 @@ a.btn { text-decoration: none; }
   .ripple-host, .burst { display: none; }
   .btn.fav-pop .i { animation: none; }
 }
+
+/* The phone's Library: this device or RomM, above the search. */
+.lib-source { margin-bottom: var(--s-s); }
+.lib-source .seg-btn .i { width: 16px; height: 16px; }
+/* A RomM game's mark: how it stands here, in the corner of its art. */
+.romm-mark .i { fill: none; stroke: currentColor; stroke-width: 2; width: 14px; height: 14px; }
+.romm-mark[data-state="here"], .romm-mark[data-state="partly"] { color: var(--success); }
+.romm-mark[data-state="coming"] { color: var(--accent); }
+/* An action in a sheet: its icon in a soft well, what it does, a chevron. */
+.menu-item.is-action { gap: var(--s-m); }
+.action-ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.action-ic .i { width: 18px; height: 18px; }
+.action-go { flex: none; width: 16px; height: 16px; color: var(--muted); }

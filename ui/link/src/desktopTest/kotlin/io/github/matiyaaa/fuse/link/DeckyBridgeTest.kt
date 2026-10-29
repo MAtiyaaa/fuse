@@ -115,6 +115,15 @@ class DeckyBridgeTest {
             val (_, open) = http(port, "POST", "/v1/game/987654/open", token)
             assertEquals("false", Json.parseToJsonElement(open).jsonObject.getValue("opened").jsonPrimitive.content)
             assertEquals(400, http(port, "POST", "/v1/game/nope/open", token).first)
+
+            // While you play: no game running here, so nothing to close or mark.
+            val (playOk, play) = http(port, "GET", "/v1/playing", token)
+            assertEquals(200, playOk)
+            assertEquals("false", Json.parseToJsonElement(play).jsonObject.getValue("playing").jsonPrimitive.content)
+            val (_, quit) = http(port, "POST", "/v1/playing/quit", token)
+            assertEquals("false", Json.parseToJsonElement(quit).jsonObject.getValue("quit").jsonPrimitive.content)
+            val (_, mark) = http(port, "POST", "/v1/playing/journal", token, "{\"status\":\"BEATEN\"}")
+            assertEquals("false", Json.parseToJsonElement(mark).jsonObject.getValue("set").jsonPrimitive.content)
         } finally {
             bridge.close()
         }

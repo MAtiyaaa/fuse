@@ -266,7 +266,7 @@ internal class NativeSettingsStore(
         // ARMSX2 numbers its own releases, not PCSX2's: which of PCSX2's it follows isn't known.
         val version = installed.version.takeUnless { installed.id.value.substringAfter('.') in NativeSettings.ownVersions }
         fun notSetUp() = no("$name isn't set up yet", "Start $name once and finish its first-run setup, then come back.")
-        fun unreadable(what: String) = no("Fuse can't tell which game this is", "$name keeps a game's own settings under its $what, which Fuse reads from ISO and BIN images (and EBOOT.PBP files for PSP). Compressed images (CHD, CSO) aren't read; change this game's settings in $name.")
+        fun unreadable(what: String) = no("Fuse can't tell which game this is", "$name keeps a game's own settings under its $what, which Fuse reads from the disc image (ISO, BIN, CHD or CSO, and EBOOT.PBP files for PSP). This one doesn't say it; change this game's settings in $name.")
         return when (family) {
             "pcsx2" -> {
                 val home = files.pcsx2(installed) ?: return notSetUp()
@@ -700,15 +700,77 @@ internal class NativeSettingsStore(
      * [Target.keys]), recorded apart from the person's other setting changes (as [TOGETHER]), so
      * [restoreTogether] puts back exactly these.
      */
-    suspend fun setTogether(emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Boolean {
+    suspend fun setTogether(emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Boolean = setRecorded(TOGETHER, emulator, values)
+
+    /**
+     * Gives [emulator]'s files for every game each of [values], recorded as Continue's own
+     * ([KEEP_PLACE]): turning Continue off puts back exactly these ([restoreKeepPlace]), and a
+     * value the person changed in the emulator since stays theirs.
+     */
+    suspend fun setKeepPlace(emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Boolean = setRecorded(KEEP_PLACE, emulator, values)
+
+    /** Puts back what Continue changed in [emulator]'s settings. */
+    suspend fun restoreKeepPlace(emulator: EmulatorId): Boolean = restoreRecorded(KEEP_PLACE, emulator)
+
+    /**
+     * Fuse's hotkeys ([io.github.matiyaaa.fuse.launch.settings.Hotkeys]) in [emulator]'s file for
+     * every game, beside the person's own, recorded as [HOTKEYS] so [restoreHotkeys] takes out
+     * exactly these. Its file is only changed once the emulator has made it (its first run). The
+     * actions left on the person's own binding; null when Fuse can't write [emulator]'s hotkeys here.
+     */
+    suspend fun setHotkeys(emulator: EmulatorId): Set<io.github.matiyaaa.fuse.launch.settings.Hotkeys.Action>? {
+        val t = target(null, emulator).first?.takeIf { it.family in io.github.matiyaaa.fuse.launch.settings.Hotkeys.families } ?: return null
+        val kept = LinkedHashSet<io.github.matiyaaa.fuse.launch.settings.Hotkeys.Action>()
+        for (file in io.github.matiyaaa.fuse.launch.settings.Hotkeys.filesFor(t.family)) {
+            val path = hotkeyPath(t, file)
+            val text = t.text(fs.readText(path, MAX_TEXT) ?: return null, path)
+            val applied = io.github.matiyaaa.fuse.launch.settings.Hotkeys.apply(t.family, text, data.owned.get(HOTKEYS, path), data.owned.get(HOTKEYS_SET, path), ctx.host, file)
+            // PPSSPP before it has saved its own mappings: nothing to add to yet.
+            if (applied.unwritable && !applied.changed) return null
+            if (applied.changed) {
+                if (!t.writer.write(path, text.toString())) return null
+                data.owned.set(HOTKEYS, path, applied.added)
+                data.owned.set(HOTKEYS_SET, path, applied.records)
+            }
+            kept += applied.kept
+        }
+        return kept
+    }
+
+    /** Takes Fuse's hotkeys out of [emulator]'s settings again; a binding changed in the emulator since stays. True when there were some. */
+    suspend fun restoreHotkeys(emulator: EmulatorId): Boolean {
+        val t = target(null, emulator).first?.takeIf { it.family in io.github.matiyaaa.fuse.launch.settings.Hotkeys.families } ?: return false
+        var any = false
+        for (file in io.github.matiyaaa.fuse.launch.settings.Hotkeys.filesFor(t.family)) {
+            val path = hotkeyPath(t, file)
+            val added = data.owned.get(HOTKEYS, path)
+            val records = data.owned.get(HOTKEYS_SET, path)
+            if (added.isEmpty() && records.isEmpty()) continue
+            val content = fs.readText(path, MAX_TEXT)
+            if (content != null) {
+                val text = t.text(content, path)
+                io.github.matiyaaa.fuse.launch.settings.Hotkeys.restore(text, added, records)
+                if (!t.writer.write(path, text.toString())) return false
+            }
+            data.owned.set(HOTKEYS, path, emptySet())
+            data.owned.set(HOTKEYS_SET, path, emptySet())
+            any = true
+        }
+        return any
+    }
+
+    /** Where [t]'s hotkeys of [file] go: that file beside its file for every game, or that one. */
+    private fun hotkeyPath(t: Target, file: String?): String = file?.let { t.globalPath.substringBeforeLast('/') + "/" + it } ?: t.globalPath
+
+    private suspend fun setRecorded(kind: String, emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Boolean {
         val t = target(null, emulator).first ?: return false
         for ((file, these) in values.groupBy { it.file }) {
             val path = file?.let { t.globals[it] } ?: t.globalPath
             val text = t.text(fs.readText(path, MAX_TEXT), path)
-            var records = data.owned.get(TOGETHER, path)
+            var records = data.owned.get(kind, path)
             for (v in these) for ((section, key, value) in t.keys(v.section, v.key, v.value, false, null)) records = SettingsEdit.change(text, records, section, key, value)
             if (!t.writer.write(path, text.toString())) return false
-            data.owned.set(TOGETHER, path, records)
+            data.owned.set(kind, path, records)
         }
         return true
     }
@@ -720,17 +782,19 @@ internal class NativeSettingsStore(
     }
 
     /** Puts back what Play Together changed in [emulator]'s settings; a value changed in the emulator since stays. */
-    suspend fun restoreTogether(emulator: EmulatorId): Boolean {
+    suspend fun restoreTogether(emulator: EmulatorId): Boolean = restoreRecorded(TOGETHER, emulator)
+
+    private suspend fun restoreRecorded(kind: String, emulator: EmulatorId): Boolean {
         val t = target(null, emulator).first ?: return false
         var any = false
         for (path in t.paths) {
-            val records = data.owned.get(TOGETHER, path)
+            val records = data.owned.get(kind, path)
             if (records.isEmpty()) continue
-            val text = fs.readText(path, MAX_TEXT) ?: run { data.owned.set(TOGETHER, path, emptySet()); continue }
+            val text = fs.readText(path, MAX_TEXT) ?: run { data.owned.set(kind, path, emptySet()); continue }
             val file = t.text(text, path)
             SettingsEdit.restore(file, records)
             if (!t.writer.write(path, file.toString())) return false
-            data.owned.set(TOGETHER, path, emptySet())
+            data.owned.set(kind, path, emptySet())
             any = true
         }
         return any
@@ -833,6 +897,15 @@ internal class NativeSettingsStore(
 
         /** The same, for the keys Play Together changed, put back on their own. */
         const val TOGETHER = "emulator.together"
+
+        /** The same, for the keys Continue changed (so its emulators keep a resume state), put back on their own. */
+        const val KEEP_PLACE = "emulator.keepplace"
+
+        /** The hotkey bindings Fuse added beside the person's ([io.github.matiyaaa.fuse.launch.settings.Hotkeys.Applied.added]), by file. */
+        const val HOTKEYS = "emulator.hotkeys"
+
+        /** The one-value hotkey keys Fuse set, as [SettingsEdit] records them, by file. */
+        const val HOTKEYS_SET = "emulator.hotkeys.set"
 
         /** The emulator a system's games are changed in when they don't start in one Fuse knows. */
         val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin", "ps3" to "rpcs3", "switch" to "eden", "3ds" to "azahar", "new-nintendo-3ds" to "azahar", "wiiu" to "cemu", "ps4" to "shadps4", "xbox360" to "xenia", "psvita" to "vita3k", "dc" to "flycast", "model3" to "supermodel")

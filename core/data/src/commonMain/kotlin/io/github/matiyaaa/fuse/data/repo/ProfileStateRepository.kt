@@ -25,6 +25,11 @@ data class UserGameRow(
     val contentSerial: String? = null,
     /** The system the game's folder says, when a person moved it to another. */
     val scannedPlatform: String? = null,
+    /** The Journal: where the person is with it (a [io.github.matiyaaa.fuse.model.PlayStatus] name) and since when, their rating and note. */
+    val status: String? = null,
+    val statusAt: Long? = null,
+    val rating: Int = 0,
+    val note: String? = null,
 )
 
 data class SessionRow(val gameId: Long, val emulator: String?, val startedAt: Long, val endedAt: Long)
@@ -36,8 +41,8 @@ data class UserState(val games: List<UserGameRow>, val sessions: List<SessionRow
 
 /**
  * Reads and writes a person's state over the library, for Fuse Sync's profiles: favourites,
- * hidden and pinned games, custom titles, chosen emulators, play time, Last Played, sessions and
- * collections. Writing replaces it all in one transaction, so switching profiles never leaves half
+ * hidden and pinned games, custom titles, chosen emulators, the Journal, play time, Last Played,
+ * sessions and collections. Writing replaces it all in one transaction, so switching profiles never leaves half
  * of one person and half of another. The library itself (games, files, metadata) is untouched.
  */
 class ProfileStateRepository(
@@ -58,6 +63,7 @@ class ProfileStateRepository(
                 r.id, r.platform_id, r.title_original, r.title_custom, serial,
                 r.favorite != 0L, r.hidden != 0L, r.pinned != 0L, r.last_played_at, r.tracked_seconds, r.session_count, r.emulator_override,
                 contentSerial = content[r.id], scannedPlatform = r.platform_scanned,
+                status = r.play_status, statusAt = r.status_at, rating = r.rating.toInt(), note = r.note,
             )
         }
         val sessions = q.endedSessions().executeAsList().mapNotNull { s -> s.ended_at?.let { SessionRow(s.game_id, s.emulator_id, s.started_at, it) } }
@@ -80,7 +86,8 @@ class ProfileStateRepository(
             db.gameQueries.selectById(child).executeAsOneOrNull()?.let { r ->
                 val serial = r.tags_json?.let { t -> runCatching { json.decodeFromString(FilenameTags.serializer(), t).serial }.getOrNull() }
                 UserGameRow(r.id, r.platform_id, r.title_original, r.title_custom, serial, r.favorite != 0L,
-                    r.hidden != 0L, r.pinned != 0L, r.last_played_at, r.tracked_seconds, r.session_count, r.emulator_override) to resolveOwner(owner, owners)
+                    r.hidden != 0L, r.pinned != 0L, r.last_played_at, r.tracked_seconds, r.session_count, r.emulator_override,
+                    status = r.play_status, statusAt = r.status_at, rating = r.rating.toInt(), note = r.note) to resolveOwner(owner, owners)
             }
         }.toMap()
     }
@@ -110,6 +117,11 @@ class ProfileStateRepository(
                 pinned = rows.any { it.pinned }, lastPlayed = rows.mapNotNull { it.lastPlayed }.maxOrNull(),
                 trackedSeconds = rows.sumOf { it.trackedSeconds }, sessionCount = rows.sumOf { it.sessionCount },
                 emulator = base?.emulator,
+                // The Journal of the copy written in last speaks for the game.
+                status = (base ?: rows.maxBy { it.statusAt ?: 0 }).status,
+                statusAt = (base ?: rows.maxBy { it.statusAt ?: 0 }).statusAt,
+                rating = base?.rating?.takeIf { it > 0 } ?: rows.maxOf { it.rating },
+                note = base?.note ?: rows.firstNotNullOfOrNull { it.note },
             )
         }
         return UserState(games, state.sessions.map { it.copy(gameId = owner(it.gameId)) }.distinct(),
@@ -137,8 +149,16 @@ class ProfileStateRepository(
             for (r in current.games) {
                 if (sinceRows != null && sinceRows[r.id] != r) continue
                 val g = byId[r.id]
-                val want = g?.let { r.copy(customTitle = it.customTitle, favorite = it.favorite, hidden = it.hidden, pinned = it.pinned, lastPlayed = it.lastPlayed, trackedSeconds = it.trackedSeconds, sessionCount = it.sessionCount, emulator = it.emulator) }
-                    ?: r.copy(customTitle = null, favorite = false, hidden = false, pinned = false, lastPlayed = null, trackedSeconds = 0, sessionCount = 0, emulator = null)
+                val want = g?.let {
+                    r.copy(
+                        customTitle = it.customTitle, favorite = it.favorite, hidden = it.hidden, pinned = it.pinned, lastPlayed = it.lastPlayed,
+                        trackedSeconds = it.trackedSeconds, sessionCount = it.sessionCount, emulator = it.emulator,
+                        status = it.status, statusAt = it.statusAt, rating = it.rating, note = it.note,
+                    )
+                } ?: r.copy(
+                    customTitle = null, favorite = false, hidden = false, pinned = false, lastPlayed = null, trackedSeconds = 0, sessionCount = 0, emulator = null,
+                    status = null, statusAt = null, rating = 0, note = null,
+                )
                 if (want == r) continue
                 q.setUserState(
                     favorite = if (want.favorite) 1 else 0,
@@ -149,6 +169,10 @@ class ProfileStateRepository(
                     sessions = want.sessionCount,
                     titleCustom = want.customTitle,
                     emulator = want.emulator,
+                    status = want.status,
+                    statusAt = want.statusAt,
+                    rating = want.rating.toLong(),
+                    note = want.note,
                     now = now,
                     id = r.id,
                 )

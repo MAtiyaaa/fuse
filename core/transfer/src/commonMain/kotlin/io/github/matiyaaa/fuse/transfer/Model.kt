@@ -66,6 +66,9 @@ enum class WaitReason {
 
     /** The other device it comes from (or goes to) is off or away. [TransferItem.waitingFor] names it. */
     DEVICE,
+
+    /** Kept for later ([TransferItem.later]): it goes once [TransferConditions.rightForLater]. */
+    LATER,
 }
 
 /** What an active transfer is doing. */
@@ -137,6 +140,11 @@ data class TransferItem(
      * itself when the device wakes or its connection comes back ([Transfers.woke]).
      */
     val lostConnection: Boolean = false,
+    /**
+     * Kept for later by the person: it waits for the device to be charging on Wi-Fi (or a cable)
+     * with no game running, so a big download never costs the battery or a game's speed.
+     */
+    val later: Boolean = false,
     val payload: String = "",
 ) {
     val progress: Float? get() = totalBytes?.takeIf { it > 0 }?.let { (doneBytes.toFloat() / it).coerceIn(0f, 1f) }
@@ -210,6 +218,10 @@ data class TransferSettings(
         return null
     }
 
+    /** Why [item] waits under [c]: its direction's rules first, then, for one kept for later, whether now is the time. */
+    fun held(item: TransferItem, c: TransferConditions): WaitReason? =
+        held(item.direction, c) ?: WaitReason.LATER.takeIf { item.later && !c.rightForLater }
+
     companion object {
         /** Never more than five each way, whatever a setting says. */
         const val MAX_PARALLEL = 5
@@ -243,10 +255,18 @@ data class TransferConditions(
     val charging: Boolean = false,
     /** Minutes since local midnight; null until known. */
     val minute: Int? = null,
+    /** The device has said how its power stands ([battery] and [charging] are its own, not a guess). */
+    val powerKnown: Boolean = false,
 ) {
+    /**
+     * The time for transfers kept for later: on Wi-Fi or a cable, charging (or a device without a
+     * battery), and no game running. Until the device says how its power stands, it isn't.
+     */
+    val rightForLater: Boolean get() = powerKnown && unmetered && !playing && (battery == null || charging)
+
     companion object {
         /** Reasons that clear when conditions change, rather than with time. */
-        val CONDITIONS: Set<WaitReason> = setOf(WaitReason.PLAYING, WaitReason.WIFI, WaitReason.POWER, WaitReason.QUIET)
+        val CONDITIONS: Set<WaitReason> = setOf(WaitReason.PLAYING, WaitReason.WIFI, WaitReason.POWER, WaitReason.QUIET, WaitReason.LATER)
     }
 }
 
@@ -261,6 +281,8 @@ data class TransferSummary(
     val progress: Float? = null,
     /** Of [waiting], those the network dropped: each tries again within a minute. */
     val retrying: Int = 0,
+    /** Of [waiting], those kept for later, waiting for a charger and Wi-Fi. */
+    val later: Int = 0,
 ) {
     val active: Int get() = activeDownloads + activeUploads
 

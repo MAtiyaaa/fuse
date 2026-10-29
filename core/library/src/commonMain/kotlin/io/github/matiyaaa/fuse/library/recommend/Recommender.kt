@@ -23,6 +23,12 @@ data class RecGame<K>(
     val franchise: String? = null,
     /** 0 to 100, from the game's details. */
     val rating: Int? = null,
+    /** Where the person is with it, in their Journal. */
+    val status: io.github.matiyaaa.fuse.model.PlayStatus? = null,
+    /** When [status] was set. */
+    val statusAt: Long? = null,
+    /** The person's own rating out of ten; 0 for none. */
+    val stars: Int = 0,
 ) {
     val played: Boolean get() = sessions > 0 || playSeconds > 0 || lastPlayedAt != null
 }
@@ -49,6 +55,9 @@ enum class RecKind {
 
     /** New in the library and not played yet. */
     NEW_ARRIVAL,
+
+    /** On the person's own Up Next list (their Journal). */
+    UP_NEXT,
 }
 
 /** A suggestion and the reason for it, in words. */
@@ -61,6 +70,10 @@ data class Recommendation<K>(val key: K, val kind: RecKind, val reason: String, 
  * started. It works from the library alone, on the device, so it works offline and tells no one
  * what anyone plays. The same library gives the same suggestions (no randomness), and games played
  * in the last [RECENT_DAYS] days are left to Continue Playing.
+ *
+ * The person's Journal speaks louder than play time: what they want to play next leads, what they
+ * beat, completed or dropped is never suggested again, their own high ratings lead to more of the
+ * same, and a game they dropped never does.
  */
 object Recommender {
     const val DAY_MS = 86_400_000L
@@ -88,14 +101,22 @@ object Recommender {
         val series = seriesOf(games)
         val byKey = games.associateBy { it.key }
         val recent = now - RECENT_DAYS * DAY_MS
-        // Not suggested: what is being played now (Continue Playing has it).
-        fun open(g: RecGame<K>) = (g.lastPlayedAt ?: 0) < recent
+        // Not suggested: what is being played now (Continue Playing has it), and what is done with.
+        fun open(g: RecGame<K>) = (g.lastPlayedAt ?: 0) < recent && g.status?.settled != true
         val found = LinkedHashMap<K, Recommendation<K>>()
         fun offer(r: Recommendation<K>) {
             val g = byKey[r.key] ?: return
             if (!open(g)) return
             val had = found[r.key]
             if (had == null || r.score > had.score) found[r.key] = r
+        }
+
+        // The person's own Up Next, the longest waiting a little ahead.
+        for (g in games) {
+            if (g.status != io.github.matiyaaa.fuse.model.PlayStatus.WANT) continue
+            val waited = g.statusAt?.let { (now - it).coerceAtLeast(0) / DAY_MS.toDouble() } ?: 0.0
+            val why = if (waited >= 14) "On your Up Next list for ${since(now - g.statusAt!!)}" else "On your Up Next list"
+            offer(Recommendation(g.key, RecKind.UP_NEXT, why, 95.0 + minOf(5.0, waited / 30.0)))
         }
 
         // Favourites left alone.
@@ -123,7 +144,7 @@ object Recommender {
         }
 
         // What someone plays most leads to more of the same: its makers and its kinds.
-        val seeds = games.filter { it.playSeconds >= STARTED_SECONDS || (it.favorite && it.played) }
+        val seeds = games.filter { (it.playSeconds >= STARTED_SECONDS || (it.favorite && it.played) || it.stars >= LIKED_STARS) && it.status != io.github.matiyaaa.fuse.model.PlayStatus.DROPPED }
             .sortedWith(compareByDescending<RecGame<K>> { weight(it, now) }.thenBy { it.title })
             .take(SEEDS)
         val seedKeys = seeds.map { it.key }.toSet()
@@ -216,12 +237,18 @@ object Recommender {
 
     private const val SPOTLIGHT_POOL = 10
 
-    /** How much a played game says about someone: time in it, more when recent, more when a favourite. */
+    /**
+     * How much a played game says about someone: time in it, more when recent, more when a
+     * favourite, and the person's own stars most of all (a five-star game counts like a favourite twice).
+     */
     private fun weight(g: RecGame<*>, now: Long): Double {
         val hours = g.playSeconds / 3_600.0
         val age = g.lastPlayedAt?.let { (now - it).coerceAtLeast(0) / DAY_MS.toDouble() } ?: 365.0
-        return hours * (1.0 + 30.0 / (30.0 + age)) + if (g.favorite) 5.0 else 0.0
+        return hours * (1.0 + 30.0 / (30.0 + age)) + (if (g.favorite) 5.0 else 0.0) + g.stars
     }
+
+    /** The person's own rating (out of ten) that says they liked a game: four stars. */
+    private const val LIKED_STARS = 8
 
     /** Best first, but never more than [RUN] of one reason in a row while others wait. */
     private fun <K> mix(sorted: List<Recommendation<K>>, limit: Int): List<Recommendation<K>> {

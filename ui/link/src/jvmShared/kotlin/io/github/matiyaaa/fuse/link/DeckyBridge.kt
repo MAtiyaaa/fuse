@@ -24,6 +24,7 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFilePermissions
 import java.security.MessageDigest
 import java.security.SecureRandom
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -87,6 +88,15 @@ class DeckyBridge(
                 post("/v1/steam/{appId}/open") { call.allowedTo(ExtensionScope.PLAY) { call.json(openSteam(call.appId() ?: return@allowedTo call.bad())) } }
                 // Fuse's own games, as Home shows them first: what is being played and what was played last.
                 get("/v1/library") { call.allowedTo(ExtensionScope.LIBRARY) { call.json(library()) } }
+                // While you play: the game in front, closing it, and where the person is with it.
+                get("/v1/playing") { call.allowedTo(ExtensionScope.STATUS) { call.json(playing()) } }
+                post("/v1/playing/quit") { call.allowedTo(ExtensionScope.PLAY) { call.json(quitPlaying()) } }
+                post("/v1/playing/journal") {
+                    call.allowedTo(ExtensionScope.CHANGE_LIBRARY) {
+                        val status = runCatching { Json.parseToJsonElement(call.receiveText()).jsonObject["status"]?.jsonPrimitive?.content }.getOrNull()
+                        call.json(setPlayingStatus(status))
+                    }
+                }
                 post("/v1/game/{gameId}/open") {
                     call.allowedTo(ExtensionScope.PLAY) {
                         val id = call.parameters["gameId"]?.toLongOrNull() ?: return@allowedTo call.bad()
@@ -194,11 +204,14 @@ class DeckyBridge(
                 put("detail", words.detail)
                 put("ok", words.ok)
                 put("profile", svc.activeProfile.value?.name)
+                val playing = svc.playingNow.value.associateBy { it.deviceId }
                 putJsonArray("devices") {
                     for (d in svc.devices.value.filterNot { it.revoked }) add(buildJsonObject {
                         put("name", d.name)
                         put("platform", d.platform)
                         put("lastSeen", d.lastSeen)
+                        // What it is playing now, as the household sees it in Fuse.
+                        playing[d.id]?.title?.takeIf { it.isNotEmpty() }?.let { put("playing", it) }
                     })
                 }
             }
@@ -276,6 +289,47 @@ class DeckyBridge(
                 })
             }
         }
+    }
+
+    /**
+     * The game being played, as Fuse's own Playing page shows it: its name, system, since when, its
+     * Journal status, and whether Fuse can ask it to close here. `playing` false when none is.
+     */
+    private fun playing(): JsonObject {
+        val play = store.homeFeed.value.playtime
+        val game = play.currentGame ?: return buildJsonObject { put("playing", false) }
+        return buildJsonObject {
+            put("playing", true)
+            put("id", game.id.value)
+            put("name", game.title)
+            put("system", game.platformShort)
+            play.currentSince?.let { put("since", it) }
+            game.status?.let { put("status", it.name) }
+            put("canQuit", store.library.canQuitPlaying)
+        }
+    }
+
+    /** Asks the game being played to close, as closing its window would; never by force. */
+    private suspend fun quitPlaying(): JsonObject {
+        if (!store.library.canQuitPlaying) return buildJsonObject { put("quit", false); put("message", "Fuse can't close games on this system. Close it from the game.") }
+        val asked = store.library.quitPlaying()
+        return buildJsonObject {
+            put("quit", asked)
+            if (!asked) put("message", "No game of Fuse's is running.")
+        }
+    }
+
+    /** The game being played given [status] in its Journal (a PlayStatus name; "NONE" takes it out). */
+    private suspend fun setPlayingStatus(status: String?): JsonObject {
+        val game = store.homeFeed.value.playtime.currentGame ?: return buildJsonObject { put("set", false); put("message", "No game is being played.") }
+        val next = when (status) {
+            null -> return buildJsonObject { put("set", false); put("message", "Bad request") }
+            "NONE" -> null
+            else -> io.github.matiyaaa.fuse.model.PlayStatus.of(status) ?: return buildJsonObject { put("set", false); put("message", "Bad request") }
+        }
+        val detail = store.library.game(game.id).firstOrNull() ?: return buildJsonObject { put("set", false); put("message", "Fuse couldn't find that game.") }
+        store.library.setJournal(game.id, detail.game.journal.copy(status = next))
+        return buildJsonObject { put("set", true) }
     }
 
     private fun openFuseGame(value: Long): JsonObject {

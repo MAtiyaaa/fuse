@@ -184,6 +184,7 @@ class AndroidFuseServices(
     private val releaseInstaller = AndroidReleaseInstaller(appContext, http, activities)
     override val installer: ReleaseInstaller = releaseInstaller
     override val packages: PackageBridge = AndroidPackageBridge(appContext, activities)
+    override val usage: io.github.matiyaaa.fuse.ui.shell.store.AppUsage = io.github.matiyaaa.fuse.platform.AndroidAppUsage(appContext, activities)
 
     /** The lists of Android ports carried inside the app as resources (see app/android/build.gradle.kts, portsLists). */
     override val androidPortLists: io.github.matiyaaa.fuse.ui.shell.store.AndroidPortLists = object : io.github.matiyaaa.fuse.ui.shell.store.AndroidPortLists {
@@ -271,6 +272,36 @@ class AndroidFuseServices(
         } catch (e: IOException) {
             null
         } catch (e: SecurityException) {
+            null
+        }
+    }
+
+    override suspend fun copyBeside(from: String, name: String, edits: List<io.github.matiyaaa.fuse.library.patch.FileEdit>): String? = withContext(Dispatchers.IO) {
+        if (name.isBlank() || '/' in name || '\\' in name || name == "." || name == "..") return@withContext null
+        val source = File(from).absoluteFile
+        val dir = source.parentFile ?: return@withContext null
+        val file = File(dir, name)
+        if (!source.isFile || file.exists()) return@withContext null
+        val temp = File(dir, ".$name.fuse-part")
+        try {
+            source.copyTo(temp, overwrite = true)
+            java.io.RandomAccessFile(temp, "rw").use { f ->
+                for (e in edits) {
+                    f.seek(e.offset)
+                    f.write(e.bytes)
+                }
+            }
+            // Never over a file that appeared meanwhile.
+            if (file.exists() || !temp.renameTo(file)) {
+                temp.delete()
+                return@withContext null
+            }
+            file.absolutePath
+        } catch (e: IOException) {
+            temp.delete()
+            null
+        } catch (e: SecurityException) {
+            temp.delete()
             null
         }
     }

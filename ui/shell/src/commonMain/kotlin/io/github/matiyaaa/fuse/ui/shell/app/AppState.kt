@@ -65,6 +65,19 @@ data class ConfirmSpec(
     val onConfirm: () -> Unit,
 )
 
+/**
+ * A rating to give in stars ([io.github.matiyaaa.fuse.ui.designsystem.components.StarRating]): out
+ * of ten, halves of five stars, 0 for none. [onRate] has the rating given; Back goes to [onBack].
+ */
+data class RatingSpec(
+    val title: String,
+    val rating: Int,
+    /** A picture of what is rated (a game's cover), beside its name. */
+    val art: Any? = null,
+    val onBack: () -> Unit = {},
+    val onRate: (Int) -> Unit,
+)
+
 data class TextInputSpec(
     val title: String,
     val initial: String,
@@ -204,6 +217,9 @@ class AppState(
     var artUndo by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.store.ArtUndo?>(null)
     var textInput by mutableStateOf<TextInputSpec?>(null)
     var choice by mutableStateOf<ChoiceSpec?>(null)
+
+    /** Stars being given ([RatingSpec]). */
+    var rating by mutableStateOf<RatingSpec?>(null)
 
     /** Saves from a Switch being brought in, one game at a time ([io.github.matiyaaa.fuse.ui.shell.sync.SwitchImportOverlay]). */
     internal var switchImport by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.SwitchImport?>(null)
@@ -370,7 +386,7 @@ class AppState(
     var launching by mutableStateOf<LaunchVeil?>(null)
 
     val overlayOpen: Boolean
-        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || saveConflict != null || whoAreYou != null || profileEdit != null || profileMerge || pairing || textPreview != null || surprise != null || phoneTyping
+        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || rating != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || saveConflict != null || whoAreYou != null || profileEdit != null || profileMerge || pairing || textPreview != null || surprise != null || phoneTyping
 
     fun openContextMenu(spec: ContextMenuSpec) {
         contextMenu = spec
@@ -383,6 +399,7 @@ class AppState(
         textInput?.let { t -> textInput = null; t.onCancel() }
         phoneTyping = false
         choice = null
+        rating = null
         screenPrompt = null
         problem = null
         textPreview = null

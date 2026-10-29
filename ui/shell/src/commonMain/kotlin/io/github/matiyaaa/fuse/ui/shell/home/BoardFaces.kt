@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -97,12 +98,14 @@ internal fun BoardFace(kind: WidgetKind, size: BoardSize, feed: HomeFeed, cartri
     when (kind) {
         WidgetKind.CONTINUE_PLAYING -> ContinueFace(feed, face)
         WidgetKind.FAVORITES, WidgetKind.RECENTLY_PLAYED, WidgetKind.RECENTLY_ADDED, WidgetKind.PINNED_GAMES, WidgetKind.FOR_YOU,
+        WidgetKind.UP_NEXT,
         -> GameCarousel(kind, boardGames(kind, feed), feed, face)
         // One game, large, with why it is in the spotlight today.
-        WidgetKind.SPOTLIGHT -> GamesFace(kind, boardGames(kind, feed), face) { g -> feed.reasons[g.id] ?: g.platformShort }
-        WidgetKind.CURRENT_GAME -> GamesFace(kind, listOfNotNull(feed.playtime.currentGame), face) { g ->
-            feed.playtime.currentSince?.let { "Started ${agoText(it)}" } ?: g.platformShort
-        }
+        WidgetKind.SPOTLIGHT -> feed.spotlight?.let { g -> SingleGameFace(kind, g, feed.reasons[g.id] ?: g.platformShort, feed, face) }
+            ?: Framed(kind, null, null) { EmptyFace(widgetIcon(kind), kind.title(), emptySuggestionNote(kind), shelf = true) }
+        WidgetKind.CURRENT_GAME -> feed.playtime.currentGame?.let { g ->
+            SingleGameFace(kind, g, feed.playtime.currentSince?.let { "Started ${agoText(it)}" } ?: g.platformShort, feed, face)
+        } ?: IdleFace(feed, face)
         WidgetKind.SYSTEMS -> SystemsCarousel(feed, face)
         WidgetKind.PINNED_APPS -> AppsFace(feed)
         WidgetKind.COLLECTIONS -> CollectionsCarousel(feed, face)
@@ -132,6 +135,7 @@ internal fun boardGames(kind: WidgetKind, feed: HomeFeed): List<GameCard> = when
     WidgetKind.CONTINUE_PLAYING -> feed.continuePlaying
     WidgetKind.RECENTLY_PLAYED -> feed.recentlyPlayed
     WidgetKind.FAVORITES -> feed.favorites
+    WidgetKind.UP_NEXT -> feed.upNext
     WidgetKind.RECENTLY_ADDED -> feed.recentlyAdded
     WidgetKind.PINNED_GAMES -> feed.pinnedGames
     WidgetKind.MOST_PLAYED -> feed.mostPlayed
@@ -144,117 +148,48 @@ internal fun boardGames(kind: WidgetKind, feed: HomeFeed): List<GameCard> = when
 // ------------------------------------------------------------------------------------- games
 
 /**
- * A list of games told through its first game's art: the art fills the face, the widget's name,
- * the game's title and a line about it sit at the bottom left over a scrim, and the next games
- * stand as covers along the bottom, or down the right side of a wide face, as many as fit. One
- * cell shows the first game alone, like a poster.
+ * Now Playing with nothing running: rather than an empty card, the game played last, its box and
+ * when, so the face still says something. With nothing ever played, it says what will fill it.
  */
 @Composable
-private fun GamesFace(kind: WidgetKind, games: List<GameCard>, face: FaceSize, caption: (GameCard) -> String) {
+private fun IdleFace(feed: HomeFeed, face: FaceSize) {
     val c = Fuse.colors
-    val first = games.firstOrNull()
-    if (first == null) {
-        Framed(kind, null, null) { EmptyFace(widgetIcon(kind), kind.title(), emptyGamesNote(kind)) }
-        return
-    }
-    val corner = Fuse.geometry.tileCornerFraction * COVER_CORNER
-    val shape = remember(corner) { SquircleShape.fraction(corner) }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth >= maxHeight * WIDE_COVERS
-        val pad = if (maxHeight < 140.dp) Space.m else Space.l
-        val rest = if (face == FaceSize.SMALL) emptyList() else games.drop(1)
-        // Covers of the next games: down the right of a wide face, else along the bottom.
-        val coverHeight = when {
-            rest.isEmpty() -> 0.dp
-            wide -> (maxHeight - pad * 2).coerceAtMost(COVER_MAX)
-            else -> (maxHeight * 0.3f).coerceIn(56.dp, COVER_MAX)
+    val last = feed.recentlyPlayed.firstOrNull { it.lastPlayedAt != null }
+    Framed(WidgetKind.CURRENT_GAME, null, null) {
+        if (last == null) {
+            EmptyFace(widgetIcon(WidgetKind.CURRENT_GAME), WidgetKind.CURRENT_GAME.title(), "Nothing is running")
+            return@Framed
         }
-        val coverWidth = coverHeight * Aspect.BOX
-        val room = if (wide) maxWidth * 0.48f else maxWidth - pad * 2
-        val fit = if (coverWidth <= 0.dp) 0 else ((room + Space.s) / (coverWidth + Space.s)).toInt().coerceIn(0, minOf(rest.size, MAX_COVERS))
-        val withCaption = maxHeight >= 120.dp
-        val titleStyle = when {
-            maxHeight >= 420.dp && maxWidth >= 560.dp -> Fuse.type.display
-            maxHeight >= 300.dp && maxWidth >= 360.dp -> Fuse.type.title
-            maxHeight >= 160.dp -> Fuse.type.titleSmall
-            else -> Fuse.type.bodyStrong
-        }
-        Artwork(
-            first.art.hero ?: first.art.grid ?: first.art.screenshot ?: first.art.boxart,
-            Modifier.fillMaxSize(),
-            focusX = first.art.heroFocusX,
-            focusY = first.art.heroFocusY,
-            fallback = { GeneratedArt(first.title, first.accent.toColor(), slot = ArtSlot.WIDE, showText = false) },
-        )
-        // A scrim under the words (from the bottom, and from the left on a wide face).
-        val scrim = c.artScrim
-        Box(
-            Modifier.fillMaxSize().background(
-                if (wide) {
-                    Brush.horizontalGradient(0f to scrim, 0.62f to scrim.copy(alpha = scrim.alpha * 0.25f), 1f to scrim.copy(alpha = scrim.alpha * 0.5f))
-                } else {
-                    Brush.verticalGradient(0f to Color.Transparent, 0.4f to scrim.copy(alpha = scrim.alpha * 0.2f), 1f to scrim)
-                },
-            ),
-        )
-        Column(Modifier.fillMaxSize().padding(pad)) {
-            ArtLabel(kind)
-            Spacer(Modifier.weight(1f))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Column(Modifier.weight(1f)) {
-                    FText(first.title, titleStyle, color = c.onArt, maxLines = 2)
-                    if (withCaption) {
-                        Spacer(Modifier.height(Space.xxs))
-                        FText(caption(first), Fuse.type.caption, color = c.onArtMuted, maxLines = 1, fit = true)
-                    }
+        val room = LocalWidgetRoom.current
+        WidgetHeader(widgetIcon(WidgetKind.CURRENT_GAME), WidgetKind.CURRENT_GAME.title())
+        Spacer(Modifier.weight(1f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (!room.small && face != FaceSize.SMALL) {
+                val h = when {
+                    room.roomy -> 132.dp
+                    room.compact -> 52.dp
+                    else -> 84.dp
                 }
-                if (wide && fit > 0) {
-                    Spacer(Modifier.width(Space.l))
-                    Covers(rest.take(fit), coverHeight, shape)
+                Box(Modifier.height(h).aspectRatio(Aspect.BOX).lifted(CoverShape).graphicsLayer { alpha = IDLE_COVER_ALPHA }) {
+                    Artwork(last.art.boxart ?: last.art.grid ?: last.art.square ?: last.art.icon, Modifier.fillMaxSize(), fallback = {
+                        GeneratedArt(last.title, last.accent.toColor(), slot = ArtSlot.BOX, label = last.platformShort, showText = false)
+                    })
+                }
+                Spacer(Modifier.width(if (room.roomy) Space.l else Space.m))
+            }
+            Column(Modifier.weight(1f)) {
+                FText("Nothing is running", if (room.roomy) Fuse.type.titleSmall else Fuse.type.bodyStrong, maxLines = 1, fit = true)
+                if (!room.tiny) {
+                    Spacer(Modifier.height(Space.xxs))
+                    FText("Last played ${last.title}, ${agoText(last.lastPlayedAt!!)}", Fuse.type.caption, color = c.textMuted, maxLines = 2)
                 }
             }
-            if (!wide && fit > 0) {
-                Spacer(Modifier.height(Space.m))
-                Covers(rest.take(fit), coverHeight, shape)
-            }
         }
     }
 }
 
-/** Covers standing in a row, each a small lit object over a contact shadow. */
-@Composable
-private fun Covers(games: List<GameCard>, height: Dp, shape: androidx.compose.ui.graphics.Shape) {
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.Bottom) {
-        for (g in games) {
-            Box(Modifier.height(height).aspectRatio(Aspect.BOX).lifted(shape)) {
-                Artwork(g.art.boxart ?: g.art.grid ?: g.art.square ?: g.art.icon, Modifier.fillMaxSize(), fallback = {
-                    GeneratedArt(g.title, g.accent.toColor(), slot = ArtSlot.BOX, label = g.platformShort, showText = false)
-                })
-            }
-        }
-    }
-}
-
-/** A widget's name over art: its icon and name in the overline style, in the colours that read on art. */
-@Composable
-private fun ArtLabel(kind: WidgetKind) {
-    val c = Fuse.colors
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        FuseIcon(widgetIcon(kind), size = Size.iconXS, tint = c.onArtMuted)
-        Spacer(Modifier.width(Space.s - Space.xxs))
-        FText(widgetLabel(kind).uppercase(), Fuse.type.overline, color = c.onArtMuted, maxLines = 1, fit = true)
-    }
-}
-
-private fun emptyGamesNote(kind: WidgetKind): String = when (kind) {
-    WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED -> "Games you play show here"
-    WidgetKind.FAVORITES -> "Add favourites from a game's options"
-    WidgetKind.PINNED_GAMES -> "Pin games from their options"
-    WidgetKind.RECENTLY_ADDED -> "New games show here after a scan"
-    WidgetKind.CURRENT_GAME -> "Nothing is running"
-    WidgetKind.FOR_YOU, WidgetKind.SPOTLIGHT -> emptySuggestionNote(kind)
-    else -> "Nothing here yet"
-}
+/** What Up Next says while no game is wanted: how one gets there. */
+internal const val UP_NEXT_EMPTY = "Choose Want to play in a game's Journal"
 
 /** What a suggestion widget says before the library has anything to suggest. */
 internal fun emptySuggestionNote(kind: WidgetKind): String =
@@ -954,13 +889,8 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
 
 
 
-/** Covers' corners against the theme's tile corner. */
-private const val COVER_CORNER = 0.45f
-
-/** A face this much wider than tall puts its covers down the right. */
-private const val WIDE_COVERS = 1.7f
-private val COVER_MAX = 150.dp
-private const val MAX_COVERS = 6
+/** How strongly the last game's box shows on an idle Now Playing: present, but not playing. */
+private const val IDLE_COVER_ALPHA = 0.82f
 
 /** Icon sizes the Apps widget tries, largest first. */
 private val APP_SIZES = listOf(112.dp, 96.dp, 80.dp, 72.dp, 64.dp, 56.dp, 48.dp, 40.dp)

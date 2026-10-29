@@ -32,6 +32,19 @@ internal data class UserDto(
     @SerialName("PrimaryImageTag") val primaryImageTag: String? = null,
 )
 
+/** A Quick Connect sign-in under way: the code to show, and the secret to ask after it with. */
+@Serializable
+internal data class QuickConnectDto(
+    @SerialName("Secret") val secret: String? = null,
+    @SerialName("Code") val code: String? = null,
+    @SerialName("Authenticated") val authenticated: Boolean = false,
+)
+
+@Serializable
+internal data class QuickConnectAuthDto(
+    @SerialName("Secret") val secret: String,
+)
+
 @Serializable
 internal data class AuthResultDto(
     @SerialName("User") val user: UserDto? = null,
@@ -175,6 +188,21 @@ internal data class ItemDto(
     @SerialName("Status") val status: String? = null,
     @SerialName("IsFolder") val isFolder: Boolean? = null,
     @SerialName("LocationType") val locationType: String? = null,
+    /** For a person, where they were born. */
+    @SerialName("ProductionLocations") val productionLocations: List<String>? = null,
+    /** Trickplay pictures by version, then by width (asked for with fields=Trickplay). */
+    @SerialName("Trickplay") val trickplay: Map<String, Map<String, TrickplayInfoDto>>? = null,
+)
+
+/** How a version's trickplay pictures are laid out (Jellyfin 10.9 and later). */
+@Serializable
+internal data class TrickplayInfoDto(
+    @SerialName("Width") val width: Int = 0,
+    @SerialName("Height") val height: Int = 0,
+    @SerialName("TileWidth") val tileWidth: Int = 0,
+    @SerialName("TileHeight") val tileHeight: Int = 0,
+    @SerialName("ThumbnailCount") val thumbnailCount: Int = 0,
+    @SerialName("Interval") val interval: Long = 0,
 )
 
 @Serializable
@@ -224,4 +252,52 @@ internal data class PlaybackReportDto(
     @SerialName("SubtitleStreamIndex") val subtitleStreamIndex: Int? = null,
     @SerialName("CanSeek") val canSeek: Boolean = true,
     @SerialName("Failed") val failed: Boolean = false,
+)
+
+/** One of an item's media segments (Jellyfin 10.10 and later), from whichever provider found it. */
+@Serializable
+internal data class MediaSegmentDto(
+    @SerialName("Type") val type: String? = null,
+    @SerialName("StartTicks") val startTicks: Long = 0,
+    @SerialName("EndTicks") val endTicks: Long = 0,
+)
+
+@Serializable
+internal data class MediaSegmentsResultDto(
+    @SerialName("Items") val items: List<MediaSegmentDto> = emptyList(),
+)
+
+/** A subtitle the server's subtitle plugins found for an item, to be downloaded onto it. */
+@Serializable
+internal data class RemoteSubtitleInfoDto(
+    @SerialName("Id") val id: String? = null,
+    @SerialName("Name") val name: String? = null,
+    @SerialName("ProviderName") val providerName: String? = null,
+    @SerialName("ThreeLetterISOLanguageName") val language: String? = null,
+    @SerialName("Format") val format: String? = null,
+    @SerialName("DownloadCount") val downloadCount: Int? = null,
+    @SerialName("IsHashMatch") val isHashMatch: Boolean? = null,
+    @SerialName("HearingImpaired") val hearingImpaired: Boolean? = null,
+    @SerialName("MachineTranslated") val machineTranslated: Boolean? = null,
+    @SerialName("AiTranslated") val aiTranslated: Boolean? = null,
+)
+
+/** A song's words (Jellyfin 10.9 and later): each line with where it starts, in ticks, when timed. */
+@Serializable
+internal data class LyricDto(
+    @SerialName("Lyrics") val lyrics: List<LyricLineDto> = emptyList(),
+)
+
+@Serializable
+internal data class LyricLineDto(
+    @SerialName("Text") val text: String? = null,
+    @SerialName("Start") val start: Long? = null,
+)
+
+/** An older Intro Skipper's answer for an episode: its intro, in seconds. */
+@Serializable
+internal data class IntroTimestampsDto(
+    @SerialName("Valid") val valid: Boolean = false,
+    @SerialName("IntroStart") val introStart: Double = 0.0,
+    @SerialName("IntroEnd") val introEnd: Double = 0.0,
 )

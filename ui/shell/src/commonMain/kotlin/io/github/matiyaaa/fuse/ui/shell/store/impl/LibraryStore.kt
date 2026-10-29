@@ -102,6 +102,8 @@ private data class ActiveSession(
     val clock: SessionClock = SessionClock(0),
     /** Follows [clock] while the game runs. */
     val watch: kotlinx.coroutines.Job? = null,
+    /** On Android, the emulator's package: with Usage access, only its time in front is counted. */
+    val appId: String? = null,
 )
 
 /** Fuse Sync, for the saves around a game: the service and how it knows games. */
@@ -377,6 +379,19 @@ internal class DefaultLibraryOps(
         }
     }.flowOn(Dispatchers.Default)
 
+    override fun similar(id: GameId): Flow<List<io.github.matiyaaa.fuse.ui.shell.store.Suggestion>> = recGames.map { games ->
+        ctx.work.run(BackgroundWork.Job.SUGGESTIONS) { Recommender.similar(id, games, limit = SIMILAR_MOST) }
+    }.distinctUntilChanged().flatMapLatest { picks ->
+        if (picks.isEmpty()) {
+            flowOf(emptyList())
+        } else {
+            val why = picks.associate { it.key to it.reason }
+            ctx.cards(data.games.observeSummariesInOrder(picks.map { it.key })).map { cards ->
+                cards.mapNotNull { card -> why[card.id]?.let { io.github.matiyaaa.fuse.ui.shell.store.Suggestion(card, it) } }
+            }
+        }
+    }.flowOn(Dispatchers.Default)
+
     /** Each series' first game's art, for the series' tile. */
     private val seriesArt: Flow<Map<io.github.matiyaaa.fuse.model.CollectionId, io.github.matiyaaa.fuse.ui.shell.store.Art>> =
         data.collections.observeSeriesLeads().flatMapLatest { leads ->
@@ -402,6 +417,7 @@ internal class DefaultLibraryOps(
             storage.onStart { emit(null) },
             picks.onStart { emit(HomePicks()) },
             seriesArt.onStart { emit(emptyMap()) },
+            ctx.cards(data.games.observeJournal(listOf(io.github.matiyaaa.fuse.model.PlayStatus.WANT))),
         ),
     ) { v ->
         val p = v[12] as HomePicks
@@ -411,6 +427,7 @@ internal class DefaultLibraryOps(
             recentlyPlayed = v[1] as List<GameCard>,
             recentlyAdded = v[2] as List<GameCard>,
             favorites = v[3] as List<GameCard>,
+            upNext = v[14] as List<GameCard>,
             pinnedGames = v[4] as List<GameCard>,
             mostPlayed = v[5] as List<GameCard>,
             systems = v[6] as List<PlatformCard>,
@@ -509,6 +526,11 @@ internal class DefaultLibraryOps(
             }
             return listed.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) }
         }
+        query.journal?.let { statuses ->
+            return games.observeJournal(statuses).map { list ->
+                list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(JOURNAL_ORDER)
+            }
+        }
         val summaries = when {
             query.collection != null -> data.collections.observeGames(CollectionKey.Manual(query.collection))
             query.favoritesOnly -> games.observeFavorites()
@@ -526,6 +548,21 @@ internal class DefaultLibraryOps(
             list.filter { smart.matches(it.id, it.lastPlayedAt, it.totalSeconds, it.addedAt, now, together) }
         }.distinctUntilChanged()
     }
+
+    private val moveInWork by lazy { MoveInWork(ctx) { achievements.wantToPlay() } }
+
+    override suspend fun moveInLook() = moveInWork.look()
+
+    override suspend fun moveIn(sources: Set<io.github.matiyaaa.fuse.library.movein.MoveInSource>) = moveInWork.bringIn(sources)
+
+    override suspend fun undoMoveIn() = moveInWork.undo()
+
+    override suspend fun lastMoveIn() = moveInWork.last()
+
+    override fun journalCounts(platform: PlatformId?): Flow<Map<io.github.matiyaaa.fuse.model.PlayStatus, Int>> =
+        data.games.observeJournal().map { list ->
+            list.filter { platform == null || it.platformId == platform }.mapNotNull { it.status }.groupingBy { it }.eachCount()
+        }.distinctUntilChanged().flowOn(Dispatchers.Default)
 
     override fun smartCounts(platform: PlatformId?): Flow<Map<io.github.matiyaaa.fuse.ui.shell.store.SmartFilter, Int>> =
         combine(summaries(GameQuery(platform = platform)), together, hourly) { list, together, _ ->
@@ -834,14 +871,14 @@ internal class DefaultLibraryOps(
         }
     }
 
-    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, together: io.github.matiyaaa.fuse.ui.shell.store.Together?, via: io.github.matiyaaa.fuse.ui.shell.store.PlayVia, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome {
+    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, together: io.github.matiyaaa.fuse.ui.shell.store.Together?, via: io.github.matiyaaa.fuse.ui.shell.store.PlayVia, resume: Boolean, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome {
         // A game the person plays with a port starts as the port's own game (its saves and time there);
         // on Android, as the port's app attached to it (the time the game's own). From its own system,
         // when it shows in Ports or Android too, it starts with its emulator.
         val plain = emulator == null && discPath == null && together == null && via != io.github.matiyaaa.fuse.ui.shell.store.PlayVia.EMULATOR
         val target = if (plain) portPlay?.invoke(id)?.first ?: id else id
         val asApp = if (plain && target == id) appFor(id, via, null, lastOf = { lastPlay(data.playSessions.sessions(id).first()) })?.first else null
-        return launchGame(target, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage, asApp).also { outcome ->
+        return launchGame(target, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage, asApp, resume).also { outcome ->
             if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
         }
     }
@@ -867,7 +904,7 @@ internal class DefaultLibraryOps(
         class Stopped(val outcome: LaunchOutcome) : PlayResolution
     }
 
-    private suspend fun resolveForPlay(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, asApp: String? = null): PlayResolution {
+    private suspend fun resolveForPlay(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, asApp: String? = null, resume: io.github.matiyaaa.fuse.launch.Resume? = null): PlayResolution {
         fun stop(problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) = PlayResolution.Stopped(LaunchOutcome.Problem(problem))
         var stored = data.games.get(id) ?: return stop(LaunchProblems.gone())
         // Played as the port's app ([asApp]): started as the app, which keeps the game's files itself,
@@ -927,6 +964,7 @@ internal class DefaultLibraryOps(
             display = display,
             displayId = displayId,
             homeDir = ctx.services.emulators.homeDir,
+            resume = resume,
         )
         if (IdFiles.needsContent(game.location)) {
             choice = choice.copy(injectedText = ctx.services.fs.readText(game.location.launchPath, IdFiles.MAX_BYTES))
@@ -984,6 +1022,7 @@ internal class DefaultLibraryOps(
         together: io.github.matiyaaa.fuse.ui.shell.store.Together? = null,
         onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit = {},
         asApp: String? = null,
+        resume: Boolean = false,
     ): LaunchOutcome {
         val ready = when (val r = resolveForPlay(id, emulator, discPath, display, asApp)) {
             is PlayResolution.Stopped -> return r.outcome
@@ -1058,6 +1097,15 @@ internal class DefaultLibraryOps(
                         is io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go -> note = note ?: gate.note
                     }
                 }
+                // Continue, now that the newest saves and states are in place: the emulator asked to
+                // carry on from its resume state, where it has one. Never while playing together.
+                if (together == null) keepPlaceFor(game, installedEmulator, usedCore, resolved.adapter?.resumeWay, resume)?.let { r ->
+                    when (val again = resolveForPlay(id, emulator, discPath, display, asApp, resume = r)) {
+                        is PlayResolution.Ready -> resolved = again.plan.resolved
+                        is PlayResolution.Stopped -> Unit
+                    }
+                }
+                hotkeysFor(installedEmulator)
                 onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING)
                 // Hosting: the household hears of it with this device's presence while it is played.
                 val hosting = if (together == io.github.matiyaaa.fuse.ui.shell.store.Together.Host) togetherStore.hosting(installedEmulator) else null
@@ -1074,7 +1122,10 @@ internal class DefaultLibraryOps(
                             emulator = installedEmulator.name + (installedEmulator.version?.let { " $it" } ?: ""), core = usedCore,
                             how = LaunchReport.how(plan), target = LaunchReport.target(resolved.target), tookMs = ctx.now() - pressedAt, saveNote = note,
                         ))
-                        startSession(id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null }, plainSave, rommSave?.takeIf { rommMode.sends })
+                        startSession(
+                            id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null }, plainSave, rommSave?.takeIf { rommMode.sends },
+                            appId = installedEmulator.appId.takeIf { installedEmulator.host == io.github.matiyaaa.fuse.model.Host.ANDROID },
+                        )
                         if (note != null) LaunchOutcome.Synced(note) else LaunchOutcome.Started
                     }
                     // Only the app opened; which game gets played there is unknown, so no session is recorded.
@@ -1084,6 +1135,106 @@ internal class DefaultLibraryOps(
                 }
             }
         }
+    }
+
+    /**
+     * How [game] starts in [emulator] as far as where it was left goes, while Continue is on
+     * ([way] is how the emulator does it): carrying on from its resume state when [resume] asks and
+     * there is one; for RetroArch, which keeps it through its settings, a settings file laid over the
+     * person's for the run that keeps the state as the game is left and loads it only when asked.
+     * Null starts it exactly as before. PCSX2 is asked once to save a state on shutdown, recorded so
+     * turning Continue off puts it back.
+     */
+    private suspend fun keepPlaceFor(game: io.github.matiyaaa.fuse.model.Game, emulator: InstalledEmulator, core: String?, way: io.github.matiyaaa.fuse.launch.ResumeWay?, resume: Boolean): io.github.matiyaaa.fuse.launch.Resume? {
+        val pcsx2 = io.github.matiyaaa.fuse.sync.SaveAdapters.baseId(emulator.id.value) == "pcsx2"
+        if (!ctx.settings.value.library.keepPlace) {
+            // Continue was turned off: what it changed in PCSX2 goes back as it was, before it starts.
+            if (pcsx2) runCatching { nativeSettings.restoreKeepPlace(emulator.id) }
+            return null
+        }
+        if (way == null) return null
+        if (pcsx2) keepPcsx2Place(emulator)
+        val point = if (resume) resumePointOf(game, emulator, core) else null
+        return when (way) {
+            io.github.matiyaaa.fuse.launch.ResumeWay.AUTO_LOAD ->
+                retroArchResumeConfig(load = point != null)?.let { cfg -> io.github.matiyaaa.fuse.launch.Resume(point?.path.orEmpty(), cfg) }
+            else -> point?.let { io.github.matiyaaa.fuse.launch.Resume(it.path) }
+        }
+    }
+
+    /**
+     * The same hotkeys in every emulator: written into [emulator] as a game starts while they are
+     * on (beside the person's own, so nothing of theirs stops working), taken out again once they
+     * are off. A file read and, only when something is missing, written.
+     */
+    private suspend fun hotkeysFor(emulator: InstalledEmulator) {
+        if (io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(emulator.id.value) !in io.github.matiyaaa.fuse.launch.settings.Hotkeys.families) return
+        runCatching {
+            if (ctx.settings.value.library.gameHotkeys) nativeSettings.setHotkeys(emulator.id) else nativeSettings.restoreHotkeys(emulator.id)
+        }
+    }
+
+    /** The emulators here Fuse can write its hotkeys into: set up, and of a family [io.github.matiyaaa.fuse.launch.settings.Hotkeys] knows. */
+    private suspend fun hotkeyEmulators(): List<InstalledEmulator> {
+        if (ctx.services.settingsFiles == null) return emptyList()
+        if (ctx.installed.value.isEmpty()) emulators.detectNow()
+        return ctx.installed.value.filter { io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(it.id.value) in io.github.matiyaaa.fuse.launch.settings.Hotkeys.families }
+    }
+
+    override val canQuitPlaying: Boolean get() = ctx.services.launcher.canQuit
+
+    override suspend fun quitPlaying(): Boolean = runCatching { ctx.services.launcher.quitGame() }.getOrDefault(false)
+
+    override suspend fun hotkeysHere(): List<io.github.matiyaaa.fuse.ui.shell.store.HotkeyEmulator> = hotkeyEmulators()
+        .map { io.github.matiyaaa.fuse.ui.shell.store.HotkeyEmulator(it.name, io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(it.id.value)) }
+        .distinctBy { it.name }
+
+    override suspend fun applyHotkeys(on: Boolean): List<io.github.matiyaaa.fuse.ui.shell.store.HotkeysApplied> = hotkeyEmulators().mapNotNull { e ->
+        runCatching {
+            if (on) {
+                nativeSettings.setHotkeys(e.id)?.let { kept -> io.github.matiyaaa.fuse.ui.shell.store.HotkeysApplied(e.name, kept.map { it.label }) }
+            } else {
+                io.github.matiyaaa.fuse.ui.shell.store.HotkeysApplied(e.name, emptyList()).takeIf { nativeSettings.restoreHotkeys(e.id) }
+            }
+        }.getOrNull()
+    }
+
+    /** RetroArch's settings for one run of Continue: the automatic state kept as the game is left, and loaded when [load]. */
+    private fun retroArchResumeConfig(load: Boolean): String? = ctx.services.writeCacheFile(
+        "resume/retroarch-${if (load) "continue" else "fresh"}.cfg",
+        "savestate_auto_save = \"true\"\nsavestate_auto_load = \"$load\"\n",
+    )
+
+    /** PCSX2 keeps no resume state unless asked: Save State On Shutdown, turned on once and recorded as Continue's. */
+    private suspend fun keepPcsx2Place(emulator: InstalledEmulator) {
+        val value = io.github.matiyaaa.fuse.launch.online.OnlineValue(null, "EmuCore", "SaveStateOnShutdown", "true")
+        val now = runCatching { nativeSettings.current(emulator.id, listOf(value)) }.getOrNull() ?: return
+        if (now[value]?.equals("true", ignoreCase = true) == true) return
+        runCatching { nativeSettings.setKeepPlace(emulator.id, listOf(value)) }
+    }
+
+    /** [game]'s resume state on this device, as [emulator]'s saves lay it out. */
+    private suspend fun resumePointOf(game: io.github.matiyaaa.fuse.model.Game, emulator: InstalledEmulator, core: String?): io.github.matiyaaa.fuse.sync.ResumePoint? = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val adapter = io.github.matiyaaa.fuse.sync.SaveAdapters.forEmulator(emulator.id.value) ?: return@withContext null
+        val env = sync?.service?.saveEnvironment ?: return@withContext null
+        val query = plainSaveQuery(game, emulator, coreFor(emulator, game, core))
+        runCatching { io.github.matiyaaa.fuse.sync.ResumePoints.find(adapter.locate(query, env), env) }.getOrNull()
+    }
+
+    override suspend fun resumePoint(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.ResumeInfo? {
+        if (!ctx.settings.value.library.keepPlace) return null
+        val game = data.games.get(id) ?: return null
+        val (resolved, core) = startsWith(game)
+        val emulator = resolved.installed ?: return null
+        if (resolved.adapter?.resumeWay == null) return null
+        val point = resumePointOf(game, emulator, core) ?: return null
+        // Fuse One says which device made the newest state, and when: the moment the game was left.
+        val newest = sync?.service?.let { s ->
+            saveQuery(id, game, emulator, coreFor(emulator, game, core))?.let { q ->
+                runCatching { s.versions(q, io.github.matiyaaa.fuse.sync.SaveKind.STATE) }.getOrNull()?.firstOrNull { it.current }
+            }
+        }
+        return io.github.matiyaaa.fuse.ui.shell.store.ResumeInfo(emulator.name, newest?.at ?: point.modifiedAt, newest?.device)
     }
 
     /** What Fuse Sync needs to find [id]'s saves, with the emulator it would start with now; null when none would. */
@@ -1258,6 +1409,7 @@ internal class DefaultLibraryOps(
     private suspend fun startSession(
         game: GameId, emulator: EmulatorId, awaitExit: (suspend () -> Unit)?, save: io.github.matiyaaa.fuse.sync.SaveQuery? = null,
         plainSave: io.github.matiyaaa.fuse.sync.SaveQuery? = null, romm: Pair<Long, io.github.matiyaaa.fuse.sync.SaveQuery>? = null,
+        appId: String? = null,
     ) {
         val startedAt = ctx.now()
         playedWhileAway = true
@@ -1265,7 +1417,7 @@ internal class DefaultLibraryOps(
         val clock = SessionClock(startedAt)
         active = ActiveSession(
             sessionId, game, endsOnResume = awaitExit == null, save = save, plainSave = plainSave, romm = romm,
-            clock = clock, watch = watchSession(sessionId, clock),
+            clock = clock, watch = watchSession(sessionId, clock), appId = appId,
         )
         // Fuse Sync keeps the save moving while the game runs, and tells the other devices it is being played.
         val link = sync
@@ -1322,7 +1474,10 @@ internal class DefaultLibraryOps(
         session?.romm?.let { (romId, q) -> rommSaves?.let { rs -> afterGame { delay(ROMM_SETTLE_MS); rs.afterExit(q, romId) } } }
         // Played time only: the screen off and the computer asleep don't count.
         val now = ctx.now()
-        val ended = data.playSessions.end(sessionId, session?.clock?.takeIf { it.startedAt > 0 }?.endAt(now) ?: now)
+        val clocked = session?.clock?.takeIf { it.startedAt > 0 }?.endAt(now) ?: now
+        // On Android with Usage access, nor does the time spent in another app before coming back to Fuse.
+        val inFront = session?.takeIf { it.endsOnResume && it.clock.startedAt > 0 }?.let { s -> s.appId?.let { app -> inFrontEnd(app, s.clock.startedAt, now, clocked) } }
+        val ended = data.playSessions.end(sessionId, inFront ?: clocked, if (inFront != null) io.github.matiyaaa.fuse.model.PlaySessionSource.USAGE_STATS else null)
         runCatching { data.cache.remove(SESSION_NS, SESSION_ALIVE) }
         // RomM counts the session too, for a game from RomM, when the person sends their changes there.
         ended?.endedAt?.let { end -> rommChange?.invoke(ended.gameId) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Played(romId, ended.startedAt, end) } }
@@ -1333,6 +1488,19 @@ internal class DefaultLibraryOps(
         }
         // Over once its end is written and what follows it has started ([awaitPlayed] waits for both).
         if (active?.id == sessionId) active = null
+    }
+
+    /**
+     * Where a session that began at [startedAt] ends when only the time [appId] was in front counts
+     * (Android's Usage access, once allowed), never later than [clocked], the screen-on end already
+     * worked out; null when the system can't say, so the screen-on count stands.
+     */
+    private suspend fun inFrontEnd(appId: String, startedAt: Long, now: Long, clocked: Long): Long? {
+        val usage = ctx.services.usage?.takeIf { it.allowed() } ?: return null
+        val moves = runCatching { usage.moves(appId, startedAt, now) }.getOrNull()?.takeIf { it.isNotEmpty() } ?: return null
+        val played = io.github.matiyaaa.fuse.ui.shell.store.timeInFront(moves, startedAt, now)
+        if (played <= 0) return null
+        return startedAt + minOf(played, clocked - startedAt)
     }
 
     private fun afterPlaying() {
@@ -1399,6 +1567,17 @@ internal class DefaultLibraryOps(
     override suspend fun setFavorite(id: GameId, favorite: Boolean) = data.games.setFavorite(id, favorite).also {
         ctx.userChanged()
         rommChange?.invoke(id) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Favourite(romId, favorite) }
+    }
+
+    override suspend fun setJournal(id: GameId, journal: io.github.matiyaaa.fuse.model.GameJournal) {
+        val before = data.games.get(id)?.journal ?: return
+        // A status set again keeps when it was first set; a new one is set now.
+        val statusAt = if (journal.status == before.status) before.statusAt else null
+        data.games.setJournal(id, journal.copy(statusAt = statusAt))
+        ctx.userChanged()
+        if (journal.status != before.status || journal.rating != before.rating) {
+            rommChange?.invoke(id) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Journal(romId, journal.status?.name, journal.rating) }
+        }
     }
 
     override suspend fun setHidden(id: GameId, hidden: Boolean) = data.games.setHidden(id, hidden).also {
@@ -1644,7 +1823,7 @@ internal class DefaultLibraryOps(
             else -> launch
         }
         val ext = Paths.extension(path).lowercase()
-        if (ext != "iso" && ext != "pbp") return null
+        if (ext != "iso" && ext != "pbp" && ext !in io.github.matiyaaa.fuse.library.disc.PlayStationDisc.COMPRESSED) return null
         val stat = fs.stat(path) ?: return null
         val key = "psp|$path|${stat.sizeBytes}|${stat.modifiedAt}"
         val serializer = kotlinx.serialization.serializer<String>()
@@ -1691,7 +1870,19 @@ internal class DefaultLibraryOps(
         return null
     }
 
-    private val discs by lazy { io.github.matiyaaa.fuse.library.disc.PlayStationDisc(ctx.services.fs) }
+    /** The PlayStation disc reader, reading CHD, CSO and ZSO images through Fuse's own readers of them. */
+    private val discs by lazy {
+        io.github.matiyaaa.fuse.library.disc.PlayStationDisc(ctx.services.fs) { path ->
+            val opened = ArrayList<ClosableByteSource>()
+            fun closeAll() = opened.forEach { runCatching { it.close() } }
+            val files = object : io.github.matiyaaa.fuse.integrations.disc.DiscFiles {
+                override suspend fun open(path: String): io.github.matiyaaa.fuse.integrations.ByteSource? = openByteSource(path)?.also { opened += it }
+
+                override suspend fun readText(path: String): String? = runCatching { ctx.services.fs.readText(path) }.getOrNull()
+            }
+            runCatching { DiscData.sectors(path, files, ::closeAll) }.getOrNull() ?: null.also { closeAll() }
+        }
+    }
 
     override suspend fun discIdentity(id: GameId): io.github.matiyaaa.fuse.library.disc.DiscIdentity? {
         val game = data.games.get(id) ?: return null
@@ -1779,7 +1970,7 @@ internal class DefaultLibraryOps(
     private suspend fun discImage(game: io.github.matiyaaa.fuse.model.Game): String? {
         val path = game.discs.firstOrNull()?.path ?: game.location.launchPath
         val ext = Paths.extension(path).lowercase()
-        if (ext in setOf("iso", "bin", "img")) return path
+        if (ext in setOf("iso", "bin", "img") || ext in io.github.matiyaaa.fuse.library.disc.PlayStationDisc.COMPRESSED) return path
         if (ext != "cue") return null
         val cue = ctx.services.fs.readText(path, 64 * 1024) ?: return null
         val name = Regex("""(?im)^\s*FILE\s+"([^"]+)"""").find(cue)?.groupValues?.get(1) ?: return null
@@ -1811,6 +2002,60 @@ internal class DefaultLibraryOps(
                 )
             },
         )
+    }.flowOn(Dispatchers.Default)
+
+    override suspend fun recapPeriods(): List<io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod> {
+        val span = data.playSessions.playedSpan() ?: return emptyList()
+        val offset = ctx.services.utcOffsetMillis()
+        fun dateOf(ms: Long) = kotlinx.datetime.LocalDate.fromEpochDays((ms + offset).floorDiv(TimeWords.DAY_MS))
+        val now = dateOf(ctx.now())
+        val first = dateOf(span.first)
+        val month = now.month.ordinal + 1
+        val lastMonth = if (month == 1) io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod(now.year - 1, 12) else io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod(now.year, month - 1)
+        val firstMonth = first.year * 12 + first.month.ordinal
+        return buildList {
+            add(io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod(now.year))
+            add(io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod(now.year, month))
+            if (lastMonth.year * 12 + (lastMonth.month!! - 1) >= firstMonth) add(lastMonth)
+            for (y in now.year - 1 downTo first.year) add(io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod(y))
+        }
+    }
+
+    override fun recap(period: io.github.matiyaaa.fuse.ui.shell.store.RecapPeriod): Flow<io.github.matiyaaa.fuse.ui.shell.store.PlayRecap> = flow {
+        val offset = ctx.services.utcOffsetMillis()
+        val edges = Recaps.edges(period.year, period.month, offset)
+        val from = edges.first()
+        val until = edges.last()
+        val t = Recaps.of(data.playSessions.inWindow(from, until), data.playSessions.firstPlayed(), edges, offset)
+        val wanted = (t.games.take(RECAP_GAMES).map { it.first } + t.firsts.take(RECAP_FIRSTS) + listOfNotNull(t.longest?.first)).distinct()
+        val cards = ctx.cardsOnce(wanted.mapNotNull { data.games.summary(it) }).associateBy { it.id }
+        val finished = data.games.observeJournal(listOf(io.github.matiyaaa.fuse.model.PlayStatus.BEATEN, io.github.matiyaaa.fuse.model.PlayStatus.COMPLETED)).first()
+            .filter { (it.statusAt ?: 0) in from until until }
+        val systems = platforms.value.associateBy { it.platform.id }
+        fun day(d: Long) = TimeWords.date(d).let { if (period.month != null || it.endsWith(" ${period.year}")) it.substringBeforeLast(' ') else it }
+        val now = ctx.now()
+        emit(io.github.matiyaaa.fuse.ui.shell.store.PlayRecap(
+            period = period,
+            title = period.month?.let { "${TimeWords.monthName(Recaps.monthStart(period.year, it, 0) / TimeWords.DAY_MS)} ${period.year}" } ?: "${period.year}",
+            seconds = t.seconds,
+            sessions = t.sessions,
+            days = t.days,
+            gameCount = t.games.size,
+            bars = t.bars,
+            barLabels = if (period.month == null) "JFMAMJJASOND".map { it.toString() } else t.bars.indices.map { (it + 1).toString() },
+            barNow = if (now in from until until) edges.indexOfLast { it <= now }.coerceIn(0, t.bars.size - 1) else null,
+            games = t.games.take(RECAP_GAMES).mapNotNull { (id, s) -> cards[id]?.let { it to s } },
+            systems = t.systems.mapNotNull { (id, s) -> systems[PlatformId(id)]?.let { it to s } },
+            longest = t.longest?.let { (id, s, d) -> cards[id]?.let { io.github.matiyaaa.fuse.ui.shell.store.RecapLongest(it, s, day(d)) } },
+            streakDays = t.streak?.first ?: 0,
+            streakWords = t.streak?.let { (n, d) -> "${day(d)} to ${day(d + n - 1)}" },
+            firsts = t.firsts.take(RECAP_FIRSTS).mapNotNull { cards[it] },
+            firstCount = t.firsts.size,
+            finished = ctx.cardsOnce(finished),
+            weekday = t.weekday?.let { Recaps.WEEKDAYS[it - 1] },
+            partOfDay = t.partOfDay?.let { Recaps.PARTS[it] },
+            loaded = true,
+        ))
     }.flowOn(Dispatchers.Default)
 
     override suspend fun launchCandidates(id: GameId): List<String> {
@@ -1927,34 +2172,102 @@ internal class DefaultLibraryOps(
 
     override suspend fun userParts(owner: GameId) = data.games.userParts(owner)
 
-    override suspend fun applyPatch(id: GameId, patchPath: String): io.github.matiyaaa.fuse.ui.shell.store.PatchApplied {
+    override suspend fun applyPatch(id: GameId, patchPath: String, disc: Int?): io.github.matiyaaa.fuse.ui.shell.store.PatchApplied {
         val failed = io.github.matiyaaa.fuse.ui.shell.store.PatchApplied::Failed
         val game = data.games.get(id) ?: return failed("This game isn't in the library any more.")
         if (game.appId != null || game.location.kind != LocationKind.FILE) return failed("Patches apply to a game that is one file. This one is a folder or an app.")
-        val path = game.location.path
-        val ext = path.substringAfterLast('.', "").lowercase()
-        if (ext in ARCHIVES) return failed("This game is in a .$ext archive. Patches apply to the game itself: unpack it first, then patch that.")
-        val limit = io.github.matiyaaa.fuse.library.patch.RomPatches.MAX_SIZE.toInt()
-        val patch = ctx.services.readFile(patchPath, 64 * 1024 * 1024) ?: return failed("Fuse couldn't read the patch.")
-        val rom = ctx.services.readFile(path, limit) ?: return failed("Fuse couldn't read the game (or it is larger than the games patches are for).")
-        val outcome = withContext(Dispatchers.Default) { io.github.matiyaaa.fuse.library.patch.RomPatches.apply(rom, patch) }
-        fun crc(v: Long) = v.toString(16).uppercase().padStart(8, '0')
-        return when (outcome) {
-            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Unreadable -> failed(outcome.reason)
-            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.NotForThisGame -> failed(outcome.reason)
-            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.AlreadyPatched -> io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched
-            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.WrongGame -> io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WrongGame(outcome.format.label, crc(outcome.expected), crc(outcome.actual))
-            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Patched -> {
-                // Named after the game and the patch, so both are plain to see, beside the game.
-                val stem = FsPath.name(path).let { n -> n.substringBeforeLast('.', n) }
-                val patchStem = patchPath.replace('\\', '/').substringAfterLast('/').let { n -> n.substringBeforeLast('.', n) }.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(80).trim()
-                val name = "$stem - $patchStem${if (ext.isEmpty()) "" else ".$ext"}"
-                val written = ctx.services.writeBeside(path, name, outcome.bytes)
-                    ?: return failed("Fuse couldn't write the patched copy beside the game (the folder may not allow it, or \"$name\" is there already).")
-                val added = addGameFile(written, game.platformId)
-                io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made(added, name, outcome.format.label, outcome.checked, outcome.headerRemoved)
-            }
+        val fs = ctx.services.fs
+        fun extOf(p: String) = p.substringAfterLast('.', "").lowercase()
+        // The file the patch changes, and the sheets around it (an .m3u, then a .cue), outermost first:
+        // each gets a copy naming the patched file below it.
+        var path = game.location.path
+        val sheets = ArrayList<Pair<String, Int>>()
+        if (extOf(path) == "m3u") {
+            val discs = fs.readText(path)?.let { io.github.matiyaaa.fuse.library.scan.Playlists.parseM3u(it, FsPath.parent(path) ?: "") }.orEmpty()
+            if (discs.isEmpty()) return failed("Fuse couldn't read the discs in ${FsPath.name(path)}.")
+            val index = disc ?: if (discs.size == 1) 0 else return io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WhichDisc(discs.map { FsPath.name(it) })
+            sheets += path to index
+            path = discs.getOrNull(index) ?: return failed("${FsPath.name(path)} has no disc ${index + 1}.")
         }
+        if (extOf(path) == "cue") {
+            val track = fs.readText(path)?.let { io.github.matiyaaa.fuse.library.scan.Playlists.parseCue(it, FsPath.parent(path) ?: "") }?.firstOrNull()
+                ?: return failed("Fuse couldn't find the tracks ${FsPath.name(path)} names.")
+            sheets += path to 0
+            path = track
+        }
+        val ext = extOf(path)
+        when {
+            ext == "gdi" -> return failed("Fuse doesn't patch a Dreamcast game kept as .gdi tracks. Its patches come with a tool of their own, which knows the track it changes.")
+            ext in COMPRESSED_DISCS -> return failed("${FsPath.name(path)} is kept compressed (.$ext). Patches change the disc itself: patch an uncompressed copy (a .bin and .cue, or an .iso), then compress that if you like.")
+            ext in ARCHIVES -> return failed("This game is in a .$ext archive. Patches apply to the game itself: unpack it first, then patch that.")
+        }
+        val patch = ctx.services.readFile(patchPath, 64 * 1024 * 1024) ?: return failed("Fuse couldn't read the patch.")
+        // Each copy is named after its original and the patch, so both are plain to see, beside the original.
+        val patchStem = patchPath.replace('\\', '/').substringAfterLast('/').let { n -> n.substringBeforeLast('.', n) }.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(80).trim()
+        fun copyName(p: String): String {
+            val stem = FsPath.name(p).let { n -> n.substringBeforeLast('.', n) }
+            return "$stem - $patchStem${extOf(p).let { if (it.isEmpty()) "" else ".$it" }}"
+        }
+        val name = copyName(path)
+        val taken = "Fuse couldn't write the patched copy beside the game (the folder may not allow it, or \"$name\" is there already)."
+        val made: io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made
+        val written: String
+        if (io.github.matiyaaa.fuse.library.patch.Ppf.isPpf(patch)) {
+            // A disc image of hundreds of megabytes: read where the patch looks, and copied with its
+            // changes written in, never held whole.
+            val size = fs.stat(path)?.sizeBytes ?: return failed("Fuse couldn't read the game.")
+            val verdict = try {
+                val parsed = withContext(Dispatchers.Default) { io.github.matiyaaa.fuse.library.patch.Ppf.parse(patch) }
+                io.github.matiyaaa.fuse.library.patch.Ppf.check(parsed, size) { at, length -> fs.readBytes(path, at, length) }
+            } catch (e: io.github.matiyaaa.fuse.library.patch.Ppf.Problem) {
+                return failed(e.message.orEmpty())
+            }
+            val ready = when (verdict) {
+                is io.github.matiyaaa.fuse.library.patch.Ppf.Verdict.Ready -> verdict
+                io.github.matiyaaa.fuse.library.patch.Ppf.Verdict.AlreadyPatched -> return io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched
+                is io.github.matiyaaa.fuse.library.patch.Ppf.Verdict.NotForThisGame -> return failed(verdict.reason)
+            }
+            val folder = FsPath.parent(path) ?: ""
+            fs.freeSpace(folder)?.let { free ->
+                if (free < size + ROOM_TO_SPARE) return failed("There isn't room beside the game for a patched copy: it needs ${io.github.matiyaaa.fuse.ui.shell.home.bytesText(size)}, and ${io.github.matiyaaa.fuse.ui.shell.home.bytesText(free)} is free.")
+            }
+            written = ctx.services.copyBeside(path, name, ready.edits) ?: return failed(taken)
+            made = io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made(null, name, "PPF", ready.checked, headerRemoved = false)
+        } else {
+            val rom = ctx.services.readFile(path, io.github.matiyaaa.fuse.library.patch.RomPatches.MAX_SIZE.toInt())
+                ?: return failed("Fuse couldn't read the game (or it is larger than the games patches are for).")
+            val outcome = withContext(Dispatchers.Default) { io.github.matiyaaa.fuse.library.patch.RomPatches.apply(rom, patch) }
+            fun crc(v: Long) = v.toString(16).uppercase().padStart(8, '0')
+            val patched = when (outcome) {
+                is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Unreadable -> return failed(outcome.reason)
+                is io.github.matiyaaa.fuse.library.patch.PatchOutcome.NotForThisGame -> return failed(outcome.reason)
+                is io.github.matiyaaa.fuse.library.patch.PatchOutcome.AlreadyPatched -> return io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched
+                is io.github.matiyaaa.fuse.library.patch.PatchOutcome.WrongGame -> return io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WrongGame(outcome.format.label, crc(outcome.expected), crc(outcome.actual))
+                is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Patched -> outcome
+            }
+            written = ctx.services.writeBeside(path, name, patched.bytes) ?: return failed(taken)
+            made = io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made(null, name, patched.format.label, patched.checked, patched.headerRemoved)
+        }
+        // The sheets, innermost first, each naming the copy below it; if one can't be written, the
+        // copies made for it go again.
+        val copies = arrayListOf(written)
+        var top = written
+        for ((sheet, index) in sheets.asReversed()) {
+            val text = fs.readText(sheet)
+            val repointed = when {
+                text == null -> null
+                extOf(sheet) == "m3u" -> io.github.matiyaaa.fuse.library.scan.Playlists.repointM3u(text, index, FsPath.name(top))
+                else -> io.github.matiyaaa.fuse.library.scan.Playlists.repointCue(text, FsPath.name(top))
+            }
+            val sheetCopy = repointed?.let { ctx.services.writeBeside(sheet, copyName(sheet), it.encodeToByteArray()) }
+            if (sheetCopy == null) {
+                copies.forEach { fs.delete(it) }
+                return failed("Fuse couldn't write a copy of ${FsPath.name(sheet)} naming the patched disc (the folder may not allow it, or \"${copyName(sheet)}\" is there already).")
+            }
+            copies += sheetCopy
+            top = sheetCopy
+        }
+        return made.copy(game = addGameFile(top, game.platformId), name = FsPath.name(top))
     }
 
     override suspend fun browse(path: String?): BrowseListing {
@@ -2004,11 +2317,18 @@ private fun SortOrder.comparator(): Comparator<io.github.matiyaaa.fuse.data.repo
 
 private const val HOUR_MS = 3_600_000L
 
+/** How many games a Your Year recap shows by time, and of those first played in it. */
+private const val RECAP_GAMES = 10
+private const val RECAP_FIRSTS = 8
+
 /** How many of the week's games its recap names. */
 private const val WEEK_GAMES = 3
 
 /** How long the library stays still before suggestions are worked out again (a scan changes many games). */
 private const val RECOMMEND_SETTLE_MS = 2_000L
+
+/** The most games a game's page shows as like it. */
+private const val SIMILAR_MOST = 16
 
 /** How long suggestions' inputs are kept after the last screen using them goes (moving between pages). */
 private const val RECOMMEND_KEEP_MS = 30_000L
@@ -2018,6 +2338,11 @@ private const val LIST_KEEP_MS = 30_000L
 
 /** Lists of games shared at most at once. */
 private const val MAX_SHARED_LISTS = 24
+
+/** The Journal's order: what is being played, then what is wanted, on hold and done with; each the latest set first. */
+private val JOURNAL_ORDER: Comparator<io.github.matiyaaa.fuse.data.repo.GameSummary> = compareBy<io.github.matiyaaa.fuse.data.repo.GameSummary> {
+    io.github.matiyaaa.fuse.ui.shell.store.JournalWords.order.indexOf(it.status)
+}.thenByDescending { it.statusAt ?: 0 }.thenBy { it.sortKey }
 
 /** Home's suggestions, the day's spotlight, and why each is there. */
 private data class HomePicks(
@@ -2029,7 +2354,7 @@ private data class HomePicks(
 private fun io.github.matiyaaa.fuse.data.repo.RecommendationRow.toRecGame() = RecGame(
     key = id, platform = platformId.value, title = title, favorite = favorite, lastPlayedAt = lastPlayedAt,
     playSeconds = playSeconds, sessions = sessions, addedAt = addedAt, year = year, genres = genres,
-    developer = developer, franchise = franchise, rating = rating,
+    developer = developer, franchise = franchise, rating = rating, status = status, statusAt = statusAt, stars = stars,
 )
 
 /** Systems whose disc images say their serial in SYSTEM.CNF. */
@@ -2051,7 +2376,13 @@ private const val STEAM_SESSION_MAX_MS = 24L * 60 * 60 * 1000
 private const val COMPAT_CACHE = "rpcs3.compat"
 
 /** Archives a patch never applies to: it is for the game inside. */
-private val ARCHIVES = setOf("zip", "7z", "rar", "gz", "chd", "rvz", "cso", "zso")
+private val ARCHIVES = setOf("zip", "7z", "rar", "gz")
+
+/** Discs kept compressed, which a patch would break: it is for the disc as it is when not. */
+private val COMPRESSED_DISCS = setOf("chd", "cso", "zso", "rvz", "wia", "gcz", "pbp", "ecm", "ciso")
+
+/** Room kept free on a drive after a patched copy of a disc is made there. */
+private const val ROOM_TO_SPARE = 64L * 1024 * 1024
 
 /** Emulators finish writing a moment after they close: RomM's save sync waits that long. */
 private const val ROMM_SETTLE_MS = 1_500L

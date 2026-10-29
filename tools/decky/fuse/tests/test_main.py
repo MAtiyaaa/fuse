@@ -134,6 +134,20 @@ class BackendTest(unittest.TestCase):
         Bridge.answers[("GET", "/v1/steam/changes/4/art/hero")] = (200, {"format": "png", "data": "iVBORw0K"})
         self.assertEqual("png", self.run_(plugin.change_art(4, "hero"))["format"])
 
+    def test_the_game_being_played_is_asked_about_closed_and_marked(self):
+        plugin = self.main.Plugin()
+        Bridge.answers[("GET", "/v1/playing")] = (200, {"playing": True, "id": 7, "name": "Metroid Fusion", "system": "GBA", "canQuit": True})
+        Bridge.answers[("POST", "/v1/playing/quit")] = (200, {"quit": True})
+        Bridge.answers[("POST", "/v1/playing/journal")] = (200, {"set": True})
+        self.assertEqual("Metroid Fusion", self.run_(plugin.playing())["name"])
+        self.assertTrue(self.run_(plugin.quit_playing())["quit"])
+        self.assertTrue(self.run_(plugin.set_playing_status("BEATEN"))["set"])
+        self.assertEqual({"status": "BEATEN"}, Bridge.seen[-1][3])
+        # A status Fuse doesn't have never reaches it.
+        seen = len(Bridge.seen)
+        self.assertEqual("bad-request", self.run_(plugin.set_playing_status("beaten; rm -rf"))["error"])
+        self.assertEqual(seen, len(Bridge.seen))
+
     def test_fuses_own_refusal_is_passed_on(self):
         Bridge.answers[("GET", "/v1/steam/changes")] = (403, {"error": "not-allowed", "message": "Allow it in Fuse: Settings, Library, Decky."})
         answer = self.run_(self.main.Plugin().steam_changes())

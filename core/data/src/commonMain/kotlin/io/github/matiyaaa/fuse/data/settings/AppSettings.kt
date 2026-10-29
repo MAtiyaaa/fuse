@@ -265,6 +265,13 @@ data class JellyfinSettings(
     val remoteMaxBitrate: Long = 20_000_000,
     val hardwareDecoding: Boolean = true,
     val autoplayNext: Boolean = true,
+    /**
+     * At an intro or a recap the server marks (Intro Skipper, chapter names): "ASK" (a button to
+     * skip it), "AUTO" (skipped by itself) or "OFF".
+     */
+    val skipIntros: String = "ASK",
+    /** The same at the credits and a preview after them; asking offers the next episode. */
+    val skipCredits: String = "ASK",
     val seekSeconds: Int = 10,
     val controlsTimeoutSeconds: Int = 4,
     val rememberSpeed: Boolean = false,
@@ -569,6 +576,18 @@ data class LibraryPreferences(
     val autoSeries: Boolean = true,
     /** A system's page names a game from it to try today (its spotlight). */
     val systemSpotlight: Boolean = true,
+    /**
+     * Continue where you left off: the emulators that can are asked to keep a resume state as a
+     * game is left (PCSX2's Save State On Shutdown, RetroArch's automatic state, which DuckStation
+     * keeps by itself), and a game's page offers Continue from it beside Start Fresh.
+     */
+    val keepPlace: Boolean = true,
+    /**
+     * The same hotkeys in every emulator (core:launch's `Hotkeys`):
+     * written into the emulators that can take them as a game starts, beside the person's own
+     * bindings; turned off, Fuse's are taken out again.
+     */
+    val gameHotkeys: Boolean = false,
     /** Series the user hid or kept as their own collection, lower case, so Fuse doesn't make them again. */
     val hiddenSeries: List<String> = emptyList(),
     /** Brand colours from the system art pack (opaque ARGB), by platform id. */

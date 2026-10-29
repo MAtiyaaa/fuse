@@ -668,6 +668,13 @@ internal fun AuditDriver.detailScreens() {
 
     scenario("details", "a game with many facts") {
         useLibrary()
+        fun idOf(title: String) = runBlocking { libraryStore.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first().first { it.title == title }.id }
+        val alike = listOf(
+            "Tidebreak Tactics" to io.github.matiyaaa.fuse.model.GameMetadata(releaseYear = 1999, genres = listOf("Strategy", "Role-playing"), franchise = "Emberline", developer = "Lantern Works"),
+            "Lanterns of Vell" to io.github.matiyaaa.fuse.model.GameMetadata(releaseYear = 1995, genres = listOf("Adventure"), developer = "Lantern Works"),
+            "Glasswing Requiem" to io.github.matiyaaa.fuse.model.GameMetadata(releaseYear = 2003, genres = listOf("Role-playing", "Fantasy")),
+            "Hollow Meridian" to io.github.matiyaaa.fuse.model.GameMetadata(releaseYear = 1998, genres = listOf("Adventure")),
+        )
         val card = runBlocking { libraryStore.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first().first { it.title == "Emberline Saga" } }
         val owner = io.github.matiyaaa.fuse.model.MediaOwner.OfGame(card.id)
         val shot = File(cache, "detail-screenshot.png").also { AuditSystemArt.panel(it, 0xFF3A5A8CL) }
@@ -682,6 +689,8 @@ internal fun AuditDriver.detailScreens() {
                 null,
             )
             libraryStore.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.SCREENSHOT, shot.absolutePath)
+            // Games like it, for More like this: one of its series, one by its maker, two of its kinds.
+            alike.forEach { (title, meta) -> libraryData.games.replaceMetadata(idOf(title), meta, null) }
         }
         try {
             openGame("Emberline Saga")
@@ -703,8 +712,13 @@ internal fun AuditDriver.detailScreens() {
             settle(1_200)
             shoot("a screenshot full screen")
             tap(PadButton.B)
+            // Past the two lines of details: games like it, each with why.
+            tap(PadButton.DPAD_DOWN, 4)
+            settle(900)
+            shoot("more like this, each with why", 1_200)
         } finally {
             runBlocking {
+                alike.forEach { (title, _) -> libraryData.games.replaceMetadata(idOf(title), null, null) }
                 libraryData.games.replaceMetadata(card.id, null, null)
                 libraryStore.media.reset(owner, io.github.matiyaaa.fuse.model.MediaKind.SCREENSHOT)
             }

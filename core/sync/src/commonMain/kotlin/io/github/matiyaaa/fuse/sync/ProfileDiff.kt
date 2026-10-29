@@ -46,6 +46,10 @@ object ProfileDiff {
             reg(now.continueDismissed, before.continueDismissed, null)?.let { change = change.copy(continueDismissed = it); changed = true }
             reg(now.title, before.title, null)?.let { change = change.copy(title = it); changed = true }
             reg(now.emulator, before.emulator, null)?.let { change = change.copy(emulator = it); changed = true }
+            // A status goes with when it was set, so every device says "Beaten in March" alike.
+            reg(now.status, before.status, null)?.let { change = change.copy(status = it, statusAt = now.statusAt); changed = true }
+            reg(now.rating, before.rating, 0)?.let { change = change.copy(rating = it); changed = true }
+            reg(now.note, before.note, null)?.let { change = change.copy(note = it); changed = true }
             // Trophies earned here that the household hasn't heard of (or heard of later than here).
             val earned = now.trophies.filter { (k, t) -> before.trophies[k]?.let { it.unlockedAt > t.unlockedAt } ?: true }
             if (earned.isNotEmpty()) {

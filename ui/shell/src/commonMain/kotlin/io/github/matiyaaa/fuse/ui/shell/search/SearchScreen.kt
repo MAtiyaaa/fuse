@@ -145,6 +145,8 @@ internal fun FilterKey.icon(): ImageVector = when (this) {
     FilterKey.GENRE -> FuseIcons.Tag
     FilterKey.DEVELOPER -> FuseIcons.Users
     FilterKey.DRIVE -> FuseIcons.HardDrive
+    FilterKey.STATUS -> FuseIcons.NotebookPen
+    FilterKey.RATING -> FuseIcons.Star
 }
 
 private sealed interface Hit {
@@ -216,6 +218,8 @@ private sealed interface Hit {
             FilterKey.COLLECTION -> "Collections"
             FilterKey.DRIVE -> "Drives"
             FilterKey.DEVELOPER -> "Developers"
+            FilterKey.STATUS -> "Journal"
+            FilterKey.RATING -> "Ratings"
             FilterKey.FAVORITE, FilterKey.MISSING, FilterKey.HIDDEN -> "Yes or no"
         }
     }

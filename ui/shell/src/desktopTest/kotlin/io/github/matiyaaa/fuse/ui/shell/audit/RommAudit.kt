@@ -48,7 +48,25 @@ internal class AuditRomm(base: FuseStore, private val waiting: Int = 0, private 
         cards.map { it.platformId }.distinct().take(5).mapIndexed { i, p -> RommSystem(p, p.value, p.value.uppercase(), 40 + i * 13, if (i == 0) 40 else i * 3, 0) } +
             RommSystem(PlatformId("ps4"), "ps4", "PlayStation 4", 12, 0, 0),
     )
-    override val collections: StateFlow<List<RommCollectionCard>> = MutableStateFlow(listOf(RommCollectionCard("user-1", "Couch co-op", false, 18, cards.take(4))))
+    override val collections: StateFlow<List<RommCollectionCard>> = MutableStateFlow(
+        listOf(
+            RommCollectionCard("user-1", "Couch co-op", false, 18, cards.take(4)),
+            RommCollectionCard("user-2", "Finish this year", false, 9, cards.drop(8).take(4)),
+            RommCollectionCard("user-3", "Short and sweet", false, 12, cards.drop(14).take(4)),
+        ),
+    )
+    override fun collection(id: String): Flow<List<RommGame>> = flowOf(games.drop(1).take(14))
+
+    /** Whether a Download All finds too little room ([tight]) or all of it. */
+    @Volatile var tight = false
+    override suspend fun batchPlan(romIds: List<Long>): io.github.matiyaaa.fuse.ui.shell.store.RommBatchPlan {
+        val gb = 1L shl 30
+        val ids = romIds.filter { id -> games.firstOrNull { it.romId == id }?.presence == RommPresence.ON_SERVER }
+        val sd = io.github.matiyaaa.fuse.ui.shell.store.RommBatchDrive("SD card", ids.size - 2, 18 * gb + 400L * (1 shl 20), if (tight) 9 * gb else 112 * gb)
+        val inside = io.github.matiyaaa.fuse.ui.shell.store.RommBatchDrive("This device", 2, 3 * gb, 41 * gb)
+        val fitting = if (tight) ids.take(5) else ids
+        return io.github.matiyaaa.fuse.ui.shell.store.RommBatchPlan(ids, sd.bytes + inside.bytes, listOf(sd, inside), fitting, if (tight) 8 * gb else sd.bytes + inside.bytes)
+    }
     override val notOnServer: StateFlow<io.github.matiyaaa.fuse.ui.shell.store.RommNotOnServer> =
         MutableStateFlow(io.github.matiyaaa.fuse.ui.shell.store.RommNotOnServer(cards.drop(24).take(8), 31))
     override fun games(slug: String?): Flow<List<RommGame>> = flowOf(games)

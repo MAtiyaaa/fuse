@@ -45,7 +45,15 @@ class RommDownloadHandler(private val http: HttpClient, private val host: RommTr
         // Room for what is still to come, with a little to spare.
         val left = job.files.sumOf { f -> val dest = File(root, f.relative); if (dest.isFile && dest.length() == f.file.sizeBytes) 0L else f.file.sizeBytes - partOf(root, job, f).length() }
         val free = TransferFiles.freeSpace(root)
-        if (free in 1 until left + SPARE) throw TransferFailure("There isn't room for this on ${place.volume?.label ?: "that drive"}: it needs ${gb(left)} and ${gb(free)} is free.")
+        // What the downloads ahead of it to the same drive have still to write is theirs.
+        val ahead = io.reserved()
+        if (free > 0 && free - ahead < left + SPARE) {
+            val drive = place.volume?.label ?: "that drive"
+            throw TransferFailure(
+                if (ahead > 0 && free >= left + SPARE) "There isn't room for this on $drive once the downloads ahead of it are in: it needs ${gb(left)}, and ${gb((free - ahead).coerceAtLeast(0))} is left after them. Try again once they're done."
+                else "There isn't room for this on $drive: it needs ${gb(left)} and ${gb(free)} is free.",
+            )
+        }
 
         val placed = job.files.map { File(root, it.relative).path }
         val waiting = job.files.filter { f ->

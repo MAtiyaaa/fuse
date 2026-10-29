@@ -520,6 +520,22 @@ class RommClient(
     }
 
     /**
+     * [romId]'s status and rating as [marks] say, for the signed-in person (`PUT /api/roms/{id}/props`,
+     * only these changed): RomM's status with its backlog and now-playing flags, and the rating.
+     */
+    suspend fun setMarks(romId: Long, marks: RommMarks) {
+        call(HttpMethod.Put, "/api/roms/$romId/props", extra = {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("status", marks.status)
+                put("backlogged", marks.backlogged)
+                put("now_playing", marks.nowPlaying)
+                put("rating", marks.rating)
+            }.toString())
+        }) { }
+    }
+
+    /**
      * The signed-in person's favourites collection on RomM (`is_favorite`, the heart in RomM's own
      * pages), made the first time it is needed when they have none.
      */

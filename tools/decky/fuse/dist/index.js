@@ -38,6 +38,9 @@ const openGame = callable("open_game");
 const importGames = callable("import_games");
 const library = callable("library");
 const openFuseGame = callable("open_fuse_game");
+const playing = callable("playing");
+const quitPlaying = callable("quit_playing");
+const setPlayingStatus = callable("set_playing_status");
 const emulators = callable("emulators");
 const updateAllEmulators = callable("emulators_update_all");
 const installAllEmulators = callable("emulators_install_all");
@@ -418,6 +421,34 @@ const Connection = ({ hi }) => {
             window.SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: () => { if (!startFuse())
                     toaster.toast({ title: "Fuse", body: "Add Fuse to Steam from Fuse's settings to start it from here." }); } }, "Open Fuse")))));
 };
+/** The Journal's statuses, in its own order, as the person sees them in Fuse. */
+const STATUSES = [
+    { data: "NONE", label: "Not in your Journal" },
+    { data: "WANT", label: "Want to Play" },
+    { data: "PLAYING", label: "Playing" },
+    { data: "PAUSED", label: "On Hold" },
+    { data: "BEATEN", label: "Beaten" },
+    { data: "COMPLETED", label: "Completed" },
+    { data: "DROPPED", label: "Dropped" },
+];
+/**
+ * While you play: the game Fuse has in front, how long it has run, where the person is with it,
+ * and closing it (as its own window would, with its saves sent as it ends). Nothing while no game runs.
+ */
+const NowPlaying = ({ canClose, canMark }) => {
+    const [p, refresh] = usePoll(() => playing());
+    if (!p || failure(p) || !p.playing)
+        return null;
+    const minutes = p.since ? Math.max(0, Math.round((Date.now() - p.since) / 60000)) : null;
+    const since = minutes == null ? null : minutes < 1 ? "Started just now" : `Playing for ${duration(minutes * 60)}`;
+    return (window.SP_REACT.createElement(DFL.PanelSection, { title: "Playing now" },
+        window.SP_REACT.createElement(DFL.PanelSectionRow, null,
+            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: p.name ?? "A game", description: [p.system, since].filter(Boolean).join("  ·  ") })),
+        canMark && (window.SP_REACT.createElement(DFL.PanelSectionRow, null,
+            window.SP_REACT.createElement(DFL.DropdownItem, { label: "Journal", rgOptions: STATUSES, selectedOption: p.status ?? "NONE", onChange: async (o) => { say(await setPlayingStatus(o.data), "Kept in your Journal"); refresh(); } }))),
+        canClose && p.canQuit && (window.SP_REACT.createElement(DFL.PanelSectionRow, null,
+            window.SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: () => DFL.showModal(window.SP_REACT.createElement(DFL.ConfirmModal, { strTitle: `Quit ${p.name ?? "the game"}?`, strDescription: "It closes as when you close its window, and Fuse sends its saves as it ends. Anything not saved in the game is lost.", strOKButtonText: "Quit", onOK: async () => { say(await quitPlaying(), "Closing the game"); refresh(); } })) }, "Quit the game")))));
+};
 /** The game Steam is running (or was last showing): in Fuse or not, and the one action that fits. */
 const ThisGame = () => {
     const running = DFL.Router?.MainRunningApp;
@@ -480,7 +511,7 @@ const FuseOne = ({ s }) => {
         window.SP_REACT.createElement(DFL.PanelSectionRow, null,
             window.SP_REACT.createElement(DFL.Field, { focusable: true, label: one.state ?? "Fuse One", description: one.detail })),
         (one.devices ?? []).slice(0, 6).map((d) => (window.SP_REACT.createElement(DFL.PanelSectionRow, { key: d.name },
-            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: d.name, description: d.platform })))),
+            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: d.name, description: d.playing ? `Playing ${d.playing}` : d.platform })))),
         t && (moving > 0 || t.queued > 0 || t.failed > 0) && (window.SP_REACT.createElement(DFL.PanelSectionRow, null,
             window.SP_REACT.createElement(DFL.Field, { focusable: true, label: moving > 0 ? `${moving} moving` : t.queued > 0 ? `${t.queued} waiting` : "Transfers", description: [t.progress != null ? `${Math.round(t.progress * 100)}%` : null, t.failed > 0 ? `${t.failed} failed` : null].filter(Boolean).join("  ·  ") || undefined })))));
 };
@@ -526,6 +557,7 @@ const Content = () => {
     const connected = !failure(hi);
     return (window.SP_REACT.createElement(window.SP_REACT.Fragment, null,
         window.SP_REACT.createElement(Connection, { hi: hi }),
+        connected && may(hi, "status") && window.SP_REACT.createElement(NowPlaying, { canClose: may(hi, "play"), canMark: may(hi, "change_library") }),
         connected && may(hi, "library") && window.SP_REACT.createElement(ThisGame, null),
         connected && may(hi, "library") && window.SP_REACT.createElement(FuseLibrary, { canOpen: may(hi, "play") }),
         connected && may(hi, "status") && window.SP_REACT.createElement(FuseOne, { s: s }),

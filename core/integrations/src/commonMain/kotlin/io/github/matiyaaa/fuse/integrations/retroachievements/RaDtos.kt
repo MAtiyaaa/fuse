@@ -271,6 +271,117 @@ data class RaConsole(
     @SerialName("IsGameSystem") @Serializable(with = FlexBoolean::class) val isGameSystem: Boolean? = null,
 )
 
+/** An id and a title, as API_GetAchievementOfTheWeek gives its game and console. */
+@Serializable
+data class RaIdTitle(
+    @SerialName("ID") @Serializable(with = LooseLong::class) val id: Long = 0,
+    @SerialName("Title") val title: String = "",
+)
+
+/** The achievement of API_GetAchievementOfTheWeek. */
+@Serializable
+data class RaWeekAchievement(
+    @SerialName("ID") @Serializable(with = LooseLong::class) val id: Long = 0,
+    @SerialName("Title") val title: String = "",
+    @SerialName("Description") val description: String = "",
+    @SerialName("Points") @Serializable(with = LooseInt::class) val points: Int = 0,
+    @SerialName("TrueRatio") @Serializable(with = LooseInt::class) val trueRatio: Int = 0,
+    @SerialName("Type") val type: String? = null,
+    @SerialName("Author") val author: String? = null,
+)
+
+/** One of the recent unlocks API_GetAchievementOfTheWeek lists. */
+@Serializable
+data class RaWeekUnlock(
+    @SerialName("User") val user: String = "",
+    @SerialName("ULID") val ulid: String? = null,
+    @SerialName("DateAwarded") val dateAwarded: String? = null,
+    @SerialName("HardcoreMode") @Serializable(with = LooseBoolean::class) val hardcore: Boolean = false,
+)
+
+/** API_GetAchievementOfTheWeek: the week's achievement, its game, and how many have it. */
+@Serializable
+data class RaAchievementOfTheWeek(
+    @SerialName("Achievement") val achievement: RaWeekAchievement = RaWeekAchievement(),
+    @SerialName("Console") val console: RaIdTitle = RaIdTitle(),
+    @SerialName("Game") val game: RaIdTitle = RaIdTitle(),
+    @SerialName("StartAt") val startAt: String? = null,
+    @SerialName("TotalPlayers") @Serializable(with = LooseInt::class) val totalPlayers: Int = 0,
+    @SerialName("Unlocks") val unlocks: List<RaWeekUnlock> = emptyList(),
+    @SerialName("UnlocksCount") @Serializable(with = LooseInt::class) val unlocksCount: Int = 0,
+    @SerialName("UnlocksHardcoreCount") @Serializable(with = LooseInt::class) val unlocksHardcoreCount: Int = 0,
+)
+
+/** One person API_GetUsersIFollow lists. */
+@Serializable
+data class RaFollowed(
+    @SerialName("User") val user: String = "",
+    @SerialName("ULID") val ulid: String? = null,
+    @SerialName("Points") @Serializable(with = LooseLong::class) val points: Long = 0,
+    @SerialName("PointsSoftcore") @Serializable(with = LooseLong::class) val pointsSoftcore: Long = 0,
+    @SerialName("IsFollowingMe") @Serializable(with = LooseBoolean::class) val followsMe: Boolean = false,
+)
+
+/** API_GetUsersIFollow: one page of the people the key's owner follows. */
+@Serializable
+data class RaFollowing(
+    @SerialName("Count") @Serializable(with = LooseInt::class) val count: Int = 0,
+    @SerialName("Total") @Serializable(with = LooseInt::class) val total: Int = 0,
+    @SerialName("Results") val results: List<RaFollowed> = emptyList(),
+)
+
+/** A game on a person's Want to Play list: RetroAchievements' id for it, its title and its console. */
+@Serializable
+data class RaWanted(
+    @SerialName("ID") @Serializable(with = FlexLong::class) val id: Long? = null,
+    @SerialName("Title") val title: String = "",
+    @SerialName("ConsoleID") @Serializable(with = LooseInt::class) val consoleId: Int = 0,
+    @SerialName("ConsoleName") val consoleName: String = "",
+)
+
+/** API_GetUserWantToPlayList: one page of the games a person wants to play. */
+@Serializable
+data class RaWantToPlay(
+    @SerialName("Count") @Serializable(with = LooseInt::class) val count: Int = 0,
+    @SerialName("Total") @Serializable(with = LooseInt::class) val total: Int = 0,
+    @SerialName("Results") val results: List<RaWanted> = emptyList(),
+)
+
+/** A score on a leaderboard: whose, what (as the game formats it), and the place when it is given. */
+@Serializable
+data class RaLeaderboardEntry(
+    @SerialName("User") val user: String = "",
+    @SerialName("ULID") val ulid: String? = null,
+    @SerialName("Score") @Serializable(with = FlexLong::class) val score: Long? = null,
+    @SerialName("FormattedScore") val formattedScore: String? = null,
+    @SerialName("Rank") @Serializable(with = FlexLong::class) val rank: Long? = null,
+    @SerialName("DateUpdated") val dateUpdated: String? = null,
+)
+
+/**
+ * One of a game's leaderboards (API_GetGameLeaderboards, with its [top] score) or one the person has
+ * a score on (API_GetUserGameLeaderboards, with [mine]). [lowerIsBetter]: its scores rank from the
+ * lowest up (times).
+ */
+@Serializable
+data class RaLeaderboard(
+    @SerialName("ID") @Serializable(with = LooseLong::class) val id: Long = 0,
+    @SerialName("RankAsc") @Serializable(with = LooseBoolean::class) val lowerIsBetter: Boolean = false,
+    @SerialName("Title") val title: String = "",
+    @SerialName("Description") val description: String = "",
+    @SerialName("Format") val format: String? = null,
+    @SerialName("TopEntry") val top: RaLeaderboardEntry? = null,
+    @SerialName("UserEntry") val mine: RaLeaderboardEntry? = null,
+)
+
+/** A page of leaderboards, from either call. */
+@Serializable
+data class RaLeaderboards(
+    @SerialName("Count") @Serializable(with = LooseInt::class) val count: Int = 0,
+    @SerialName("Total") @Serializable(with = LooseInt::class) val total: Int = 0,
+    @SerialName("Results") val results: List<RaLeaderboard> = emptyList(),
+)
+
 internal object RaRecentlyPlayedList : FlexListSerializer<RaRecentlyPlayedGame>(RaRecentlyPlayedGame.serializer())
 internal object RaGameAchievementList : FlexListSerializer<RaGameAchievement>(RaGameAchievement.serializer())
 internal object RaCompletionList : FlexListSerializer<RaCompletionEntry>(RaCompletionEntry.serializer())

@@ -1,8 +1,12 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
+import io.github.matiyaaa.fuse.sync.Ps1Card
+import io.github.matiyaaa.fuse.sync.Ps2Card
 import io.github.matiyaaa.fuse.sync.SaveImportChoice
 import io.github.matiyaaa.fuse.sync.SaveImportConfidence
 import io.github.matiyaaa.fuse.sync.SaveImportPlan
+import io.github.matiyaaa.fuse.sync.SaveImportTarget
+import io.github.matiyaaa.fuse.sync.romm.RommSlots
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
@@ -148,13 +152,13 @@ private class SaveImportPreview(private val app: AppState, private val plan: Sav
             for (entry in plan.entries) {
                 val target = entry.targets.firstOrNull { it.id == selected[entry.id] }
                 add(MenuAction(entry.id, entry.name, FuseIcons.Save,
-                    detail = if (target == null) "${entry.sourceFormat}. Choose a game or leave this out" else "${target.query.title} · ${target.query.platform} · ${target.query.emulatorId}\n${entry.sourceFormat} to ${target.format}${if (target.conversion) " (converted)" else ""}\n${target.destination}",
+                    detail = if (target == null) "${formatWords(entry.sourceFormat)}. Choose a game or leave this out" else "${target.query.title} · ${target.query.platform} · ${target.query.emulatorId}\n${journey(entry.sourceFormat, target)}\n${target.destination}",
                     trailing = Trailing.Value(if (target == null) "Not selected" else confidence(target.confidence)), onSelect = {
                         app.choice = ChoiceSpec("Match Save", entry.name + ". Only compatible destinations are offered.", listOf(
                             MenuAction("skip", "Leave This Out", FuseIcons.CircleSlash, onSelect = { selected.remove(entry.id); show() }),
                         ) + entry.targets.map { t ->
                             MenuAction(t.id, t.query.title, FuseIcons.Gamepad,
-                                detail = "${t.query.platform} · ${t.query.emulatorId} · ${confidence(t.confidence)}\n${t.destination}\n${entry.sourceFormat} to ${t.format}${if (t.conversion) " (converted)" else ""}",
+                                detail = "${t.query.platform} · ${t.query.emulatorId} · ${confidence(t.confidence)}\n${t.destination}\n${journey(entry.sourceFormat, t)}",
                                 onSelect = { selected[entry.id] = t.id; show() })
                         }, FuseIcons.Save)
                     }))
@@ -204,4 +208,21 @@ private class SaveImportPreview(private val app: AppState, private val plan: Sav
         SaveImportConfidence.EXACT_NAME -> "Exact name"
         SaveImportConfidence.MANUAL -> "Confirm match"
     }
+}
+
+/** What a save of [format] is, in words: "PS2 Save", "PlayStation Memory Card", "Cartridge Save". */
+private fun formatWords(format: String): String = when (format) {
+    Ps1Card.SINGLE -> "PlayStation Save"
+    Ps2Card.SINGLE -> "PS2 Save"
+    Ps2Card.FOLDER_CARD -> "PS2 Folder Memory Card"
+    "retroarch.n64" -> "RetroArch N64 Save"
+    else -> RommSlots.family(format).takeIf { it != "Save" } ?: format
+}
+
+/** How a save of [source] gets to [target]: as it is, onto a memory card beside the saves there, or converted. */
+private fun journey(source: String, target: SaveImportTarget): String = when {
+    !target.conversion -> formatWords(source)
+    source == Ps1Card.SINGLE || source == Ps2Card.SINGLE ->
+        "${formatWords(source)}, written onto the ${formatWords(target.format)} beside the saves on it"
+    else -> "${formatWords(source)}, converted to ${formatWords(target.format)}"
 }

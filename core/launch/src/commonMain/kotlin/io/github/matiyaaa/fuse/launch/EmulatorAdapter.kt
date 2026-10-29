@@ -62,7 +62,17 @@ data class LaunchOptions(
     val injectedText: String? = null,
     /** Linux: the user's home directory, used to expand `~` in default paths. */
     val homeDir: String? = null,
+    /** Start from where the game was left: its save state. Null starts it as the emulator always does. */
+    val resume: Resume? = null,
 )
+
+/**
+ * Starting a game from the save state it was left in. [statePath] is the state file here (put in
+ * place by Fuse One before the launch when another device made it); [configPath] is the small
+ * settings file Fuse wrote for an emulator that loads it through its settings (RetroArch's
+ * `savestate_auto_load`), when it does.
+ */
+data class Resume(val statePath: String, val configPath: String? = null)
 
 /** Everything an adapter needs to describe one launch. [target] is already resolved by [LaunchResolver]. */
 data class LaunchRequest(
@@ -116,6 +126,12 @@ interface EmulatorAdapter {
     /** True when this adapter can never start a specific game and only opens the app. */
     val opensAppOnly: Boolean get() = false
 
+    /**
+     * How it starts a game from a save state ([LaunchOptions.resume]), when it can: null when it
+     * has no documented way, and Continue isn't offered for it.
+     */
+    val resumeWay: ResumeWay? get() = null
+
     /** Whether [target] is something this adapter has a launch mode for. */
     fun accepts(target: LaunchTarget, platform: PlatformId): Boolean = true
 
@@ -146,6 +162,13 @@ interface EmulatorAdapter {
     /** Describes how to start [LaunchRequest.game]. Pure: no I/O, nothing is launched. */
     fun plan(request: LaunchRequest): LaunchPlan
 }
+
+/**
+ * An emulator's own way of starting a game from where it was left, as its source documents it.
+ * [STATE_FILE] takes the state's path; [OWN_RESUME] loads the resume state it keeps for the game
+ * itself; [AUTO_LOAD] loads its automatic state through a settings file Fuse writes for the launch.
+ */
+enum class ResumeWay { STATE_FILE, OWN_RESUME, AUTO_LOAD }
 
 /** Source strings shared by many adapters. */
 object Sources {

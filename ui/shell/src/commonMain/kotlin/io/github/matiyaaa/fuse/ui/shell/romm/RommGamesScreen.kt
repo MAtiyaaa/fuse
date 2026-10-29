@@ -25,6 +25,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.height
+import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
@@ -44,6 +48,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.app.rememberPageState
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.downloads.sizeOf
+import io.github.matiyaaa.fuse.ui.shell.store.RommCollectionCard
 import io.github.matiyaaa.fuse.ui.shell.store.RommGame
 import io.github.matiyaaa.fuse.ui.shell.store.RommPresence
 
@@ -70,7 +76,29 @@ fun RommGamesScreen(app: AppState, slug: String?, name: String, collection: Stri
     val state by ops.state.collectAsState()
     val sel = rememberPageState(app.navigator, "romm.grid.${slug ?: collection ?: "all"}") { io.github.matiyaaa.fuse.ui.designsystem.focus.SectionedGridSelection() }
     val onDevice = list.count { it.presence == RommPresence.INSTALLED || it.presence == RommPresence.PARTLY_INSTALLED }
-    val sections = listOf(
+    // Every game on RomM: its collections lead, each opening as a page of its own.
+    val everything = slug == null && collection == null
+    val collections by ops.collections.collectAsState()
+    val notHere = list.filter { it.presence == RommPresence.ON_SERVER }
+    // A system's or a collection's games that aren't here, all at once (every game on RomM is too many to mean).
+    val actions = if (everything || notHere.isEmpty()) emptyList() else listOf(
+        io.github.matiyaaa.fuse.ui.shell.downloads.TopAction("Download All", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.CloudDownload) {
+            app.rommDownloadAll(name, notHere.map { it.romId })
+        },
+    )
+    val sections = listOfNotNull(
+        io.github.matiyaaa.fuse.ui.shell.reach.GameSection(
+            "collections", "Collections", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.Bookmark, "${collections.size}",
+            collections.mapNotNull { col ->
+                val lead = col.covers.firstOrNull() ?: return@mapNotNull null
+                io.github.matiyaaa.fuse.ui.shell.reach.SectionItem(
+                    "collection:${col.id}", lead,
+                    tile = { selected, size, onClick, onLong -> RommCollectionTile(col, selected, size, onClick = onClick, onLongClick = onLong) },
+                    open = { app.go(Route.RommGames(null, col.name, col.id)) },
+                    options = { app.openContextMenu(collectionMenu(app, col)) },
+                )
+            },
+        ).takeIf { everything },
         io.github.matiyaaa.fuse.ui.shell.reach.GameSection(
             "main", "On RomM", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.LibraryBig, listOfNotNull("${list.size}", "$onDevice here".takeIf { onDevice > 0 }).joinToString("  ·  "),
             list.map { g ->
@@ -106,7 +134,7 @@ fun RommGamesScreen(app: AppState, slug: String?, name: String, collection: Stri
         ),
     )
     io.github.matiyaaa.fuse.ui.shell.reach.SectionedGameGrid(
-        app, sel, sections, loading = games == null, empty = "Nothing here on the server.", tag = "romm.grid",
+        app, sel, sections, loading = games == null, empty = "Nothing here on the server.", tag = "romm.grid", actions = actions,
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             RommMark(40.dp)
@@ -116,6 +144,7 @@ fun RommGamesScreen(app: AppState, slug: String?, name: String, collection: Stri
                 FText(
                     if (games == null) "Reading your RomM library..." else listOfNotNull(
                         "${list.size} games on RomM", "$onDevice here".takeIf { onDevice > 0 },
+                        "${sizeOf(notHere.sumOf { it.sizeBytes })} not here yet".takeIf { actions.isNotEmpty() && notHere.any { it.sizeBytes > 0 } },
                         "${here.size + theirs.size} not on RomM".takeIf { here.size + theirs.size > 0 },
                     ).joinToString("  ·  "),
                     Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1,
@@ -124,3 +153,57 @@ fun RommGamesScreen(app: AppState, slug: String?, name: String, collection: Stri
         }
     }
 }
+
+/**
+ * A RomM collection as Fuse's own collections are drawn: its games' covers on its art, its name and
+ * how many it holds beneath.
+ */
+@Composable
+private fun RommCollectionTile(col: RommCollectionCard, selected: Boolean, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val c = Fuse.colors
+    val fraction = Fuse.geometry.tileCornerFraction * 0.6f
+    val shape = remember(fraction) { io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape.fraction(fraction) }
+    Column(Modifier.width(size)) {
+        io.github.matiyaaa.fuse.ui.designsystem.components.Tile(
+            selected = selected,
+            modifier = Modifier.width(size).height(size),
+            shape = shape,
+            cornerFraction = fraction,
+            glow = col.covers.firstOrNull()?.accent?.toColor() ?: c.accent,
+            onClick = onClick,
+            onLongClick = onLongClick,
+        ) {
+            io.github.matiyaaa.fuse.ui.shell.components.CoverCollage(col.covers, size)
+        }
+        Spacer(Modifier.height(Size.sparkClearance))
+        FText(col.name, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.88f), maxLines = 1)
+        Spacer(Modifier.height(Space.xxs))
+        FText("${col.games} ${if (col.games == 1) "game" else "games"}", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+    }
+}
+
+/** A RomM collection's options: open it, or download every game of it that isn't here. */
+private fun collectionMenu(app: AppState, col: RommCollectionCard): io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec =
+    io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec(
+        title = col.name,
+        subtitle = "${col.games} ${if (col.games == 1) "game" else "games"} on RomM",
+        icon = io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.Bookmark,
+        actions = listOf(
+            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("romm.col.open", "Open", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.Info, onSelect = {
+                app.closeOverlays()
+                app.go(Route.RommGames(null, col.name, col.id))
+            }),
+            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                "romm.col.all", "Download All", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.CloudDownload,
+                detail = "Every game in it that isn't here, shown before it goes",
+                onSelect = {
+                    app.closeOverlays()
+                    app.scope.launch {
+                        val games = app.store.romm.collection(col.id).first().filter { it.presence == RommPresence.ON_SERVER }
+                        if (games.isEmpty()) app.toasts.show("Everything in ${col.name} is here or on its way")
+                        else app.rommDownloadAll(col.name, games.map { it.romId })
+                    }
+                },
+            ),
+        ),
+    )

@@ -131,8 +131,13 @@ internal class FakeServices(
     @Volatile var homeNetwork: List<String> = emptyList()
     override fun homeAddresses(): List<String> = homeNetwork
 
+    /** The person's home folder, for a test of what Fuse reads there (moving in from other launchers). */
+    @Volatile var homeFolder: String? = null
+
     override val emulators = object : EmulatorDetector {
         override suspend fun suites(): Set<String> = this@FakeServices.suites
+
+        override val homeDir: String? get() = this@FakeServices.homeFolder
 
         override fun retroArchCorePath(installed: InstalledEmulator, core: String): String? =
             retroArchCores?.takeIf { core in it }?.let { "/usr/lib/libretro/${core}_libretro.so" }
@@ -226,6 +231,14 @@ internal class FakeServices(
         val file = File(File(beside).parentFile, name)
         if (file.exists()) return null
         file.writeBytes(bytes)
+        return file.absolutePath
+    }
+
+    override suspend fun copyBeside(from: String, name: String, edits: List<io.github.matiyaaa.fuse.library.patch.FileEdit>): String? {
+        val file = File(File(from).parentFile, name)
+        if (file.exists()) return null
+        File(from).copyTo(file)
+        java.io.RandomAccessFile(file, "rw").use { f -> edits.forEach { f.seek(it.offset); f.write(it.bytes) } }
         return file.absolutePath
     }
 

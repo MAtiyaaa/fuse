@@ -43,6 +43,7 @@ class LinuxCommandAdapter(val def: LinuxEmulatorDef, override val host: Host = H
         def.modes.filter { it.idFile }.flatMap { it.extensions.orEmpty() }.toSet()
     override val opensAppOnly: Boolean get() = def.openAppOnlyReason != null
     override val shortcutsOnly: Boolean get() = def.shortcutsOnly
+    override val resumeWay: io.github.matiyaaa.fuse.launch.ResumeWay? get() = def.resume?.way
 
     override fun accepts(target: LaunchTarget, platform: PlatformId): Boolean =
         opensAppOnly || def.modes.select(target, platform) != null
@@ -122,14 +123,29 @@ class LinuxCommandAdapter(val def: LinuxEmulatorDef, override val host: Host = H
             LaunchTokens.SERIAL to serial,
             LaunchTokens.INJECT to injected,
             LaunchTokens.EMUDIR to installed.appId.takeIf(Paths::isAbsolute)?.let(Paths::parent),
+            LaunchTokens.STATE to request.options.resume?.statePath,
+            LaunchTokens.RESUMECFG to request.options.resume?.configPath,
         )
         val args = ArrayList<String>()
-        for (template in mode.spec.args) {
+        // A game resumed from its save state: the emulator's own flags, just before the game's file.
+        val resume = request.options.resume?.let { def.resume }?.let { spec ->
+            spec.args.map { t ->
+                when (val r = LaunchTokens.fill(t, values)) {
+                    is LaunchTokens.Filled.Ok -> r.value
+                    // Nothing to resume from after all: the game starts as it always does.
+                    is LaunchTokens.Filled.Missing -> null
+                }
+            }.takeIf { it.none { a -> a == null } }?.filterNotNull()
+        }.orEmpty()
+        val at = mode.spec.args.indexOfFirst { LaunchTokens.ROM in it || LaunchTokens.PATH in it }.let { if (it < 0) mode.spec.args.size else it }
+        for ((i, template) in mode.spec.args.withIndex()) {
+            if (i == at) args += resume
             when (val r = LaunchTokens.fill(template, values)) {
                 is LaunchTokens.Filled.Ok -> args += r.value
                 is LaunchTokens.Filled.Missing -> return unsupported(missingMessage(r.token, target))
             }
         }
+        if (at >= mode.spec.args.size) args += resume
         val workingDir = mode.spec.workingDir?.let { t ->
             when (val r = LaunchTokens.fill(t, values)) {
                 is LaunchTokens.Filled.Ok -> Paths.expandHome(r.value, home)

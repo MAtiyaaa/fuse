@@ -916,6 +916,8 @@ internal class DefaultReachOps(
                         TransferAction.MOVE_TO_TOP -> transfers.moveToTop(t.id)
                         TransferAction.REMOVE -> transfers.remove(t.id)
                         TransferAction.OPEN -> null
+                        TransferAction.LATER -> transfers.setLater(t.id, true)
+                        TransferAction.NOW -> transfers.setLater(t.id, false)
                     }
                     household.transfersChanged()
                     CommandResult(DeviceCommand.DONE)

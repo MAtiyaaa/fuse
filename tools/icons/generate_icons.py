@@ -109,6 +109,8 @@ ICONS = {
     # Fuse Sync by Fuse.
     "UserPlus": "user-plus", "UserCog": "user-cog", "ArrowLeftRight": "arrow-left-right", "Router": "router",
     "CloudUpload": "cloud-upload", "RefreshCcw": "refresh-ccw",
+    # 0.4.6: the Journal (StarFilled and StarHalfFilled are the same shapes filled, written by hand).
+    "NotebookPen": "notebook-pen", "StarHalf": "star-half", "Flag": "flag", "CirclePause": "circle-pause",
 }
 
 NUM = r"-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?"

@@ -46,6 +46,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.shell.app.rescanAndReport
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.moveInSheet
+import io.github.matiyaaa.fuse.ui.shell.app.moveInUndo
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorSignInSheet
 import io.github.matiyaaa.fuse.ui.shell.app.addToSteam
 import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
@@ -429,6 +431,7 @@ private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.CONTINUE_PLAYING -> FuseIcons.CirclePlay
     WidgetKind.RECENTLY_PLAYED -> FuseIcons.History
     WidgetKind.FAVORITES -> FuseIcons.Heart
+    WidgetKind.UP_NEXT -> FuseIcons.Bookmark
     WidgetKind.RECENTLY_ADDED -> FuseIcons.Sparkles
     WidgetKind.PINNED_GAMES -> FuseIcons.Pin
     WidgetKind.PINNED_APPS -> FuseIcons.Smartphone
@@ -461,6 +464,8 @@ fun libraryRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val sources by app.store.sources.sources.collectAsState()
     val scan by app.store.sources.scan.collectAsState()
+    // When the last move in was, while it can still be put back; looked at again as moves come and go.
+    val lastMoveIn by androidx.compose.runtime.produceState<Long?>(null, app.choice) { value = runCatching { app.store.library.lastMoveIn() }.getOrNull() }
     return buildList {
         labelled("Game folders") {
             for (s in sources) {
@@ -484,6 +489,36 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 trailing = Trailing.Chevron,
                 onSelect = { app.addGame() },
             ))
+        }
+        app.store.usage?.let { usage ->
+            labelled("Play time") {
+                val on = usage.allowed()
+                add(MenuAction(
+                    "usage", "Count only time on screen", FuseIcons.Hourglass,
+                    detail = if (on) {
+                        "On: a game's time stops when you switch to another app, not when you come back to Fuse. Usage access in Android's settings turns it off"
+                    } else {
+                        "A game's time stops when you switch to another app, not when you come back to Fuse. Needs Usage access in Android's settings"
+                    },
+                    trailing = Trailing.Value(if (on) "On" else "Off"),
+                    onSelect = { usage.askForAccess() },
+                ))
+            }
+        }
+        labelled("Moving in") {
+            add(MenuAction(
+                "movein", "Bring in your history", FuseIcons.Import,
+                detail = "Favourites, play time, finished games and collections from ES-DE, RetroArch, Pegasus or Steam",
+                trailing = Trailing.Chevron,
+                onSelect = { app.moveInSheet() },
+            ))
+            lastMoveIn?.let { at ->
+                add(MenuAction(
+                    "movein.undo", "Put back the last move in", FuseIcons.Undo,
+                    detail = "Brought in ${io.github.matiyaaa.fuse.ui.shell.reach.dayText(at, kotlin.time.Clock.System.now().toEpochMilliseconds())}. Every game and collection goes back as it was",
+                    onSelect = { app.moveInUndo() },
+                ))
+            }
         }
         labelled("Browsing") {
             add(app.choiceRow(
@@ -544,6 +579,10 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 "spotlight", "Spotlight on systems", FuseIcons.Star, p.systemSpotlight,
                 "A system's page names a game of it to try today, with why. From your library alone, on this device",
             ) { v -> app.store.updatePrefs { it.copy(systemSpotlight = v) } })
+            add(toggleRow(
+                "keepplace", "Continue where you left off", FuseIcons.History, p.keepPlace,
+                "A game's page offers Continue from the moment you left it, on any device. DuckStation, PCSX2 and RetroArch keep that moment as you leave",
+            ) { v -> app.store.updatePrefs { it.copy(keepPlace = v) } })
         }
         labelled("Collections") {
             add(toggleRow("collections", "Collections", FuseIcons.LibraryBig, p.collectionsEnabled, "Your own collections and the series Fuse finds. Off hides them everywhere; nothing is deleted") { v ->
@@ -1685,6 +1724,21 @@ fun inputRows(app: AppState): List<MenuAction> {
             }
             add(toggleRow("shoulders", "Swap bumpers and triggers", FuseIcons.Swap, i.swapShoulders, if (i.swapShoulders) "Now: L2 and R2 switch tabs, L1 and R1 turn widgets" else "Now: L1 and R1 switch tabs, L2 and R2 turn widgets") { v -> setInput { it.copy(swapShoulders = v) } })
             add(toggleRow("keyhints", "Keyboard hints when typing", FuseIcons.Keyboard, i.autoGlyphs, "Show keyboard keys in hints after a keyboard key is used") { v -> setInput { it.copy(autoGlyphs = v) } })
+        }
+        // The same hotkeys in every emulator, where Fuse can write them (a computer's emulators).
+        val hotkeysHere by androidx.compose.runtime.produceState<List<io.github.matiyaaa.fuse.ui.shell.store.HotkeyEmulator>?>(null) { value = runCatching { app.store.library.hotkeysHere() }.getOrDefault(emptyList()) }
+        val here = hotkeysHere
+        if (here != null && (here.isNotEmpty() || p.gameHotkeys)) labelled("In games") {
+            add(toggleRow(
+                "hotkeys", "Same hotkeys in every emulator", FuseIcons.Gamepad, p.gameHotkeys,
+                io.github.matiyaaa.fuse.ui.shell.app.hotkeysWords(here),
+            ) { v -> io.github.matiyaaa.fuse.ui.shell.app.setHotkeys(app, v) })
+            if (p.gameHotkeys) add(MenuAction(
+                "hotkeys.layout", "The hotkeys", FuseIcons.Keyboard,
+                detail = "What each does, and in which emulator",
+                trailing = Trailing.Chevron,
+                onSelect = { io.github.matiyaaa.fuse.ui.shell.app.hotkeysSheet(app, here) },
+            ))
         }
         labelled("Feel") {
             val d = io.github.matiyaaa.fuse.model.InputProfile()

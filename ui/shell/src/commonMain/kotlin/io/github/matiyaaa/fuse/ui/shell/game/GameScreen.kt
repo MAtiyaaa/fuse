@@ -113,6 +113,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.folderPolicyPicker
 import io.github.matiyaaa.fuse.ui.shell.romm.rommDownload
+import io.github.matiyaaa.fuse.ui.shell.romm.rommDownloadLater
 import io.github.matiyaaa.fuse.ui.shell.store.rommOnly
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.GallerySpec
@@ -121,6 +122,9 @@ import io.github.matiyaaa.fuse.ui.shell.app.collectionPicker
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorPicker
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.gameRoom
+import io.github.matiyaaa.fuse.ui.shell.app.journalSheet
+import io.github.matiyaaa.fuse.ui.shell.app.statusIcon
+import io.github.matiyaaa.fuse.ui.shell.app.statusSince
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 import io.github.matiyaaa.fuse.ui.shell.app.showProblem
@@ -131,6 +135,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
+import io.github.matiyaaa.fuse.ui.shell.store.JournalWords
 import io.github.matiyaaa.fuse.ui.shell.store.householdOnly
 import io.github.matiyaaa.fuse.ui.shell.reach.copyMenu
 import io.github.matiyaaa.fuse.ui.shell.reach.reachDownload
@@ -161,7 +166,7 @@ private sealed interface GameLoad {
 }
 
 /** The cards at the foot of the page, in the order they sit (and the selection walks them). */
-private enum class InfoCard { STARTS, PLAY, EXTRAS, FILE }
+private enum class InfoCard { STARTS, PLAY, JOURNAL, EXTRAS, FILE }
 
 /**
  * Game Info: a store page for a game you already own. The room stays lit by the art you selected,
@@ -222,6 +227,9 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
     val rommFlow = remember(game.id) { if (remote != null) app.store.romm.forRom(remote) else app.store.romm.forGame(game.id) }
     val romm by rommFlow.collectAsState(initial = null)
     val rommButtons = remember(romm, remote) { rommButtonsOf(romm, remote != null) }
+    // Its status and rating as RomM has them, when they were changed there (at most every few minutes).
+    val onRomm = remote == null && romm != null
+    LaunchedEffect(game.id, onRomm) { if (onRomm) runCatching { app.store.romm.freshenMarks(game.id) } }
     // The Fuse Library: every copy of this game (here, on the household's other devices, on RomM).
     val household = game.id.householdOnly != null
     val notHere = remote != null || household
@@ -237,6 +245,10 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
         value = if (notHere || !reachState.supported) null else runCatching { app.store.reach.extras(game.id) }.getOrNull()
     }
     val shownCopies = copies?.copies.orEmpty().takeIf { list -> reachState.supported || list.any { it.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.DEVICE } }.orEmpty()
+    // Where it was left, when its emulator here can carry on from there: looked at again after each play.
+    val resumeAt by produceState<io.github.matiyaaa.fuse.ui.shell.store.ResumeInfo?>(null, game.id, game.play.lastPlayedAt, d.emulator.selected?.id) {
+        value = if (notHere || card.isApp || d.unavailable != null || d.missing) null else runCatching { app.store.library.resumePoint(game.id) }.getOrNull()
+    }
 
     // Play first, then what it starts in (the port, when Play starts one from here), then the quick
     // actions, then everything else.
@@ -264,11 +276,18 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                 app.rommDownload(remote, game.displayTitle, io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.Everything)
             }
         },
+        // Kept for when the device is charging on Wi-Fi: a big game never costs the battery.
+        DetailAction("later", null, FuseIcons.PlugZap, "Download later, once charging on Wi-Fi") {
+            app.rommDownloadLater(remote, game.displayTitle)
+        }.takeIf { romm?.transfer == null },
         DetailAction("send", null, FuseIcons.Share, "Send to another device") { app.sendPicker(game.id, game.displayTitle) }.takeIf { canSend },
     ) else listOfNotNull(
         // A game Fuse can't reach right now keeps its Play button (pressing it explains why), drawn
         // as not ready, so the page never promises a start it knows won't happen.
-        DetailAction("play", "Play", if (d.unavailable != null) FuseIcons.HardDrive else FuseIcons.Play, "Play", primary = d.unavailable == null && !d.missing) { app.play(card) },
+        // Left somewhere it can carry on from: Continue leads, and starting over is a press beside it.
+        resumeAt?.let { DetailAction("continue", "Continue", FuseIcons.Play, "Continue", primary = true) { app.play(card, resume = true) } },
+        if (resumeAt != null) DetailAction("play", "Start fresh", FuseIcons.RotateCcw, "Start fresh") { app.play(card) }
+        else DetailAction("play", "Play", if (d.unavailable != null) FuseIcons.HardDrive else FuseIcons.Play, "Play", primary = d.unavailable == null && !d.missing) { app.play(card) },
         DetailAction("emu", d.emulator.port ?: d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.port == null && d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
             app.emulatorPicker(card)
         },
@@ -293,9 +312,17 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
         DetailAction("fav", null, if (game.favorite) FuseIcons.HeartFilled else FuseIcons.Heart, if (game.favorite) "Remove from favourites" else "Add to favourites") {
             app.scope.launch { app.store.library.setFavorite(game.id, !game.favorite) }
         },
+        // The Journal: its status's mark once it has one, so where you are with it shows at the top.
+        DetailAction(
+            "journal", null, game.journal.status?.let(::statusIcon) ?: FuseIcons.NotebookPen,
+            game.journal.status?.let { "Journal: ${JournalWords.label(it)}" } ?: "Journal",
+        ) { app.journalSheet(game.id, game.displayTitle, game.journal) },
         // Collections, sending it and its media are in Options (More, or X), not a row of round buttons.
         DetailAction("more", null, FuseIcons.More, "Options") { app.openContextMenu(app.gameMenu(card, fromDetail = true)) },
     )
+    // Games here like this one: the rest of its series, its maker's, then its kinds.
+    val similarFlow = remember(game.id, notHere) { if (notHere) kotlinx.coroutines.flow.flowOf(emptyList()) else app.store.library.similar(game.id) }
+    val similar by similarFlow.collectAsState(initial = emptyList())
     val discs = game.discs
     val badges = d.achievements?.achievements.orEmpty().sortedByDescending { it.earnedAt ?: it.earnedHardcoreAt ?: 0 }.take(24)
     val shots = d.media.screenshots
@@ -304,6 +331,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
         // A game not here yet has no play time, extras or file of its own to show.
         if (!notHere) {
             add(InfoCard.PLAY)
+            add(InfoCard.JOURNAL)
             if (game.content.isNotEmpty()) add(InfoCard.EXTRAS)
             add(InfoCard.FILE)
         }
@@ -344,6 +372,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
         if (badges.isNotEmpty()) add("achievements")
         if (shots.isNotEmpty()) add("shots")
         lines.indices.forEach { add("details:$it") }
+        if (similar.isNotEmpty()) add("similar")
     }
     fun sizeOf(key: String) = when (key) {
         "facts", "about" -> 1
@@ -354,6 +383,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
         "discs" -> discs.size
         "achievements" -> badges.size
         "shots" -> shots.size
+        "similar" -> similar.size
         else -> if (key.startsWith("details:")) lines.getOrNull(key.removePrefix("details:").toInt())?.size ?: 0 else 0
     }
     // The page opens on Play, whatever sits above it.
@@ -489,6 +519,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
             InfoCard.STARTS -> app.emulatorPicker(card)
             InfoCard.FILE -> showCopy()
             InfoCard.PLAY -> app.go(Route.PlayTime)
+            InfoCard.JOURNAL -> app.journalSheet(game.id, game.displayTitle, game.journal)
             InfoCard.EXTRAS -> app.readManual(game.displayTitle, game.content)
         }
     }
@@ -510,6 +541,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
             else -> "All play time"
         }
         "shots" -> "View full screen"
+        "similar" -> "Open"
         "romm" -> rommButtons.getOrNull(col)?.label ?: "Downloads"
         "available" -> "This copy"
         "actions" -> actions.getOrNull(col)?.name
@@ -518,6 +550,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
             InfoCard.STARTS -> "Choose emulator"
             InfoCard.FILE -> "This copy"
             InfoCard.PLAY -> "All play time"
+            InfoCard.JOURNAL -> "Journal"
             else -> null
         }
     }
@@ -595,6 +628,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                     "about" -> readAbout()
                     "progress" -> openProgress(progressParts.getOrNull(col))
                     "shots" -> viewing = col
+                    "similar" -> similar.getOrNull(col)?.let { app.go(Route.GameInfo(it.card.id)) }
                     "romm" -> rommButtons.getOrNull(col)?.let { b -> romm?.let { v -> app.rommDownload(v.romId, game.displayTitle, b.what) } } ?: app.go(Route.Downloads)
                     "available" -> shownCopies.getOrNull(col)?.let { cp -> app.copyMenu(game.id, game.displayTitle, cp, hereAlready = !notHere, canUpload = canUploadHere, rommHasIt = rommHasIt) }
                     "actions" -> actions.getOrNull(col)?.run?.invoke()
@@ -627,6 +661,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                             io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("r.send", "Send to Another Device", FuseIcons.Share, trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = { app.sendPicker(game.id, game.displayTitle) }).takeIf { canSend },
                         ) + io.github.matiyaaa.fuse.ui.shell.romm.rommEditActions(app, game.id, game.displayTitle),
                     ))
+                } else if (row == "similar") {
+                    similar.getOrNull(col)?.let { app.openContextMenu(app.gameMenu(it.card)) }
                 } else {
                     app.openContextMenu(app.gameMenu(card, fromDetail = true))
                 }
@@ -694,12 +730,13 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                                 a.icon, selected = selected,
                                 tint = when {
                                     a.id == "fav" && game.favorite -> c.accent
+                                    a.id == "journal" && game.journal.status != null -> c.accent
                                     a.id == "content" && io.github.matiyaaa.fuse.library.content.ContentState.MISSING_LICENCE in contentStates -> c.warning
                                     a.id == "health" -> c.warning
                                     else -> c.text
                                 },
                                 contentDescription = a.name,
-                                selectedTint = if (a.id == "fav" && game.favorite) c.accent else null,
+                                selectedTint = if ((a.id == "fav" && game.favorite) || (a.id == "journal" && game.journal.status != null)) c.accent else null,
                                 modifier = m,
                                 onClick = tap,
                             )
@@ -723,7 +760,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                             actions.indices.forEach { button(it, Modifier.align(Alignment.CenterVertically)) }
                         }
                     }
-                    LaunchNote(d, Modifier.reveal(reveal, 3), issues.firstOrNull()?.problem?.title)
+                    LaunchNote(d, Modifier.reveal(reveal, 3), issues.firstOrNull()?.problem?.title, resumeAt)
                 }
                 // Beside the game's logo the cover only says the name a second time; it stands in for a missing logo.
                 layout.cover?.takeIf { d.art.logo == null || !app.store.prefs.value.showLogo }?.let { cover ->
@@ -895,6 +932,9 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                             when (info) {
                                 InfoCard.STARTS -> StartsCard(d, selected, tap, m)
                                 InfoCard.PLAY -> PlayCard(d, selected, tap, m)
+                                InfoCard.JOURNAL -> JournalCard(d, selected, tap, m, onRate = { r ->
+                                    app.scope.launch { app.store.library.setJournal(game.id, game.journal.copy(rating = r)) }
+                                })
                                 InfoCard.EXTRAS -> ExtrasCard(d, selected, tap, m)
                                 InfoCard.FILE -> FileCard(d, size, disc, selected, tap, m)
                             }
@@ -903,7 +943,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                     }
                 }
             }
-            // Where it is, quietly, at the very end: the folder it is in and the name it has there.
+            // Where it is, quietly, under the cards: the folder it is in and the name it has there.
             game.location.path.takeIf { it.isNotBlank() && !it.startsWith("http") }?.let { path ->
                 val (folder, name) = splitPath(path)
                 FText(
@@ -911,6 +951,16 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
                     Fuse.type.caption, color = c.textFaint, maxLines = 1,
                     modifier = Modifier.padding(top = Space.l),
                 )
+            }
+            if (similar.isNotEmpty()) {
+                Spacer(Modifier.height(Space.xxl))
+                Section("More like this", Modifier.section("similar", 9), count = similar.size.toString()) {
+                    SimilarShelf(
+                        similar, selected = if (row == "similar" && focused) col else -1,
+                        onGame = { i -> sel.row = rows.indexOf("similar"); sel.setColumn("similar", i); app.go(Route.GameInfo(similar[i].card.id)) },
+                        onMenu = { i -> app.openContextMenu(app.gameMenu(similar[i].card)) },
+                    )
+                }
             }
             Spacer(Modifier.height(Size.hintHeight + Space.x4))
         }
@@ -1369,8 +1419,20 @@ internal fun PictureViewer(shots: List<Any?>, start: Int, onIndex: (Int) -> Unit
  * no emulator yet (a warning), or an emulator that opens a folder or only its own app.
  */
 @Composable
-private fun LaunchNote(d: GameDetail, modifier: Modifier, attention: String? = null) {
+private fun LaunchNote(d: GameDetail, modifier: Modifier, attention: String? = null, resume: io.github.matiyaaa.fuse.ui.shell.store.ResumeInfo? = null) {
     val c = Fuse.colors
+    // Where it was left, in the accent: the moment Continue carries on from, and on which device.
+    if (resume != null && attention == null) {
+        val left = listOfNotNull(
+            resume.at?.let { "Left ${io.github.matiyaaa.fuse.ui.shell.components.agoText(it)}" } ?: "Left mid-game",
+            resume.device?.let { "on $it" },
+        ).joinToString(" ")
+        Row(modifier.padding(top = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            FuseIcon(FuseIcons.History, size = Size.iconS, tint = c.accent)
+            FText("$left. Continue carries on from there in ${resume.emulator}.", Fuse.type.caption, color = c.text, maxLines = 2)
+        }
+        return
+    }
     if (attention != null && d.unavailable == null) {
         Row(modifier.padding(top = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
             FuseIcon(FuseIcons.BadgeAlert, size = Size.iconS, tint = c.warning)
@@ -1497,6 +1559,41 @@ private fun PlayCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, modi
                 Fuse.type.caption, color = c.textFaint, maxLines = 2, modifier = Modifier.padding(top = Space.xs),
             )
         }
+    }
+}
+
+/**
+ * The person's Journal for it: where they are with it and since when, their stars and a glimpse of
+ * their note. The stars are set right here by touch or the mouse, half a star at a time ([onRate]);
+ * confirming the card opens the whole Journal, the stars among it for the controller.
+ */
+@Composable
+private fun JournalCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, modifier: Modifier, onRate: (Int) -> Unit) {
+    val c = Fuse.colors
+    val j = d.game.journal
+    InfoPanel("Journal", FuseIcons.NotebookPen, selected, onClick, modifier, actionable = true) {
+        val s = j.status
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            if (s != null) FuseIcon(statusIcon(s), size = Size.iconS, tint = c.accent)
+            FText(s?.let(JournalWords::label) ?: "No status yet", Fuse.type.titleSmall, color = if (s != null) c.text else c.textMuted, maxLines = 1)
+        }
+        if (s != null) j.statusAt?.let { at ->
+            FText(statusSince(s, at, kotlin.time.Clock.System.now().toEpochMilliseconds()), Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        }
+        // What a pointer over the stars would give, said beside them as it moves.
+        var preview by remember { mutableStateOf<Int?>(null) }
+        Row(Modifier.padding(top = Space.s), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+            io.github.matiyaaa.fuse.ui.designsystem.components.StarRating(j.rating, onRate, size = Size.iconL, onPreview = { preview = it })
+            FText(
+                io.github.matiyaaa.fuse.ui.designsystem.components.RatingWords.stars(preview ?: j.rating) ?: "Not rated",
+                Fuse.type.caption.tabular(), color = if (preview != null || j.rating > 0) c.text else c.textMuted, maxLines = 1,
+            )
+        }
+        val glimpse = JournalWords.glimpse(j, NOTE_GLIMPSE)
+        FText(
+            glimpse?.let { "\u201C$it\u201D" } ?: "No note yet. Press to keep one, or to say where you are with it",
+            Fuse.type.caption, color = if (glimpse != null) c.textMuted else c.textFaint, maxLines = 3, modifier = Modifier.padding(top = Space.s),
+        )
     }
 }
 
@@ -1802,6 +1899,9 @@ internal fun playersLabel(players: String): String? {
 }
 
 /** How many detail cards share a line: four make two even lines rather than three and one. */
+/** The most of a note the Journal card shows. */
+private const val NOTE_GLIMPSE = 120
+
 private fun detailsPerLine(cards: Int, fits: Int): Int = (if (cards == 4 && fits == 3) 2 else fits.coerceAtMost(cards)).coerceAtLeast(1)
 
 /** Systems whose games can come as packages that Fuse installs into the emulator. */
@@ -1869,6 +1969,40 @@ private fun RommPartsBlock(
         }
     }
 }
+
+/**
+ * Games here like this one, as box art with why each is here under it ("Also in the Metroid
+ * series"), the chosen one's title lit. Confirming one opens its page; Options gives its own menu.
+ */
+@Composable
+private fun SimilarShelf(games: List<io.github.matiyaaa.fuse.ui.shell.store.Suggestion>, selected: Int, onGame: (Int) -> Unit, onMenu: (Int) -> Unit) {
+    val c = Fuse.colors
+    val list = rememberLazyListState()
+    FollowSelection(list, { selected.coerceAtLeast(0) }, anchor = 0.1f)
+    val width = LocalTileMetrics.current.icon * SIMILAR_COVER
+    LazyRow(
+        state = list,
+        modifier = Modifier.bleedStart(Space.m).dragScroll(list, Orientation.Horizontal),
+        horizontalArrangement = Arrangement.spacedBy(Space.l),
+        contentPadding = PaddingValues(start = Space.m, top = Space.s, end = Space.gutter, bottom = Space.xs),
+    ) {
+        itemsIndexed(games, key = { _, g -> g.card.id.value }) { i, g ->
+            val lit = selected == i
+            Column(Modifier.width(width)) {
+                io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile(
+                    g.card, selected = lit, width = width,
+                    onClick = { onGame(i) }, onLongClick = { onMenu(i) },
+                )
+                Spacer(Modifier.height(Size.sparkClearance))
+                FText(g.card.title, Fuse.type.label, color = if (lit) c.text else c.textMuted, maxLines = 1)
+                FText(g.reason, Fuse.type.caption, color = c.textFaint, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** A cover in More like this, as a share of the page's tile size: box art a little smaller than a shelf's. */
+private const val SIMILAR_COVER = 0.82f
 
 /** "3 places, all the same", "On 2 devices and RomM": the count beside "Available on". */
 private fun availableSummary(copies: List<io.github.matiyaaa.fuse.ui.shell.store.CopyView>): String {

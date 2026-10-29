@@ -26,6 +26,15 @@ data class JellyfinArt(val itemId: String, val kind: ArtKind, val tag: String, v
     fun sized(w: Int) = copy(width = w)
 }
 
+/**
+ * One sheet of an item's trickplay pictures, for the image loader: the item, its version, the
+ * pictures' width and the sheet's number. Fetched with the sign-in, which these need.
+ */
+data class JellyfinTrickplay(val itemId: String, val source: String, val width: Int, val index: Int) {
+    /** The cache key: the same sheet on any route. */
+    val key: String get() = "jellyfin-trickplay:$itemId:$source:$width:$index"
+}
+
 data class CastMember(val id: String?, val name: String, val role: String?, val kind: String?, val photo: JellyfinArt?)
 
 /**
@@ -40,7 +49,12 @@ data class MediaItem(
     val tagline: String? = null,
     val year: Int? = null,
     val endYear: Int? = null,
+    /** When it first aired or came out; for a person, when they were born (ISO 8601). */
     val premiere: String? = null,
+    /** When a show ended; for a person, when they died (ISO 8601). */
+    val ended: String? = null,
+    /** For a person, where they were born. */
+    val places: List<String> = emptyList(),
     val runtimeMs: Long? = null,
     val rating: Double? = null,
     val criticRating: Double? = null,

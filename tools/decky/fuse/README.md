@@ -8,6 +8,10 @@ only asks Fuse and shows the answers in Steam.
 - **Quick Access**: whether Fuse is running (and Open Fuse through its Steam shortcut), the running
   game with Add to Fuse or Open in Fuse, Fuse One's state, devices and transfers, adding every installed
   Steam game at once, and the emulators' Update all, Install all and Uninstall all.
+- **Playing now**, while a game Fuse started runs: its name and how long it has run, its status in
+  your Journal (`POST /v1/playing/journal`), and Quit the game (`POST /v1/playing/quit`), which asks
+  it to close as its own window would, never by force, so Fuse sends its saves as it ends. Each part
+  shows only as far as Fuse lets the plugin (see what Fuse shows, change your library, open games).
 
 ## How it finds Fuse
 

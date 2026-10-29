@@ -83,6 +83,83 @@ fun AppState.rommDownload(romId: Long, title: String, what: RommDownloadWhat = R
     }
 }
 
+/** Queues RomM game [romId] kept for later (a charger and Wi-Fi, no game running) and says so. */
+fun AppState.rommDownloadLater(romId: Long, title: String) {
+    scope.launch {
+        val why = store.romm.downloadLater(romId)
+        if (why != null) toasts.show(why, ToastKind.WARNING)
+        else toasts.show("$title goes once this device is charging on Wi-Fi", ToastKind.SUCCESS, icon = FuseIcons.PlugZap)
+    }
+}
+
+private fun gamesText(n: Int) = "$n ${if (n == 1) "game" else "games"}"
+
+/**
+ * Every game of [title] (a system or a collection on RomM) that isn't here yet: how much it is and
+ * which drives it goes to are shown first, beside what is already on its way there, then it is
+ * queued now or kept for later. When it doesn't all fit, what fits can go, or room can be made.
+ */
+fun AppState.rommDownloadAll(title: String, romIds: List<Long>) {
+    closeOverlays()
+    scope.launch {
+        val most = io.github.matiyaaa.fuse.ui.shell.store.RommBatch.MOST
+        val whole = store.romm.batchPlan(romIds)
+        // More than one batch: the plan is the first batch's, so its room is what it says.
+        val plan = if (whole.romIds.size > most) store.romm.batchPlan(whole.romIds.take(most)).copy(unplaced = whole.unplaced) else whole
+        if (plan.romIds.isEmpty()) {
+            toasts.show(
+                if (plan.unplaced > 0) "Fuse can't tell where these go. Choose where games go in Settings, Addons, RomM, Library." else "Everything in $title is here or on its way",
+                if (plan.unplaced > 0) ToastKind.WARNING else ToastKind.INFO,
+            )
+            return@launch
+        }
+        fun queueAll(ids: List<Long>, later: Boolean) {
+            choice = null
+            toasts.show("Adding ${gamesText(ids.size)} to Downloads", icon = FuseIcons.Download)
+            scope.launch {
+                val r = store.romm.downloadMany(ids, later)
+                when {
+                    r.queued == 0 -> toasts.show(r.problem ?: "None of them could be queued", ToastKind.WARNING)
+                    r.failed > 0 -> toasts.show("${gamesText(r.queued)} on the way. ${r.failed} couldn't be: ${r.problem}", ToastKind.WARNING, icon = FuseIcons.Download)
+                    later -> toasts.show("${gamesText(r.queued)} go once this device is charging on Wi-Fi", ToastKind.SUCCESS, icon = FuseIcons.PlugZap)
+                    else -> toasts.show("${gamesText(r.queued)} on the way", ToastKind.SUCCESS, icon = FuseIcons.Download)
+                }
+            }
+        }
+        val count = whole.romIds.size
+        val lines = buildList {
+            add("${sizeOf(plan.bytes)} in all.")
+            if (plan.unplaced > 0) add("${gamesText(plan.unplaced)} of systems Fuse can't place stay on RomM.")
+            if (count > most) add("That's the first $most of $count: Fuse queues $most at a time so Downloads stays light, and the rest can follow once these are in.")
+            if (!plan.fits) add("There isn't room for all of them beside what is already on its way.")
+        }
+        val later = "Goes once this device is charging on Wi-Fi, with no game running"
+        val options = if (plan.fits) listOf(
+            MenuAction("all.now", "Download Now", FuseIcons.Download, detail = "Each takes its turn in Downloads", onSelect = { queueAll(plan.romIds, later = false) }),
+            MenuAction("all.later", "Download Later", FuseIcons.PlugZap, detail = later, onSelect = { queueAll(plan.romIds, later = true) }),
+        ) else listOfNotNull(
+            MenuAction(
+                "all.fit", "Download What Fits", FuseIcons.Download, detail = "${gamesText(plan.fitting.size)}, ${sizeOf(plan.fittingBytes)}",
+                onSelect = { queueAll(plan.fitting, later = false) },
+            ).takeIf { plan.fitting.isNotEmpty() },
+            MenuAction("all.fitlater", "What Fits, Later", FuseIcons.PlugZap, detail = later, onSelect = { queueAll(plan.fitting, later = true) }).takeIf { plan.fitting.isNotEmpty() },
+            MenuAction("all.room", "Make Room", FuseIcons.Sparkles, detail = "Games not played for a long time, to look over before any go", onSelect = { choice = null; go(Route.Storage) }),
+        )
+        choice = ChoiceSpec(
+            title = "Download ${gamesText(plan.romIds.size)} from $title?",
+            message = lines.joinToString(" "),
+            icon = FuseIcons.CloudDownload,
+            options = options + plan.drives.mapIndexed { i, d ->
+                MenuAction(
+                    "all.drive.$i", d.label, if (d.fits) FuseIcons.HardDrive else FuseIcons.Warning,
+                    detail = listOfNotNull(gamesText(d.games), sizeOf(d.bytes), d.free?.let { "${sizeOf(it)} free" }).joinToString("  ·  "),
+                    enabled = false,
+                )
+            },
+        )
+    }
+}
+
 /**
  * A system's missing BIOS from the person's RomM server: Fuse works out which files the system
  * needs that are not here, shows them, and downloads them into the system's firmware folder. Files
