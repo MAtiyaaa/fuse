@@ -207,6 +207,72 @@ internal fun AuditDriver.fuse046Screens() {
         }
         shoot("covers whole over their soft copies", 2_000)
     }
+    scenario("home", "the widget gallery") {
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
+        waitFor("Continue playing")
+        tap(PadButton.DPAD_LEFT)
+        // Arranging: down past the board to the bar, where Add widget is first.
+        hold(PadButton.A)
+        waitFor("Put down")
+        tap(PadButton.A)
+        waitFor("Pick up")
+        tap(PadButton.DPAD_DOWN, 8)
+        tap(PadButton.A)
+        waitFor("Shown as each will look")
+        shoot("every widget as it will look, under headings", 2_000)
+        tap(PadButton.DPAD_DOWN, 2)
+        shoot("further down, a widget chosen", 1_200)
+        tap(PadButton.A)
+        waitGone("Shown as each will look")
+        shoot("added to the board", 1_500)
+    }
+    scenario("addons", "android ports as box art") {
+        val base = androidStore
+        // Ports in every state the page shows: playing your game, to attach, installing, your game
+        // on RomM, a problem, and ports for games you haven't got.
+        val colors = listOf(0xFF3A7BD5, 0xFFE0573E, 0xFF2E9E6E, 0xFFDAA520, 0xFF7A4DFF, 0xFFB03A8C, 0xFF5B6FB5, 0xFFC9A45C)
+        val games = listOf("Star Courier 64", "Harbour Kart", "Lantern Quest", "Moth Knight", "Glass Tower", "Ember Racer", "Tidal Saga", "Pocket Comet")
+        val covers = games.mapIndexed { i, n -> java.io.File(cache, "port-$i.png").also { AuditCovers.cover(it, n, colors[i]) }.absolutePath }
+        fun port(i: Int, name: String, sys: String, checked: Boolean = true, verified: String? = null) = io.github.matiyaaa.fuse.model.AndroidPort(
+            id = "p$i", name = name, game = games[i], systems = listOf(sys), repo = "https://github.com/example/$name",
+            licence = "MIT", checked = checked, verified = verified, publisher = "Northlight", year = 1996 + i, genre = "action-adventure", cover = covers[i],
+        )
+        val mine = io.github.matiyaaa.fuse.ui.shell.store.PortGameChoice(GameId(1), games[0], "N64", plays = true)
+        val ports = listOf(
+            io.github.matiyaaa.fuse.ui.shell.store.AndroidPortView(port(0, "Courier64", "n64", verified = "2026-10-20"), "org.example.courier", "app.courier", "1.4.0", attachedTo = listOf(mine)),
+            io.github.matiyaaa.fuse.ui.shell.store.AndroidPortView(port(1, "OpenKart", "n64"), "org.example.kart", "app.kart", "0.9.2", games = listOf(io.github.matiyaaa.fuse.ui.shell.store.PortGameChoice(GameId(2), games[1], "N64", plays = true))),
+            io.github.matiyaaa.fuse.ui.shell.store.AndroidPortView(port(2, "LanternEx", "snes"), job = io.github.matiyaaa.fuse.ui.shell.store.PortJob.Downloading(0.42f, 42, 100), games = listOf(io.github.matiyaaa.fuse.ui.shell.store.PortGameChoice(GameId(3), games[2], "SNES", plays = true))),
+            io.github.matiyaaa.fuse.ui.shell.store.AndroidPortView(port(3, "MothDroid", "psx"), games = listOf(io.github.matiyaaa.fuse.ui.shell.store.PortGameChoice(GameId(4), games[3], "PS1", plays = true))),
+            io.github.matiyaaa.fuse.ui.shell.store.AndroidPortView(port(4, "GlassPort", "psx", checked = false), job = io.github.matiyaaa.fuse.ui.shell.store.PortJob.Failed("The release has no APK for this device.")),
+            io.github.matiyaaa.fuse.ui.shell.store.AndroidPortView(port(5, "EmberRe", "n64")),
+            io.github.matiyaaa.fuse.ui.shell.store.AndroidPortView(port(6, "TidalPort", "snes", checked = false)),
+            io.github.matiyaaa.fuse.ui.shell.store.AndroidPortView(port(7, "CometNative", "gba")),
+        )
+        val state = kotlinx.coroutines.flow.MutableStateFlow(io.github.matiyaaa.fuse.ui.shell.store.AndroidPortsState(ports, loaded = true, listedAt = "28 October"))
+        val portsOps = object : io.github.matiyaaa.fuse.ui.shell.store.PortsOps by base.ports {
+            override val androidApps get() = true
+            override val android get() = state
+        }
+        base.updatePrefs { it.copy(portsEnabled = true, addonsOrder = listOf("PORTS")) }
+        try {
+            show(object : FuseStore by base { override val ports = portsOps })
+            home()
+            repeat(6) { if (!hasText("Games rebuilt for Android")) tap(PadButton.R1) }
+            waitFor("Games rebuilt for Android")
+            settle(1_500)
+            shoot("box art for every port, the chosen one told above", 1_500)
+            tap(PadButton.DPAD_RIGHT, 2)
+            settle(900)
+            shoot("one installing, the stage following", 1_200)
+            tap(PadButton.DPAD_UP)
+            tap(PadButton.DPAD_RIGHT, 3)
+            tap(PadButton.DPAD_DOWN)
+            settle(900)
+            shoot("everything, with ports for games you haven't got", 1_200)
+        } finally {
+            base.updatePrefs { it.copy(portsEnabled = false, addonsOrder = emptyList()) }
+        }
+    }
     scenario("storage", "make room") {
         useLibrary()
         val base = libraryStore
