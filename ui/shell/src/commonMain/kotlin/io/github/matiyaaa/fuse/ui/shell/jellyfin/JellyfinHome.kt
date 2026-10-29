@@ -271,7 +271,7 @@ private fun Shelves(app: AppState, page: JellyfinHomeState, focused: Boolean, to
                             ShelfRow(r.shelf.title, shelfIcon(r.shelf.kind), r.shelf.items.size, chosen >= 0, sel.column(r.key)) {
                                 itemsIndexed(r.shelf.items, key = { _, it -> it.id }) { i, item ->
                                     if (wideCards) {
-                                        WideCard(item, i == chosen, wide, onClick = { tap(i) }, onLongClick = { app.mediaOptions(item) })
+                                        ContinueCard(item, i == chosen, wide, onClick = { tap(i) }, onLongClick = { app.mediaOptions(item) })
                                     } else {
                                         PosterCard(item, i == chosen, if (item.type == MediaType.ALBUM) poster * 1.2f else poster, onClick = { tap(i) }, onLongClick = { app.mediaOptions(item) })
                                     }

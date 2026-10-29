@@ -230,7 +230,12 @@ internal fun MediaItemScreen(app: AppState, id: String) {
             MediaType.EPISODE -> page.episodes.filter { it.id != item.id }.takeIf { it.isNotEmpty() }?.let { add(PageRow.Cards("episodes", "More from ${item.seasonName ?: "this season"}", it, wide = true)) }
             MediaType.ALBUM -> page.children.forEachIndexed { i, t -> add(PageRow.Track(i, t)) }
             MediaType.ARTIST -> if (page.children.isNotEmpty()) add(PageRow.Cards("albums", "Albums", page.children, wide = false))
-            MediaType.PERSON -> if (page.children.isNotEmpty()) add(PageRow.Cards("credits", "Films and shows", page.children, wide = false))
+            // A person's films and shows apart, newest first, as their filmography reads.
+            MediaType.PERSON -> {
+                val (films, shows) = page.children.partition { it.type != MediaType.SERIES }
+                if (films.isNotEmpty()) add(PageRow.Cards("films", "Films", films, wide = false))
+                if (shows.isNotEmpty()) add(PageRow.Cards("shows", "Shows", shows, wide = false))
+            }
             MediaType.COLLECTION, MediaType.PLAYLIST, MediaType.FOLDER -> if (page.children.isNotEmpty()) add(PageRow.Cards("children", "In this collection", page.children, wide = false))
             else -> Unit
         }
@@ -272,6 +277,8 @@ internal fun MediaItemScreen(app: AppState, id: String) {
         app.hints = when (row) {
             is PageRow.Cards -> listOfNotNull(Hint(HintButton.CONFIRM, if (currentCard?.type == MediaType.EPISODE) "Play" else "Open"), Hint(HintButton.OPTIONS, "More"), held, Hint(HintButton.BACK, "Back"))
             is PageRow.Track -> listOf(Hint(HintButton.CONFIRM, "Play from here"), Hint(HintButton.OPTIONS, "More"), Hint(HintButton.BACK, "Back"))
+            // A person opens on their films and shows.
+            is PageRow.Cast -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
             else -> listOfNotNull(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.OPTIONS, "More"), held, Hint(HintButton.BACK, "Back"))
         }
     }
@@ -303,7 +310,24 @@ internal fun MediaItemScreen(app: AppState, id: String) {
             contentPadding = PaddingValues(top = if (compact) Space.l else maxHeight * 0.16f, bottom = Size.hintHeight + Space.xl),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
         ) {
-            item(key = "head") { Header(item, compact, narrow, buttons, if (focused && sel.row == 0) col else -1) { i -> sel.row = 0; sel.setColumn("buttons", i); activate(rows[0], i) } }
+            // Wide, a film's or show's poster stands beside its head, where the page was empty.
+            val poster = item.poster.takeIf { maxWidth >= POSTER_BESIDE && item.type != MediaType.PERSON && item.type != MediaType.EPISODE }
+            item(key = "head") {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    Box(Modifier.weight(1f)) { Header(item, compact, narrow, buttons, if (focused && sel.row == 0) col else -1) { i -> sel.row = 0; sel.setColumn("buttons", i); activate(rows[0], i) } }
+                    if (poster != null) {
+                        val square = item.type == MediaType.ALBUM || item.type == MediaType.ARTIST
+                        io.github.matiyaaa.fuse.ui.designsystem.components.Tile(
+                            selected = false, glow = accentOf(item.name),
+                            modifier = Modifier.padding(end = Space.gutter).width(if (compact) 168.dp else 220.dp).aspectRatio(if (square) 1f else 2f / 3f),
+                        ) {
+                            Artwork(poster.at(POSTER_WIDTH), Modifier.fillMaxSize(), fallback = {
+                                io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt(item.name, accentOf(item.name), Modifier.fillMaxSize(), slot = io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot.BOX)
+                            })
+                        }
+                    }
+                }
+            }
             rows.withIndex().filter { it.value !is PageRow.Buttons }.forEach { (ri, r) ->
                 item(key = r.key) {
                     val chosen = if (focused && sel.row == ri) sel.column(r.key) else -1
@@ -343,6 +367,7 @@ internal fun MediaItemScreen(app: AppState, id: String) {
 @Composable
 private fun Header(item: MediaItem, compact: Boolean, narrow: Boolean, buttons: List<PageButton>, chosen: Int, onClick: (Int) -> Unit) {
     val c = Fuse.colors
+    if (item.type == MediaType.PERSON) return PersonHeader(item, compact, narrow, buttons, chosen, onClick)
     Column(Modifier.padding(horizontal = Space.gutter).widthIn(max = 760.dp), verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m)) {
         val logo = item.logo
         if (logo != null) {
@@ -363,6 +388,62 @@ private fun Header(item: MediaItem, compact: Boolean, narrow: Boolean, buttons: 
                 FuseButton(b.label, selected = i == chosen, onClick = { onClick(i) }, icon = b.icon, kind = if (b.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY, height = if (compact) 40.dp else 48.dp)
             }
         }
+    }
+}
+
+/**
+ * A person's page head: their photo as a portrait beside their name, when and where they were born
+ * (and when they died), and their story; then the buttons. Narrow, the photo sits above.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PersonHeader(item: MediaItem, compact: Boolean, narrow: Boolean, buttons: List<PageButton>, chosen: Int, onClick: (Int) -> Unit) {
+    val c = Fuse.colors
+    val photo = @Composable {
+        val w = if (compact) 112.dp else 160.dp
+        io.github.matiyaaa.fuse.ui.designsystem.components.Tile(selected = false, modifier = Modifier.width(w).aspectRatio(2f / 3f), glow = accentOf(item.name)) {
+            Artwork(item.poster.at(POSTER_WIDTH), Modifier.fillMaxSize(), fallback = {
+                io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt(item.name, accentOf(item.name), Modifier.fillMaxSize())
+            })
+        }
+    }
+    val words = @Composable {
+        Column(verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m)) {
+            FText(item.name, if (narrow) Fuse.type.title else Fuse.type.display, maxLines = 2)
+            lifeLine(item)?.let { FText(it, Fuse.type.label, color = c.text.copy(alpha = 0.86f), maxLines = 2) }
+            item.overview?.let { FText(it, Fuse.type.body, color = c.text.copy(alpha = 0.82f), maxLines = if (compact) 3 else 5) }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s), modifier = Modifier.padding(top = Space.xs)) {
+                buttons.forEachIndexed { i, b ->
+                    FuseButton(b.label, selected = i == chosen, onClick = { onClick(i) }, icon = b.icon, kind = if (b.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY, height = if (compact) 40.dp else 48.dp)
+                }
+            }
+        }
+    }
+    if (narrow) {
+        Column(Modifier.padding(horizontal = Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.l)) { photo(); words() }
+    } else {
+        Row(Modifier.padding(horizontal = Space.gutter).widthIn(max = 980.dp), horizontalArrangement = Arrangement.spacedBy(Space.xxl)) {
+            photo()
+            Box(Modifier.weight(1f)) { words() }
+        }
+    }
+}
+
+/** "Born 12 May 1970 in London" or "1931 to 2016": a person's dates and birthplace, as the server knows them. */
+internal fun lifeLine(item: MediaItem): String? {
+    fun date(iso: String?): String? {
+        val d = iso?.take(10)?.split('-')?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 3 } ?: return iso?.take(4)?.toIntOrNull()?.toString()
+        val month = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December").getOrNull(d[1] - 1) ?: return d[0].toString()
+        return "${d[2]} $month ${d[0]}"
+    }
+    val born = date(item.premiere)
+    val died = date(item.ended)
+    val place = item.places.firstOrNull()
+    return when {
+        born != null && died != null -> "$born to $died" + (place?.let { ", born in $it" } ?: "")
+        born != null -> "Born $born" + (place?.let { " in $it" } ?: "")
+        place != null -> "Born in $place"
+        else -> null
     }
 }
 
@@ -498,6 +579,9 @@ private fun PageSkeleton() {
         Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) { repeat(3) { Skeleton(Modifier.width(140.dp).height(48.dp)) } }
     }
 }
+
+/** How wide a page must be for the poster to stand beside its head. */
+private val POSTER_BESIDE = 1000.dp
 
 /** 3:42 for a song. */
 internal fun trackTime(ms: Long): String {

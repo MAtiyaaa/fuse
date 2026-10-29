@@ -163,6 +163,11 @@ internal fun AuditDriver.jellyfinScreens() {
             shoot("a film's page", 1_500)
             tap(PadButton.DPAD_DOWN, 2)
             shoot("cast", 1_200)
+            // Someone in it: their photo, their dates, and their films and shows.
+            tap(PadButton.A)
+            waitFor("Films", 20_000)
+            settle(2_000)
+            shoot("a person's page", 1_500)
         }
 
         scenario("jellyfin", "show page") {
