@@ -294,39 +294,11 @@ internal fun ActionPill(a: TopAction, selected: Boolean, label: Boolean, onClick
 /** All, Downloads, Uploads, Completed, Failed: each with how many it holds. */
 @Composable
 private fun Filters(filters: List<TransferFilter>, counts: Map<TransferFilter, Int>, active: TransferFilter, focused: Boolean, modifier: Modifier, onPick: (TransferFilter) -> Unit) {
-    val c = Fuse.colors
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-        for (f in filters) {
-            val on = f == active
-            val bg by fuselineColor(
-                when {
-                    on && focused -> c.text
-                    on -> c.accent.copy(alpha = 0.18f)
-                    else -> Color.Transparent
-                },
-                Fuse.motion.tween(Durations.FAST), label = "dlFilter",
-            )
-            val fg = when {
-                on && focused -> c.ink
-                on -> c.accent
-                else -> c.textMuted
-            }
-            Row(
-                Modifier.height(32.dp).clip(CircleShape).background({ bg })
-                    .then(if (!on) Modifier.border(1.dp, c.hairline, CircleShape) else Modifier)
-                    .clickable(remember { MutableInteractionSource() }, indication = null) { onPick(f) }
-                    .padding(horizontal = Space.m),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FText(f.label, Fuse.type.label, color = fg, maxLines = 1)
-                val n = counts[f] ?: 0
-                if (n > 0 && f != TransferFilter.ALL) {
-                    Spacer(Modifier.width(6.dp))
-                    FText("$n", Fuse.type.numericSmall, color = fg.copy(alpha = 0.75f), maxLines = 1)
-                }
-            }
-        }
-    }
+    io.github.matiyaaa.fuse.ui.designsystem.components.FilterPills(
+        filters.map { it.label }, filters.indexOf(active), { i -> onPick(filters[i]) }, modifier,
+        focused = focused,
+        counts = filters.map { f -> counts[f]?.takeIf { it > 0 && f != TransferFilter.ALL } },
+    )
 }
 
 @Composable

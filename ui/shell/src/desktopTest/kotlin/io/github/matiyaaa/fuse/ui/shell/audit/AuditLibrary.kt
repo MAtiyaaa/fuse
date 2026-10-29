@@ -68,10 +68,17 @@ internal object AuditLibrary {
     )
 
     /** The full library store with history, collections, pins and overrides; setup is done. */
-    suspend fun store(root: File, cache: File, controls: AuditControls, scope: CoroutineScope): Pair<FuseStore, FuseData> {
+    suspend fun store(
+        root: File,
+        cache: File,
+        controls: AuditControls,
+        scope: CoroutineScope,
+        /** The services as the store gets them: the live audit gives them a real connection out. */
+        wrap: (io.github.matiyaaa.fuse.ui.shell.store.FuseServices) -> io.github.matiyaaa.fuse.ui.shell.store.FuseServices = { it },
+    ): Pair<FuseStore, FuseData> {
         writeTo(root)
         val services = AuditServices.create(cache, controls)
-        val store = createFuseStore(services, scope)
+        val store = createFuseStore(wrap(services), scope)
         store.updatePrefs { it.copy(onboardingDone = true) }
         store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
         withTimeout(90_000) {

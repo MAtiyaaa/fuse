@@ -47,6 +47,7 @@ import io.github.matiyaaa.fuse.romm.RommException
 import io.github.matiyaaa.fuse.romm.RommFile
 import io.github.matiyaaa.fuse.romm.RommMatch
 import io.github.matiyaaa.fuse.romm.RommMirror
+import io.github.matiyaaa.fuse.romm.RommNames
 import io.github.matiyaaa.fuse.romm.RommPlacement
 import io.github.matiyaaa.fuse.romm.RommRom
 import io.github.matiyaaa.fuse.romm.RommScopes
@@ -1249,9 +1250,33 @@ internal class DefaultRommOps(
         }
     }
 
-    /** Mirror rows as the lists show them: the library's own card where Fuse has the game. */
-    private suspend fun toGames(roms: List<RommRom>, isNew: Boolean = false): List<RommGame> {
+    /** The mirror revision [RommGames.apart] was worked out for. */
+    @kotlin.concurrent.Volatile private var apartAt = -1
+
+    /**
+     * Names for games that would read the same as another on their system ([RommNames]), worked out
+     * once for each change to the mirror or to what Fuse found about its games, from all of them, so
+     * a game is called the same in every list and on its page.
+     */
+    private suspend fun nameApart() {
+        val revision = mirrorRevision.value
+        if (apartAt == revision) return
+        val records = remote.all()
+        remote.apart = RommNames.apart(mirror.all(server).filterNot(RommContent::unfinished)) { r ->
+            val record = records[r.id]
+            if (record?.titleCustom != null) null else record?.titleMetadata ?: r.name
+        }
+        apartAt = revision
+    }
+
+    /**
+     * Mirror rows as the lists show them: the library's own card where Fuse has the game. A copy
+     * left unfinished on the server ("Game.iso.part") isn't one of its games.
+     */
+    private suspend fun toGames(all: List<RommRom>, isNew: Boolean = false): List<RommGame> {
+        val roms = all.filterNot(RommContent::unfinished)
         if (roms.isEmpty()) return emptyList()
+        nameApart()
         val m = matches.value
         val running = transfers.items.value.filter { it.source == ROMM_SOURCE && !it.status.finished }.associateBy { it.key }
         val ids = roms.mapNotNull { m[it.id]?.first }
@@ -1320,6 +1345,7 @@ internal class DefaultRommOps(
         return combine(mirrorRevision, ctx.installed, ctx.data.media.observe(owner)) { _, _, m -> m }.mapLatest { media ->
             val r = mirror.withFiles(clientFor(server), server, romId) ?: return@mapLatest null
             val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@mapLatest null
+            nameApart()
             val game = remote.game(r, remote.all()[romId]) ?: return@mapLatest null
             GameDetail(
                 game = game, platform = platform, media = media, art = withServerArt(Art.from(media), r),

@@ -173,7 +173,11 @@ private fun SelectedLine(g: RommGame, modifier: Modifier) {
     }
 }
 
-/** A RomM game's tile: the Fuse tile, with a small mark saying it is on the server, coming, or here. */
+/**
+ * A RomM game's tile: the Fuse tile, with one small mark at its foot saying it is on the server,
+ * coming, or here, and "New" in it for a game new on the server. The mark is the theme's own glass
+ * and text, so it reads on any art in any theme, and it keeps clear of the marks along the top.
+ */
 @Composable
 internal fun RommTile(g: RommGame, selected: Boolean, size: Dp, modifier: Modifier = Modifier, onClick: () -> Unit, onLongClick: () -> Unit) {
     val c = Fuse.colors
@@ -185,19 +189,34 @@ internal fun RommTile(g: RommGame, selected: Boolean, size: Dp, modifier: Modifi
             RommPresence.DOWNLOADING -> FuseIcons.Download to c.accent
             RommPresence.INSTALLED, RommPresence.PARTLY_INSTALLED -> null to c.text
         }
-        if (icon != null) {
-            Box(
-                Modifier.align(Alignment.BottomEnd).padding(6.dp).size(22.dp).clip(CircleShape).background(c.surfaceOverlay),
-                contentAlignment = Alignment.Center,
-            ) { FuseIcon(icon, size = 13.dp, tint = tint) }
-        }
-        if (g.isNew) {
-            Box(Modifier.align(Alignment.TopStart).padding(6.dp).clip(CircleShape).background(c.accent).padding(horizontal = 6.dp, vertical = 1.dp)) {
-                FText("NEW", Fuse.type.overline, color = c.onAccent, maxLines = 1)
+        if (icon != null || g.isNew) {
+            Row(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(MARK_INSET)
+                    .height(MARK_HEIGHT)
+                    .clip(CircleShape)
+                    .background(c.surfaceOverlay)
+                    .padding(start = if (g.isNew) Space.s else 0.dp, end = if (g.isNew && icon == null) Space.s else 0.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Space.xs),
+            ) {
+                if (g.isNew) {
+                    Box(Modifier.size(NEW_DOT).clip(CircleShape).background(c.accent))
+                    FText("New", Fuse.type.overline, color = c.text, maxLines = 1)
+                }
+                if (icon != null) {
+                    Box(Modifier.size(MARK_HEIGHT), contentAlignment = Alignment.Center) { FuseIcon(icon, size = 13.dp, tint = tint) }
+                }
             }
         }
     }
 }
+
+/** The mark at a RomM tile's foot: its height, how far in from the corner, and the dot that says New. */
+private val MARK_HEIGHT = 22.dp
+private val MARK_INSET = 6.dp
+private val NEW_DOT = 6.dp
 
 /** The Systems page's card for a RomM system, or one made from Fuse's catalogue for a system the library hasn't got yet. */
 internal fun systemCard(s: RommSystem, library: Map<PlatformId, PlatformCard>): PlatformCard? {

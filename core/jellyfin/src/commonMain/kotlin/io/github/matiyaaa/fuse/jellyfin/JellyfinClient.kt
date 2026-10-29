@@ -180,7 +180,11 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
             parentId?.let { param("parentId", it) }
             types?.let { param("includeItemTypes", it) }
         }
-        return json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(ItemDto.serializer()), text).map { it.toMedia() }
+        // Grouped, a show stands for its new episodes, and its ChildCount is how many of them there
+        // are: never its seasons.
+        return json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(ItemDto.serializer()), text).map { dto ->
+            dto.toMedia().let { m -> if (m.type == MediaType.SERIES && dto.childCount != null) m.copy(childCount = null, newEpisodes = dto.childCount) else m }
+        }
     }
 
     /** A page of items: a library's, a search's, a filter's. */
@@ -513,7 +517,15 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
                 else -> JellyfinException("The server had a problem ($status).", JellyfinException.Kind.SERVER, status)
             }
         }
-        return response.bodyAsText()
+        // A connection that drops while the answer is read (a phone waking, a proxy's idle cut) is
+        // the network too, so it is asked again like one that never connected.
+        return try {
+            response.bodyAsText()
+        } catch (c: CancellationException) {
+            throw c
+        } catch (t: Throwable) {
+            throw JellyfinException(networkText(t), JellyfinException.Kind.NETWORK)
+        }
     }
 
     private fun networkText(t: Throwable): String {

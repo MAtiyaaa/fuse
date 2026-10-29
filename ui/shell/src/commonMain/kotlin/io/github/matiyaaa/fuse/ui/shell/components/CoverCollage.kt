@@ -54,7 +54,10 @@ fun CoverCollage(
     /** Drawn over the background and under the covers: a card's own wash behind its words. */
     under: (@Composable androidx.compose.foundation.layout.BoxScope.() -> Unit)? = null,
 ) {
-    val first = games.firstOrNull()
+    // Games with art of their own lead: a place or a list whose newest games have no art yet (a
+    // server still finding theirs) still looks like what it holds, not like pictures that failed.
+    val shown = remember(games) { games.sortedBy { if (it.art.boxart == null && it.art.grid == null && it.art.hero == null) 1 else 0 } }
+    val first = shown.firstOrNull()
     val c = Fuse.colors
     val corner = Fuse.geometry.tileCornerFraction * COLLAGE_CORNER
     val shape = remember(corner) { SquircleShape.fraction(corner) }
@@ -84,7 +87,7 @@ fun CoverCollage(
         under?.invoke(this)
         if (first == null) return@Box
         val cover = height * coverShare
-        val fan = games.take(3)
+        val fan = shown.take(3)
         // The fan's own width: the front cover and the two behind it leaning out on either side.
         val reach = cover * Aspect.BOX + cover * SPREAD * 2
         // Kept off the card's edge when it stands to one side.

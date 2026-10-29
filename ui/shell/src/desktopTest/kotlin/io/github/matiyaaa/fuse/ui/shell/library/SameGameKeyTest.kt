@@ -22,4 +22,18 @@ class SameGameKeyTest {
         // A name that is nothing but brackets still has a key.
         assertNotEquals("", sameTitleKey("[BIOS]"))
     }
+
+    @Test
+    fun aNameOnSeveralSystemsIsTold() {
+        fun card(id: Long, title: String, system: String) = io.github.matiyaaa.fuse.ui.shell.store.GameCard(
+            id = io.github.matiyaaa.fuse.model.GameId(id), platformId = io.github.matiyaaa.fuse.model.PlatformId(system),
+            title = title, platformShort = system.uppercase(), accent = 0xFF5B8DEF, art = io.github.matiyaaa.fuse.ui.shell.store.Art.None,
+        )
+        val shared = namesOnSeveralSystems(
+            listOf(card(1, "Deadpool", "ps3"), card(2, "Deadpool", "ps4"), card(3, "Deadpool", "xbox360"), card(4, "Psychonauts", "ps2"), card(5, "Okami", "ps2")),
+        )
+        assertEquals(setOf(sameTitleKey("Deadpool")), shared)
+        // Two copies on one system are one system's game: nothing to tell apart by system.
+        assertEquals(emptySet(), namesOnSeveralSystems(listOf(card(1, "Okami", "ps2"), card(2, "Okami (USA)", "ps2"))))
+    }
 }

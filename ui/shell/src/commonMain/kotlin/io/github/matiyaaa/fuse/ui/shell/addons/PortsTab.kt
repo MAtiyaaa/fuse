@@ -22,8 +22,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -77,8 +75,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
-import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
-import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -360,31 +356,12 @@ private fun toneColor(tone: Tone): Color {
 /** The filters as one row of pills, the chosen one filled; each says how many it keeps. */
 @Composable
 private fun FilterRow(filters: List<PortsFilter>, chosen: PortsFilter, counts: Map<PortsFilter, Int>, focused: Boolean, onPick: (PortsFilter) -> Unit) {
-    val c = Fuse.colors
-    Row(Modifier.padding(horizontal = Space.gutter).padding(top = Space.m), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-        for (f in filters) {
-            val on = f == chosen
-            val bg by fuselineColor(
-                when {
-                    on && focused -> c.text
-                    on -> c.text.copy(alpha = 0.16f)
-                    else -> c.text.copy(alpha = 0.05f)
-                },
-                Fuse.motion.tween(Durations.FAST), label = "portFilter",
-            )
-            val fg = if (on && focused) c.ink else if (on) c.text else c.textMuted
-            Row(
-                Modifier.height(32.dp).clip(CircleShape).background(bg)
-                    .combinedClickable(remember { MutableInteractionSource() }, indication = null, onClick = { onPick(f) })
-                    .padding(horizontal = Space.m),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FText(f.label, Fuse.type.label, color = fg, maxLines = 1)
-                Spacer(Modifier.width(Space.xs))
-                FText("${counts[f] ?: 0}", Fuse.type.caption, color = fg.copy(alpha = 0.7f), maxLines = 1)
-            }
-        }
-    }
+    io.github.matiyaaa.fuse.ui.designsystem.components.FilterPills(
+        filters.map { it.label }, filters.indexOf(chosen), { i -> onPick(filters[i]) },
+        Modifier.padding(horizontal = Space.gutter).padding(top = Space.m),
+        focused = focused,
+        counts = filters.map { counts[it] ?: 0 },
+    )
 }
 
 /**

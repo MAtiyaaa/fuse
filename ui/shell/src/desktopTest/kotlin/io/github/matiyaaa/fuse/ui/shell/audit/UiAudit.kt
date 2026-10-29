@@ -109,6 +109,11 @@ class UiAudit {
     /** Every widget at every size, at the Deck's size: the same layout in dp for far fewer pixels. */
     @Test fun widgetGallery() = audit(AuditSize.D) { widgetGallery() }
 
+    /** Fuse against the servers in the environment (see [liveScreens]); left out without them. */
+    @Test fun liveM() = audit(AuditSize.M) { liveScreens() }
+
+    @Test fun liveJ() = audit(AuditSize.J) { liveScreens() }
+
     @Test fun widgetGalleryM() = audit(AuditSize.M) { widgetGallery() }
 
     @Test fun companionSecondScreen() = audit(AuditSize.C) { companionScreens() }

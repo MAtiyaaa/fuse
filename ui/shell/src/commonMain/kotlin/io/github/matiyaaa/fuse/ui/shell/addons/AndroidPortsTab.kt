@@ -1,9 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.addons
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -80,8 +77,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
-import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
-import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -345,40 +340,13 @@ private fun Header(state: AndroidPortsState, actions: List<TopAction>, inHead: B
 /** In Your Library, Installed, Checked by Fuse, Everything: each with how many it holds. */
 @Composable
 private fun Filters(filters: List<PortFilter>, counts: Map<PortFilter, Int>, active: PortFilter, focused: Boolean, onPick: (PortFilter) -> Unit) {
-    val c = Fuse.colors
     // Scrolls rather than clips where the four don't fit (a phone held upright).
-    Row(Modifier.padding(top = Space.m).horizontalScroll(rememberScrollState()).padding(horizontal = Space.gutter).widthIn(max = 960.dp), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-        for (f in filters) {
-            val on = f == active
-            val bg by fuselineColor(
-                when {
-                    on && focused -> c.text
-                    on -> c.accent.copy(alpha = 0.18f)
-                    else -> Color.Transparent
-                },
-                Fuse.motion.tween(Durations.FAST), label = "portFilter",
-            )
-            val fg = when {
-                on && focused -> c.ink
-                on -> c.accent
-                else -> c.textMuted
-            }
-            Row(
-                Modifier.height(32.dp).clip(CircleShape).background({ bg })
-                    .then(if (!on) Modifier.border(1.dp, c.hairline, CircleShape) else Modifier)
-                    .clickable(remember { MutableInteractionSource() }, indication = null) { onPick(f) }
-                    .padding(horizontal = Space.m),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FText(f.label, Fuse.type.label, color = fg, maxLines = 1)
-                val n = counts[f] ?: 0
-                if (n > 0) {
-                    Spacer(Modifier.width(6.dp))
-                    FText("$n", Fuse.type.numericSmall, color = fg.copy(alpha = 0.75f), maxLines = 1)
-                }
-            }
-        }
-    }
+    io.github.matiyaaa.fuse.ui.designsystem.components.FilterPills(
+        filters.map { it.label }, filters.indexOf(active), { i -> onPick(filters[i]) },
+        Modifier.padding(top = Space.m).horizontalScroll(rememberScrollState()).padding(horizontal = Space.gutter).widthIn(max = 960.dp),
+        focused = focused,
+        counts = filters.map { f -> counts[f]?.takeIf { it > 0 } },
+    )
 }
 
 /**

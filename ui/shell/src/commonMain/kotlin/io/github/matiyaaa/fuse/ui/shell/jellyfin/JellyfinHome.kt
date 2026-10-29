@@ -59,6 +59,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.components.ReportScroll
 import io.github.matiyaaa.fuse.ui.shell.components.subTabsRoom
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 import androidx.compose.foundation.gestures.Orientation
@@ -137,15 +138,39 @@ internal fun JellyfinContent(app: AppState, active: Boolean, topPadding: Dp) {
     }
 }
 
+/**
+ * Loads the home. An answer that doesn't come (a connection that dropped while the device slept, a
+ * moment's hiccup in a proxy in front of the server) is asked for again by itself a couple of times
+ * before the page says the server can't be reached; a load called off is never one that failed.
+ */
 private suspend fun load(service: io.github.matiyaaa.fuse.jellyfin.JellyfinService, page: JellyfinHomeState) {
-    try {
-        page.libraries = service.libraries()
-        page.shelves = service.home()
-        page.error = null
-    } catch (e: Exception) {
-        page.error = e.message ?: "The server can't be reached."
+    var attempt = 0
+    while (true) {
+        try {
+            // Both at once: through a tunnel each answer takes a while, and neither waits on the other.
+            kotlinx.coroutines.coroutineScope {
+                val libraries = async { service.libraries() }
+                val shelves = async { service.home() }
+                page.libraries = libraries.await()
+                page.shelves = shelves.await()
+            }
+            page.error = null
+            return
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val wait = QUIET_RETRIES_MS.getOrNull(attempt++)
+            if (wait == null || page.shelves != null) {
+                page.error = e.message ?: "The server can't be reached."
+                return
+            }
+            kotlinx.coroutines.delay(wait)
+        }
     }
 }
+
+/** How long to wait before each of the times a page's first answer is asked for again by itself. */
+internal val QUIET_RETRIES_MS = listOf(1_500L, 4_000L)
 
 @Composable
 private fun Shelves(app: AppState, page: JellyfinHomeState, focused: Boolean, topPadding: Dp, offline: Boolean) {

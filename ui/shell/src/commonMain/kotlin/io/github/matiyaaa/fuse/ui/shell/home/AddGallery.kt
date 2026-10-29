@@ -99,6 +99,7 @@ internal fun AddGallery(
         var last: String? = "\u0000"
         items.map { a -> if (a.section != null && a.section != last) heads++; last = a.section; heads }.mapIndexed { i, h -> i + h }
     }
+    val followAt = remember(items, placed, gridIndex) { galleryFollow(items, placed, gridIndex) }
     LaunchedEffect(chosen) {
         app.hints = listOf(Hint(HintButton.CONFIRM, "Add"), Hint(HintButton.BACK, "Close"))
     }
@@ -136,7 +137,7 @@ internal fun AddGallery(
                 // Each face is drawn at its size on the board, then scaled to the gallery's cells.
                 val scale = (galleryCell / cellW).coerceAtMost(1f)
                 val grid = rememberLazyGridState()
-                FollowSelection(grid, { gridIndex.getOrElse(chosen) { 0 } + 1 }, anchor = 0.2f)
+                FollowSelection(grid, { followAt.getOrElse(chosen) { 0 } }, anchor = 0.2f)
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
                     state = grid,
@@ -231,6 +232,20 @@ private fun GalleryItem(space: BoardSpace, a: Addable, selected: Boolean, realW:
             FText(a.title, Fuse.type.label, color = if (selected) c.text else c.text.copy(alpha = 0.9f), maxLines = 1)
         }
         a.detail?.let { FText(it, Fuse.type.caption, color = c.textMuted, maxLines = 2, modifier = Modifier.padding(top = Space.xs)) }
+    }
+}
+
+/**
+ * The grid item kept in view for each gallery item, by the grid's own index ([gridIndex] counts
+ * the headings before each, the sheet's title is item 0): on a heading's first line the heading
+ * too, and the sheet's title over the very first line, so Up from far down comes all the way back.
+ */
+internal fun galleryFollow(items: List<Addable>, placed: List<GallerySpot>, gridIndex: List<Int>): List<Int> = items.indices.map { i ->
+    val first = items.indexOfFirst { it.section == items[i].section }
+    when {
+        placed[i].line == 0 -> 0
+        placed[i].line == placed[first].line && items[i].section != null -> gridIndex[first]
+        else -> gridIndex[i] + 1
     }
 }
 

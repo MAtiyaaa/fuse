@@ -19,6 +19,16 @@ class AddGalleryTest {
     }
 
     @Test
+    fun upToAHeadingsFirstLineBringsTheHeadingBack() {
+        val items = listOf(WidgetKind.FAVORITES, WidgetKind.SPOTLIGHT, WidgetKind.CURRENT_GAME, WidgetKind.CLOCK, WidgetKind.STORAGE).map(::add)
+        val spots = placeInLines(items, listOf(2, 2, 2, 1, 1), columns = 4)
+        // The grid: the sheet's title, "Your games", three widgets, "This device", two widgets.
+        val follow = galleryFollow(items, spots, gridIndex = listOf(1, 2, 3, 5, 6))
+        // The first line keeps the sheet's title in view; the next line itself; a heading's first line, the heading.
+        assertEquals(listOf(0, 0, 4, 5, 5), follow)
+    }
+
+    @Test
     fun everyWidgetHasAHeadingAndWordsUnderIt() {
         for (k in WidgetKind.entries) {
             assert(widgetBlurb(k).isNotBlank()) { "$k has no words" }

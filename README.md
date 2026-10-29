@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.6 is the <b>Continue Update</b>: carry on where you left off on any device, your Journal with half-star ratings, your history brought in, Your Year, saves from anywhere, the same hotkeys in every emulator, and Skip Intro, lyrics and Quick Connect on Jellyfin</sub><br>
+<sub>0.4.6.1 is the <b>Continue Update</b>: carry on where you left off on any device, your Journal with half-star ratings, your history brought in, Your Year, saves from anywhere, the same hotkeys in every emulator, and Skip Intro, lyrics and Quick Connect on Jellyfin; 0.4.6.1 tells RomM's games apart and fits Jellyfin's posters to the screen</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -166,14 +166,15 @@ second-screen companion, Storage, backups and System health: everything is in
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.6 "The Continue Update"**: Fuse remembers the person, not only the games. Continue
+> **Fuse 0.4.6.1 "The Continue Update"**: Fuse remembers the person, not only the games. Continue
 > carries on from the moment you stopped, on this device or another; the Journal keeps where you
 > are with each game, a rating in half stars and a note; Move In brings the years before Fuse from
 > ES-DE, RetroArch, Pegasus, Steam and RetroAchievements; Your Year recaps your play; saves from
 > any tool or console come home; one set of hotkeys works in every emulator; downloads can wait for
-> the charger; and on Jellyfin, Skip Intro, lyrics, subtitles found online and Quick Connect. See
-> [the release notes](docs/releases/0.4.6.md); every earlier release is in
-> [CHANGELOG.md](CHANGELOG.md).
+> the charger; and on Jellyfin, Skip Intro, lyrics, subtitles found online and Quick Connect.
+> 0.4.6.1 tells RomM's games apart by system and by name, fits Jellyfin's posters to the screen and
+> asks again when an answer doesn't come. See [the release notes](docs/releases/0.4.6.1.md),
+> [0.4.6's](docs/releases/0.4.6.md) and every earlier release in [CHANGELOG.md](CHANGELOG.md).
 
 Fuse runs on Android handhelds and phones, Linux (SteamOS and its Game Mode too), Windows and macOS,
 and every screen is checked at 23 screen sizes. Not there yet: translations and native patches for

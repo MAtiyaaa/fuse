@@ -97,7 +97,7 @@ internal class RommGames(
         return Game(
             id = rommGameId(r.id),
             platformId = platform.id,
-            titles = GameTitles(original = original, custom = record?.titleCustom, metadata = record?.titleMetadata ?: r.name.ifBlank { null }),
+            titles = GameTitles(original = original, custom = record?.titleCustom, metadata = apart[r.id] ?: record?.titleMetadata ?: r.name.ifBlank { null }),
             location = GameLocation(LibrarySourceId(0), "romm://${r.id}", if (r.multi) LocationKind.FOLDER else LocationKind.FILE, "romm://${r.id}/${r.fsName}", sizeBytes = r.sizeBytes),
             tags = FilenameParser.parse(r.fsName, hasExtension = '.' in r.fsName).tags,
             metadata = record?.metadata?.fillFrom(server) ?: server,
@@ -105,8 +105,14 @@ internal class RommGames(
         )
     }
 
-    /** The name Fuse shows for [r]: the user's, then a source's, then RomM's. */
-    fun title(r: RommRom, record: RommGameRecord?): String = record?.titleCustom ?: record?.titleMetadata ?: r.name
+    /** The name Fuse shows for [r]: the user's, then one telling it apart from its namesakes, then a source's, then RomM's. */
+    fun title(r: RommRom, record: RommGameRecord?): String = record?.titleCustom ?: apart[r.id] ?: record?.titleMetadata ?: r.name
+
+    /**
+     * New names for the server's games that would read the same as another on their system, by rom
+     * id ([io.github.matiyaaa.fuse.romm.RommNames]), set by the store as the mirror changes.
+     */
+    @kotlin.concurrent.Volatile var apart: Map<Long, String> = emptyMap()
 
     override suspend fun applyMetadata(id: GameId, metadata: GameMetadata, titleFromMetadata: String?, onlyFillEmpty: Boolean) {
         val romId = id.rommOnly ?: return

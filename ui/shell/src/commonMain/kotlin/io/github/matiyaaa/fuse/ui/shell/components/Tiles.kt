@@ -200,15 +200,17 @@ fun GameIconTile(
         val art = Modifier.fillMaxSize().alpha(if (card.dimmed) MISSING_ART_ALPHA else 1f)
         val label = card.platformShort.takeIf { LocalTileShowsSystem.current }
         val border = LocalTileBorders.current.of(card.shownPlatform)
+        // Named the same as a game of another system in the list: the tag goes over real art too.
+        val tagged = label != null && LocalTileTagsSystem.current
         // A border that names the system takes the tag; generated art then leaves it out.
-        val artLabel = label.takeUnless { border.carriesTag }
+        val artLabel = label.takeUnless { border.carriesTag || tagged }
         if (poster) {
             PosterGameArt(card.art, art, fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = artLabel) })
         } else {
             SquareGameArt(card.art, art, fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.ICON, label = artLabel) })
         }
         val inset = markInset(minOf(dims.width, dims.height), corner)
-        TileBorder(border, accent, corner, label, inset, badgeAt = if (poster) Alignment.TopStart else Alignment.BottomStart)
+        TileBorder(border, accent, corner, label, inset, badgeAt = if (poster) Alignment.TopStart else Alignment.BottomStart, tagged = tagged)
         // On posters the tag shares the top edge with the marks.
         GameMarks(card, Modifier.align(Alignment.TopEnd), inset = inset, reserve = if (poster && label != null) tagRoom(label, dims.width) else 0.dp)
     }
@@ -230,7 +232,8 @@ fun GameCoverTile(
     val shape = remember(corner) { SquircleShape.fraction(corner) }
     val label = card.platformShort.takeIf { LocalTileShowsSystem.current }
     val border = LocalTileBorders.current.of(card.shownPlatform)
-    val artLabel = label.takeUnless { border.carriesTag }
+    val tagged = label != null && LocalTileTagsSystem.current
+    val artLabel = label.takeUnless { border.carriesTag || tagged }
     Tile(
         selected = selected,
         label = "${card.title}, ${card.platformShort}",
@@ -247,7 +250,7 @@ fun GameCoverTile(
             fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = artLabel) },
         )
         val inset = markInset(width, corner)
-        TileBorder(border, accent, corner, label, inset, badgeAt = Alignment.TopStart)
+        TileBorder(border, accent, corner, label, inset, badgeAt = Alignment.TopStart, tagged = tagged)
         GameMarks(card, Modifier.align(Alignment.TopEnd), inset = inset, reserve = if (label != null) tagRoom(label, width) else 0.dp)
     }
 }

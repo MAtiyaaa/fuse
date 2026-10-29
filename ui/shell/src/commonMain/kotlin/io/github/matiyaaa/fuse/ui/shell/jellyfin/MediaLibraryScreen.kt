@@ -92,19 +92,34 @@ internal fun MediaLibraryScreen(app: AppState, id: String, name: String, kind: S
         else -> null
     }
 
+    // A page that doesn't come is asked for again by itself a couple of times before the grid says
+    // so (see QUIET_RETRIES_MS); one called off (the sort changed, the page closed) never failed.
     suspend fun loadMore(reset: Boolean = false) {
         if (page.loading) return
         if (!reset && page.loaded && page.items.size >= page.total) return
         page.loading = true
         try {
             val start = if (reset) 0 else page.items.size
-            val p = service.page(id, types, page.sort, page.filter, start)
-            page.items = if (reset) p.items else page.items + p.items
-            page.total = p.total
-            page.loaded = true
-            page.error = null
-        } catch (e: Exception) {
-            page.error = e.message ?: "The server can't be reached."
+            var attempt = 0
+            while (true) {
+                try {
+                    val p = service.page(id, types, page.sort, page.filter, start)
+                    page.items = if (reset) p.items else page.items + p.items
+                    page.total = p.total
+                    page.loaded = true
+                    page.error = null
+                    break
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    val wait = QUIET_RETRIES_MS.getOrNull(attempt++)
+                    if (wait == null) {
+                        page.error = e.message ?: "The server can't be reached."
+                        break
+                    }
+                    kotlinx.coroutines.delay(wait)
+                }
+            }
         } finally {
             page.loading = false
         }
@@ -165,8 +180,23 @@ internal fun MediaLibraryScreen(app: AppState, id: String, name: String, kind: S
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < 600.dp
-        val cell = if (compact) 128.dp else 160.dp
-        val columns = ((maxWidth - Space.gutter * 2 + Space.l) / (cell + Space.l)).toInt().coerceAtLeast(2)
+        // The chosen title told whole above the grid, as the Library tells a game: moving through the
+        // posters shows each one's name, facts and story without opening it. A phone held upright
+        // gives its height to the posters.
+        val staged = maxWidth >= 600.dp && maxHeight >= 420.dp
+        // Posters sized to the screen both ways: three across a phone held upright, and on a short
+        // screen (a handheld's upper screen at its largest display size) small enough that a row and
+        // the start of the next show under the stage, never one row filling the page.
+        val narrow = maxWidth < NARROW_GRID
+        val gap = if (narrow) Space.m else Space.l
+        val gutter = if (narrow) Space.gutterCompact else Space.gutter
+        val view = maxHeight - Size.hudHeight - if (staged) (if (compact) STAGE_COMPACT else STAGE_TALL) + Space.s * 2 else 0.dp
+        val byHeight = (view / ROWS_IN_VIEW - POSTER_WORDS - gap) / POSTER_ASPECT
+        val byWidth = if (narrow) (maxWidth - gutter * 2 - gap * 2) / 3 else if (compact) 128.dp else 160.dp
+        val target = minOf(byWidth, byHeight).coerceAtLeast(MIN_POSTER)
+        // As many as fit at that size, then the posters widened to fill the row exactly.
+        val columns = kotlin.math.ceil((maxWidth - gutter * 2 + gap) / (target + gap) - 0.05f).toInt().coerceAtLeast(2)
+        val cell = (maxWidth - gutter * 2 - gap * (columns - 1)) / columns
         val current = page.items.getOrNull(page.index)
         if (!page.top) PrefetchMediaArt(page.items, page.index)
 
@@ -209,20 +239,16 @@ internal fun MediaLibraryScreen(app: AppState, id: String, name: String, kind: S
         // The chosen row glides to a steady place as you move (held or pushed once), like the Library.
         val fade = with(LocalDensity.current) { Space.xl.roundToPx() }
         FollowSelection(grid, { if (page.top) 0 else page.index + 1 }, anchor = 0.12f, insetPx = fade, relayout = columns)
-        // The chosen title told whole above the grid, as the Library tells a game: moving through the
-        // posters shows each one's name, facts and story without opening it. A phone held upright
-        // gives its height to the posters.
-        val staged = maxWidth >= 600.dp && maxHeight >= 420.dp
         Column(Modifier.fillMaxSize().padding(top = Size.hudHeight)) {
-        if (staged) MediaStage(current.takeIf { !page.top && focused }, compact, Modifier.padding(horizontal = Space.gutter, vertical = Space.s))
+        if (staged) MediaStage(current.takeIf { !page.top && focused }, compact, Modifier.padding(horizontal = gutter, vertical = Space.s))
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = grid,
             // Below the top line, so the grid never scrolls under it.
             modifier = Modifier.weight(1f).fillMaxWidth().fadingEdges(top = if (grid.canScrollBackward) Space.xl else 0.dp).dragScroll(grid),
-            contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.xl),
-            horizontalArrangement = Arrangement.spacedBy(Space.l),
-            verticalArrangement = Arrangement.spacedBy(Space.l),
+            contentPadding = PaddingValues(start = gutter, end = gutter, top = Space.l, bottom = Size.hintHeight + Space.xl),
+            horizontalArrangement = Arrangement.spacedBy(gap),
+            verticalArrangement = Arrangement.spacedBy(gap),
         ) {
             item(key = "head", span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(Space.m), modifier = Modifier.padding(bottom = Space.s)) {
@@ -331,3 +357,16 @@ internal fun StageRating(m: MediaItem) {
 
 private val STAGE_TALL = 156.dp
 private val STAGE_COMPACT = 36.dp
+
+/** Narrower than this (a phone held upright), the grid is three posters across with tighter edges. */
+private val NARROW_GRID = 480.dp
+
+/** How many rows of posters the grid's height is sized for: a row and the start of the next, at least. */
+private const val ROWS_IN_VIEW = 1.6f
+
+/** A poster's height for its width (2:3), and the room its name and line take under it. */
+private const val POSTER_ASPECT = 1.5f
+private val POSTER_WORDS = 50.dp
+
+/** The smallest a poster gets, so its art and name still read. */
+private val MIN_POSTER = 80.dp
