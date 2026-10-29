@@ -91,6 +91,9 @@ data class RommGame(
     val transfer: String? = null,
 )
 
+/** A page of the server's games: [total] in all, [games] the ones asked for. */
+data class RommPage(val games: List<RommGame>, val total: Int)
+
 /** A system on the server, drawn with the same art as Fuse's Systems page. */
 @Immutable
 data class RommSystem(
@@ -360,6 +363,15 @@ interface RommOps {
     fun games(slug: String?): Flow<List<RommGame>>
     fun collection(id: String): Flow<List<RommGame>>
     fun search(text: String): Flow<List<RommGame>>
+
+    /**
+     * A page of the server's games, for the phone: on one system ([slug]) or all, matching [query]
+     * when there is one, [limit] of them from [offset]. Only the page is made into Fuse's cards.
+     */
+    suspend fun browse(slug: String?, query: String, offset: Int, limit: Int): RommPage = RommPage(emptyList(), 0)
+
+    /** RomM's picture [model] (a game's card art) as a file on this device, fetched once into Fuse's cache; null for anything else. */
+    suspend fun artFile(model: Any): String? = null
     fun markNewSeen()
 
     // ---------------------------------------------------------------- one game

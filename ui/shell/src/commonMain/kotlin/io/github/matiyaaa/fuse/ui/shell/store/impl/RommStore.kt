@@ -74,6 +74,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.RommBatchResult
 import io.github.matiyaaa.fuse.ui.shell.store.RommCollectionCard
 import io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat
 import io.github.matiyaaa.fuse.ui.shell.store.RommGame
+import io.github.matiyaaa.fuse.ui.shell.store.RommPage
 import io.github.matiyaaa.fuse.ui.shell.store.RommGameView
 import io.github.matiyaaa.fuse.ui.shell.store.RommLink
 import io.github.matiyaaa.fuse.ui.shell.store.RommOps
@@ -1219,6 +1220,28 @@ internal class DefaultRommOps(
         if (text.isBlank()) emit(emptyList()) else emit(toGames(mirror.search(server, text, 120)))
     }.flowOn(Dispatchers.Default)
 
+    override suspend fun browse(slug: String?, query: String, offset: Int, limit: Int): RommPage = withContext(Dispatchers.Default) {
+        val q = query.trim()
+        val take = limit.coerceIn(1, BROWSE_MOST)
+        when {
+            q.isNotEmpty() -> {
+                val found = mirror.search(server, q, BROWSE_SEARCH_MOST).filter { slug == null || it.platformSlug == slug }
+                RommPage(toGames(found.drop(offset.coerceIn(0, found.size)).take(take)), found.size)
+            }
+            // One system: the page from the mirror, and how many it has from the systems' list.
+            slug != null -> {
+                val total = systems.value.firstOrNull { it.slug == slug }?.games ?: mirror.onPlatform(server, slug).size
+                RommPage(toGames(mirror.onPlatform(server, slug, take, offset.coerceAtLeast(0))), total)
+            }
+            else -> {
+                val all = mirror.all(server)
+                RommPage(toGames(all.drop(offset.coerceIn(0, all.size)).take(take)), all.size)
+            }
+        }
+    }
+
+    override suspend fun artFile(model: Any): String? = (model as? RommArt)?.let { a -> runCatching { rommArtCache?.file(a.server, a.path) }.getOrNull() }
+
     override fun markNewSeen() {
         ctx.scope.launch {
             mirror.seenNew(server)
@@ -1755,6 +1778,10 @@ internal class DefaultRommOps(
 
         /** Games of a batch put in the queue together. */
         private const val BATCH_CHUNK = 25
+
+        /** The most games a page for the phone holds, and the most a search there looks through. */
+        private const val BROWSE_MOST = 120
+        private const val BROWSE_SEARCH_MOST = 600
 
         /** How long a burst of art arriving waits before the lists are drawn again. */
         private const val REDRAW_MS = 4_000L

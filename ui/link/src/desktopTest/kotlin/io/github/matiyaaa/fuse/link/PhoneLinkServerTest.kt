@@ -224,6 +224,66 @@ class PhoneLinkServerTest {
     }
 
     @Test
+    fun theRommServerIsLookedThroughAndAGameQueuedFromThePhone(): Unit = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache)
+        val base = createFuseStore(services, scope)
+        // Without RomM set up, the phone is told so rather than shown an empty server.
+        val off = PhoneLinkServer(base, services.secrets, scope, "Test Device", "0.4.6").api.romm("", "", 0, 30)
+        assertEquals("false", off["available"].toString())
+        assertTrue(off["message"].toString().isNotBlank())
+
+        fun game(id: Long, title: String, presence: io.github.matiyaaa.fuse.ui.shell.store.RommPresence) = io.github.matiyaaa.fuse.ui.shell.store.RommGame(
+            id,
+            io.github.matiyaaa.fuse.ui.shell.store.GameCard(io.github.matiyaaa.fuse.model.GameId(-id), io.github.matiyaaa.fuse.model.PlatformId("snes"), title, "SNES", 0xFF336699, io.github.matiyaaa.fuse.ui.shell.store.Art(), year = 1994),
+            presence,
+            game = io.github.matiyaaa.fuse.model.GameId(-id).takeIf { presence == io.github.matiyaaa.fuse.ui.shell.store.RommPresence.INSTALLED },
+            sizeBytes = 4_000_000,
+        )
+        val games = listOf(
+            game(1, "Lantern Quest", io.github.matiyaaa.fuse.ui.shell.store.RommPresence.ON_SERVER),
+            game(2, "Ember Racer", io.github.matiyaaa.fuse.ui.shell.store.RommPresence.INSTALLED),
+            game(3, "Moth Knight", io.github.matiyaaa.fuse.ui.shell.store.RommPresence.QUEUED),
+        )
+        val queued = ArrayList<Pair<Long, Boolean>>()
+        val store = object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base {
+            override val romm = object : io.github.matiyaaa.fuse.ui.shell.store.RommOps by base.romm {
+                override val supported = true
+                override val state = kotlinx.coroutines.flow.MutableStateFlow(io.github.matiyaaa.fuse.ui.shell.store.RommState(link = io.github.matiyaaa.fuse.ui.shell.store.RommLink.ONLINE, games = 3))
+                override val systems = kotlinx.coroutines.flow.MutableStateFlow(listOf(io.github.matiyaaa.fuse.ui.shell.store.RommSystem(null, "snes", "Super Nintendo", 3, 1, 0)))
+                override suspend fun browse(slug: String?, query: String, offset: Int, limit: Int): io.github.matiyaaa.fuse.ui.shell.store.RommPage {
+                    val found = games.filter { query.isBlank() || it.card.title.contains(query, ignoreCase = true) }
+                    return io.github.matiyaaa.fuse.ui.shell.store.RommPage(found.drop(offset).take(limit), found.size)
+                }
+                override suspend fun download(romId: Long, what: io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat): String? = null.also { queued += romId to false }
+                override suspend fun downloadLater(romId: Long): String? = if (romId == 2L) "Ember Racer is already here." else null.also { queued += romId to true }
+            }
+        }
+        val api = PhoneLinkServer(store, services.secrets, scope, "Test Device", "0.4.6").api
+        fun items(o: kotlinx.serialization.json.JsonObject) = (o["items"] as kotlinx.serialization.json.JsonArray).map { it as kotlinx.serialization.json.JsonObject }
+
+        // A page of two of the three, each saying where it is, with the server's systems to narrow by.
+        val page = api.romm("", "", 0, 2)
+        assertEquals("true", page["available"].toString())
+        assertEquals("3", page["total"].toString())
+        assertEquals(listOf("\"server\"", "\"here\""), items(page).map { it["state"].toString() })
+        assertEquals("\"Super Nintendo\"", ((page["systems"] as kotlinx.serialization.json.JsonArray)[0] as kotlinx.serialization.json.JsonObject)["name"].toString())
+        // A game in the library says which one, for opening it there.
+        assertEquals("-2", items(page)[1]["gameId"].toString())
+
+        val moth = api.romm("snes", "moth", 0, 30)
+        assertEquals(listOf("\"Moth Knight\""), items(moth).map { it["title"].toString() })
+        assertEquals("\"coming\"", items(moth)[0]["state"].toString())
+
+        // Now, or for later; and a game that can't be queued says why.
+        assertEquals(200, api.rommDownload(1, null).status.value)
+        assertEquals(200, api.rommDownload(3, kotlinx.serialization.json.buildJsonObject { put("later", kotlinx.serialization.json.JsonPrimitive(true)) }).status.value)
+        assertEquals(listOf(1L to false, 3L to true), queued)
+        val refused = api.rommDownload(2, kotlinx.serialization.json.buildJsonObject { put("later", kotlinx.serialization.json.JsonPrimitive(true)) })
+        assertEquals(409, refused.status.value)
+        assertTrue(refused.body.toString().contains("already here"))
+    }
+
+    @Test
     fun aPairingCodeSignsInOnceAndThePhoneTypesAndPressesButtons(): Unit = runBlocking {
         val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache)
         val store = createFuseStore(services, scope)

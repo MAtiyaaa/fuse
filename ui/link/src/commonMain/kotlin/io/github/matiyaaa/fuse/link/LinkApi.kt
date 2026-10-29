@@ -475,11 +475,73 @@ internal class LinkApi(
         return ok()
     }
 
+    // RomM -----------------------------------------------------------------------------------------
+
+    /**
+     * A page of the RomM server's games, to look through and queue from the phone: on one system or
+     * all, matching [query], each with whether it is here, on its way, or only on the server. Its
+     * systems come with it, for narrowing. Not set up (or no RomM here): said so.
+     */
+    suspend fun romm(system: String, query: String, offset: Int, limit: Int): JsonObject {
+        val romm = store.romm
+        val state = romm.state.value
+        if (!romm.supported || !state.usable) {
+            return buildJsonObject {
+                put("available", false)
+                put("message", if (!romm.supported) "RomM isn't part of Fuse on $deviceName." else state.problem ?: "Set up RomM on $deviceName to look through it here.")
+            }
+        }
+        val page = romm.browse(system.ifBlank { null }, query, offset.coerceAtLeast(0), limit.coerceIn(1, 120))
+        return buildJsonObject {
+            put("available", true)
+            put("offline", state.link == io.github.matiyaaa.fuse.ui.shell.store.RommLink.OFFLINE)
+            put("total", page.total)
+            putJsonArray("systems") {
+                romm.systems.value.filter { it.games > 0 }.forEach { s ->
+                    add(buildJsonObject {
+                        put("slug", s.slug)
+                        put("name", s.name)
+                        put("games", s.games)
+                        put("here", s.installed)
+                    })
+                }
+            }
+            putJsonArray("items") { page.games.forEach { add(rommItem(it)) } }
+        }
+    }
+
+    /** Queues RomM game [romId] on the device: now, or kept for a charger and Wi-Fi ([body]'s `later`). */
+    suspend fun rommDownload(romId: Long, body: JsonElement?): Reply {
+        val later = ((body as? JsonObject)?.get("later") as? JsonPrimitive)?.content == "true"
+        val why = if (later) store.romm.downloadLater(romId) else store.romm.download(romId)
+        return if (why == null) Reply(buildJsonObject { put("ok", true); put("later", later) }) else Reply(error(why), HttpStatusCode.Conflict)
+    }
+
+    private fun rommItem(g: io.github.matiyaaa.fuse.ui.shell.store.RommGame) = buildJsonObject {
+        put("romId", g.romId)
+        put("title", g.card.title)
+        put("system", g.card.platformShort)
+        put("year", g.card.year)
+        put("cover", artUrl(g.card.art.boxart ?: g.card.art.grid ?: g.card.art.square ?: g.card.art.icon))
+        put("sizeBytes", g.sizeBytes)
+        put("state", when (g.presence) {
+            io.github.matiyaaa.fuse.ui.shell.store.RommPresence.INSTALLED -> "here"
+            io.github.matiyaaa.fuse.ui.shell.store.RommPresence.PARTLY_INSTALLED -> "partly"
+            io.github.matiyaaa.fuse.ui.shell.store.RommPresence.DOWNLOADING, io.github.matiyaaa.fuse.ui.shell.store.RommPresence.QUEUED -> "coming"
+            io.github.matiyaaa.fuse.ui.shell.store.RommPresence.ON_SERVER -> "server"
+        })
+        g.game?.let { put("gameId", it.value) }
+    }
+
+    /** [url], or for a picture that isn't a file yet (RomM's), a token the phone's request fetches it by. */
+    private fun artUrl(model: Any?): String? = url(model) ?: model?.takeIf { it !is String }?.let { "/api/img/${images.tokenForModel(it.toString(), it)}" }
+
     // Images ---------------------------------------------------------------------------------------
 
     /** The picture behind a token this server handed out, with its type. */
     suspend fun image(token: String): Pair<ContentType, ByteArray>? {
-        val model = images.resolve(token) ?: return null
+        // RomM's pictures are fetched into Fuse's cache the first time the phone asks for one.
+        val model = images.resolve(token) ?: images.model(token)?.let { store.romm.artFile(it) } ?: return null
         val bytes = when {
             FsPath.isAbsolute(model) -> readFile(model, MAX_IMAGE)
             model.startsWith("file://") -> readFile(model.removePrefix("file://"), MAX_IMAGE)
@@ -620,6 +682,17 @@ internal class ImageTokens {
     }
 
     fun resolve(token: String): String? = if (token.length in 8..40) byToken[token] else null
+
+    // Pictures not yet files (RomM's), kept as the model they are, by what they say they are.
+    private val modelByToken = BoundedMap<String, Any>(4_000)
+    private val tokenByKey = BoundedMap<String, String>(4_000)
+
+    fun tokenForModel(key: String, model: Any): String = tokenByKey[key] ?: base64(secureRandom(12)).replace('+', '-').replace('/', '_').trimEnd('=').also {
+        tokenByKey[key] = it
+        modelByToken[it] = model
+    }
+
+    fun model(token: String): Any? = if (token.length in 8..40) modelByToken[token] else null
 }
 
 /** A small map that forgets its oldest entries past [capacity]. */
