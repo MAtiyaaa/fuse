@@ -280,21 +280,8 @@ private fun MediaStage(item: MediaItem?, compact: Boolean, modifier: Modifier) {
     val height = if (compact) STAGE_COMPACT else STAGE_TALL
     io.github.matiyaaa.fuse.ui.fuseline.Crossfade(item, modifier.fillMaxWidth().height(height), animationSpec = Fuse.motion.fade(), label = "mediaStage") { it ->
         val m = it ?: return@Crossfade
-        val facts = listOfNotNull(
-            m.year?.let { y -> if (m.endYear != null && m.endYear != y) "$y to ${m.endYear}" else "$y" },
-            m.runtimeMs?.let { minutes(it) },
-            m.officialRating,
-            m.genres.take(2).joinToString(", ").ifEmpty { null },
-            m.leftMs?.takeIf { m.resumeMs > 0 }?.let { "${minutes(it)} left" },
-        ).joinToString("  \u00B7  ")
-        val rating: @Composable () -> Unit = {
-            m.rating?.let { r ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    FuseIcon(FuseIcons.Star, size = 14.dp, tint = androidx.compose.ui.graphics.Color(0xFFFFC857))
-                    FText(((r * 10).toInt() / 10.0).toString(), Fuse.type.label.tabular(), maxLines = 1)
-                }
-            }
-        }
+        val facts = stageFacts(m)
+        val rating: @Composable () -> Unit = { StageRating(m) }
         if (compact) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
                 FText(m.name, Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
@@ -320,6 +307,25 @@ private fun MediaStage(item: MediaItem?, compact: Boolean, modifier: Modifier) {
             }
             m.overview?.let { FText(it, Fuse.type.body, color = c.textMuted, maxLines = 2, modifier = Modifier.widthIn(max = 760.dp)) }
         }
+    }
+}
+
+/** A title's facts in one line: its years, its length, its age rating, two genres, and what is left of it. */
+internal fun stageFacts(m: MediaItem): String = listOfNotNull(
+    m.year?.let { y -> if (m.endYear != null && m.endYear != y) "$y to ${m.endYear}" else "$y" },
+    m.runtimeMs?.let { minutes(it) },
+    m.officialRating,
+    m.genres.take(2).joinToString(", ").ifEmpty { null },
+    m.leftMs?.takeIf { m.resumeMs > 0 }?.let { "${minutes(it)} left" },
+).joinToString("  \u00B7  ")
+
+/** The server's score for a title, after a gold star; nothing where it has none. */
+@Composable
+internal fun StageRating(m: MediaItem) {
+    val r = m.rating ?: return
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+        FuseIcon(FuseIcons.Star, size = 14.dp, tint = androidx.compose.ui.graphics.Color(0xFFFFC857))
+        FText(((r * 10).toInt() / 10.0).toString(), Fuse.type.label.tabular(), maxLines = 1)
     }
 }
 
