@@ -527,6 +527,9 @@ class JellyfinService(
         return client.imageUrl(base, art)
     }
 
+    /** One sheet of trickplay pictures, on the route in use. */
+    suspend fun trickplaySheet(t: JellyfinTrickplay): ByteArray = call { b, a -> client.trickplaySheet(b, a, t) }
+
     /** After playing: what was watched has changed, so pages ask again. */
     suspend fun changed() {
         cache.invalidate { true }

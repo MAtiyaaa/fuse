@@ -118,6 +118,8 @@ fun PlayerScreen(
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
     var touched by remember { mutableLongStateOf(0L) }
     var flash by remember { mutableStateOf<Flash?>(null) }
+    // Where the controller's steps along the timeline land, shown above it for a moment.
+    var aim by remember { mutableStateOf<Long?>(null) }
     // How tall the controls at the bottom are, so subtitles can rise above them.
     var controlsHeight by remember { mutableIntStateOf(0) }
     val settings = session.settings
@@ -145,6 +147,12 @@ fun PlayerScreen(
         if (flash != null) {
             delay(FLASH_MS)
             flash = null
+        }
+    }
+    LaunchedEffect(aim) {
+        if (aim != null) {
+            delay(AIM_MS)
+            aim = null
         }
     }
 
@@ -222,8 +230,11 @@ fun PlayerScreen(
                         NavResult.MOVED
                     } else {
                         val step = seekStep(e.repeat)
+                        val onTimeline = shown && row == TIMELINE
+                        if (onTimeline) aim = (session.positionMs() + if (forward) step else -step).coerceIn(0, session.durationMs() ?: Long.MAX_VALUE)
                         session.seekBy(if (forward) step else -step)
-                        flash = Flash(if (forward) "+${step / 1000} s" else "-${step / 1000} s", forward)
+                        // On the timeline, the time above it says where it went; the flash would say it twice.
+                        if (!onTimeline) flash = Flash(if (forward) "+${step / 1000} s" else "-${step / 1000} s", forward)
                         if (!shown) row = TIMELINE
                         NavResult.MOVED
                     }
@@ -361,6 +372,7 @@ fun PlayerScreen(
                 onFocusButton = { focus = it; row = BUTTONS },
                 onBottomHeight = { controlsHeight = it },
                 onSeek = { ms -> session.seekTo(ms); poke() },
+                aim = aim,
                 onExit = onExit,
                 topFocus = topFocus,
                 onSwap = swap,
@@ -441,6 +453,7 @@ private fun Controls(
     onFocusButton: (Int) -> Unit,
     onBottomHeight: (Int) -> Unit,
     onSeek: (Long) -> Unit,
+    aim: Long?,
     onExit: () -> Unit,
     topFocus: Int,
     onSwap: (() -> Unit)?,
@@ -504,6 +517,8 @@ private fun Controls(
                 chapters = item?.chapters.orEmpty(),
                 focused = row == TIMELINE,
                 onSeek = onSeek,
+                previews = session.previews,
+                aim = aim,
             )
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TimeText({ session.positionMs() })
@@ -940,6 +955,9 @@ private const val UP_NEXT_MS = 30_000L
 /** How often the last half minute's countdown looks at the clock. */
 private const val COUNTDOWN_MS = 250L
 private const val FLASH_MS = 700L
+
+/** How long the picture above the timeline stays after the controller's last step along it. */
+private const val AIM_MS = 1_200L
 
 /** The subtitle layer's own bottom margin, which the lift above the controls already includes. */
 private const val SUBTITLE_MARGIN = 0.04f

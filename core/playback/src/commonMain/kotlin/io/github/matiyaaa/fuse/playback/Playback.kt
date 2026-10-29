@@ -28,6 +28,32 @@ data class Segment(val kind: SegmentKind, val startMs: Long, val endMs: Long) {
 }
 
 /**
+ * Small pictures of an item every [intervalMs], for showing where a seek lands before it does:
+ * laid out [columns] by [rows] on each of [sheets] (whatever the image loader takes), each picture
+ * [width] by [height] pixels, [count] in all. Jellyfin makes these (trickplay, once the Jellyscrub
+ * plugin's) for the items it has.
+ */
+data class ScrubPreviews(
+    val intervalMs: Long,
+    val width: Int,
+    val height: Int,
+    val columns: Int,
+    val rows: Int,
+    val count: Int,
+    val sheets: List<Any>,
+) {
+    /** The sheet and the place on it of the picture for [ms] (column, row); null outside the item. */
+    fun at(ms: Long): Triple<Any, Int, Int>? {
+        if (intervalMs <= 0 || count <= 0 || columns <= 0 || rows <= 0) return null
+        val i = (ms / intervalMs).toInt().coerceIn(0, count - 1)
+        val per = columns * rows
+        val sheet = sheets.getOrNull(i / per) ?: return null
+        val within = i % per
+        return Triple(sheet, within % columns, within / columns)
+    }
+}
+
+/**
  * Something to play, as Fuse shows it: names, length, chapters and art. [id] is the provider's own;
  * art is whatever the image loader takes (a URL, or a provider's art key).
  */
@@ -166,4 +192,7 @@ interface PlaybackResolver {
 
     /** The parts of [item] that can be skipped (its intro, its credits), earliest first; empty when none are known. */
     suspend fun segments(item: PlayItem): List<Segment> = emptyList()
+
+    /** Pictures along [item] for seeking by, or null where the provider has none. */
+    suspend fun previews(item: PlayItem): ScrubPreviews? = null
 }

@@ -109,6 +109,10 @@ class PlayerSession(
     var segments by mutableStateOf<List<Segment>>(emptyList())
         private set
 
+    /** Pictures along the item for seeking by, once its server says it has them. */
+    var previews by mutableStateOf<io.github.matiyaaa.fuse.playback.ScrubPreviews?>(null)
+        private set
+
     /** The skippable part playing now, while it plays (or the picture is paused in it); null between them. */
     var segment by mutableStateOf<Segment?>(null)
         private set
@@ -369,6 +373,7 @@ class PlayerSession(
         segmentWatch?.cancel()
         segments = emptyList()
         segment = null
+        previews = null
         autoSkipped.clear()
         if (item.kind == MediaKind.AUDIO) return
         segmentJob = scope.launch {
@@ -382,6 +387,15 @@ class PlayerSession(
             if (this@PlayerSession.item?.id != item.id) return@launch
             segments = found
             watchSegments()
+            // Pictures for seeking, asked for after: what to skip matters sooner.
+            val pictures = try {
+                r.previews(item)
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                null
+            }
+            if (this@PlayerSession.item?.id == item.id) previews = pictures
         }
     }
 
@@ -565,6 +579,7 @@ class PlayerSession(
         segmentWatch?.cancel()
         segments = emptyList()
         segment = null
+        previews = null
     }
 
     private fun stopCurrent(reportStop: Boolean, keep: Boolean = false) {

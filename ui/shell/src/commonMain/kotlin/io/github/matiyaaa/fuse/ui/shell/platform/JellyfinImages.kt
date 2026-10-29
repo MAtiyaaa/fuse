@@ -1,7 +1,10 @@
 package io.github.matiyaaa.fuse.ui.shell.platform
 
 import coil3.ImageLoader
+import coil3.decode.DataSource
+import coil3.decode.ImageSource
 import coil3.fetch.Fetcher
+import coil3.fetch.SourceFetchResult
 import coil3.key.Keyer
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.Options
@@ -10,6 +13,7 @@ import coil3.size.Dimension
 import io.github.matiyaaa.fuse.model.ArtworkSizing
 import io.github.matiyaaa.fuse.jellyfin.JellyfinArt
 import io.github.matiyaaa.fuse.jellyfin.JellyfinService
+import io.github.matiyaaa.fuse.jellyfin.JellyfinTrickplay
 import io.ktor.client.HttpClient
 
 /**
@@ -30,6 +34,21 @@ object JellyfinImages {
 
     class Key : Keyer<JellyfinArt> {
         override fun key(data: JellyfinArt, options: Options): String = sized(data, options).key
+    }
+
+    class TrickplayKey : Keyer<JellyfinTrickplay> {
+        override fun key(data: JellyfinTrickplay, options: Options): String = data.key
+    }
+
+    /** A sheet of trickplay pictures: unlike art, these need the sign-in, so the service fetches them. */
+    class TrickplayFetch : Fetcher.Factory<JellyfinTrickplay> {
+        override fun create(data: JellyfinTrickplay, options: Options, imageLoader: ImageLoader): Fetcher? {
+            val s = service ?: return null
+            return Fetcher {
+                val bytes = s.trickplaySheet(data)
+                SourceFetchResult(ImageSource(okio.Buffer().write(bytes), options.fileSystem), "image/jpeg", DataSource.NETWORK)
+            }
+        }
     }
 
     class Fetch(http: HttpClient) : Fetcher.Factory<JellyfinArt> {

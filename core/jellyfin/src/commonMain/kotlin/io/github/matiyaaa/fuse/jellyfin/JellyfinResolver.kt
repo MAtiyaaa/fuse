@@ -254,6 +254,18 @@ class JellyfinResolver(
 
     override suspend fun subtitleText(url: String): String? = runCatching { service.call { _, a -> service.client.text(url, a) } }.getOrNull()
 
+    /** [item]'s trickplay pictures, where the server made them; null otherwise (and for music). */
+    override suspend fun previews(item: PlayItem): io.github.matiyaaa.fuse.playback.ScrubPreviews? {
+        if (item.kind == MediaKind.AUDIO) return null
+        return try {
+            service.call { b, a -> service.client.trickplay(b, a, item.id) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /**
      * Where [item]'s intro, credits and recap are: the server's media segments, or on a server
      * before them, an older Intro Skipper's intro for an episode. Empty when nothing is known, so a

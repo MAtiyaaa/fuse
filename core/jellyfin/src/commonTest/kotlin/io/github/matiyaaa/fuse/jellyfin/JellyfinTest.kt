@@ -385,6 +385,29 @@ class JellyfinTest {
     }
 
     @Test
+    fun trickplayPicturesBecomeSheetsOfFrames() {
+        val info = mapOf(
+            "ms1" to mapOf(
+                "160" to TrickplayInfoDto(160, 90, 10, 10, 264, 10_000),
+                "320" to TrickplayInfoDto(320, 180, 10, 10, 264, 10_000),
+            ),
+        )
+        val p = JellyfinClient.previewsOf("e1", info, want = 300)!!
+        assertEquals(320, p.width)
+        // 264 frames, a hundred to a sheet: three sheets, the last part full.
+        assertEquals(listOf(0, 1, 2), p.sheets.map { (it as JellyfinTrickplay).index })
+        assertEquals(JellyfinTrickplay("e1", "ms1", 320, 2), p.sheets.last())
+        // Two minutes and five seconds in: frame 12, on the first sheet's second row.
+        assertEquals(Triple(p.sheets[0], 2, 1), p.at(125_000))
+        // Past the end, the last frame; frame 150 on the second sheet.
+        assertEquals(Triple(p.sheets[2], 3, 6), p.at(10_000_000))
+        assertEquals(Triple(p.sheets[1], 0, 5), p.at(1_500_000))
+        // None made, or none usable: nothing.
+        assertNull(JellyfinClient.previewsOf("e1", null, 320))
+        assertNull(JellyfinClient.previewsOf("e1", mapOf("ms1" to mapOf("320" to TrickplayInfoDto(320, 180, 10, 10, 0, 10_000))), 320))
+    }
+
+    @Test
     fun typedAddressesBecomeUrls() {
         assertEquals(listOf("https://media.example.com", "http://media.example.com", "http://media.example.com:8096"), JellyfinClient.candidates("media.example.com/"))
         assertEquals("http://192.168.1.5:8096", JellyfinClient.candidates("192.168.1.5").first())

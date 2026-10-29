@@ -91,6 +91,11 @@ internal object SkipResolver : PlaybackResolver by StillResolver {
     override suspend fun segments(item: PlayItem) = listOf(io.github.matiyaaa.fuse.playback.Segment(io.github.matiyaaa.fuse.playback.SegmentKind.INTRO, 1_200_000, 1_300_000))
 }
 
+/** The same episode with trickplay pictures, ten by ten on each sheet, every ten seconds. */
+internal class ScrubResolver(private val sheet: String) : PlaybackResolver by StillResolver {
+    override suspend fun previews(item: PlayItem) = io.github.matiyaaa.fuse.playback.ScrubPreviews(10_000, 320, 180, 10, 10, 264, List(3) { sheet })
+}
+
 internal object MusicResolver : PlaybackResolver {
     override suspend fun resolve(item: PlayItem, request: PlayRequest) =
         PlaySource(url = "song", method = PlayMethod.DIRECT_PLAY, durationMs = item.durationMs, description = "FLAC, Stereo")
@@ -109,7 +114,8 @@ class PlayerRenders {
         if (dir.isBlank()) return
         val sizes = listOf(Triple("H", 1920 to 1080, 2.25f), Triple("M", 1920 to 1080, 1.5f), Triple("V", 1080 to 2400, 2.75f))
         for ((name, px, density) in sizes) {
-            for (state in listOf("controls", "settings", "subtitles", "skip")) {
+            val sheet = previewSheet()
+            for (state in listOf("controls", "settings", "subtitles", "skip", "scrub")) {
                 runDesktopComposeUiTest(px.first, px.second) {
                     // The player's clocks run for ever; time moves only when told to.
                     mainClock.autoAdvance = false
@@ -118,7 +124,11 @@ class PlayerRenders {
                     val session = PlayerSession(scope) { StillEngine() }
                     session.start(
                         PlayItem("e3", "The Harbour at Night", "Season 1, Episode 3  ·  Undertow", chapters = listOf(Chapter(0, "Intro"), Chapter(600_000, "Act 1"), Chapter(1_500_000, "Act 2")), season = 1, episode = 3, durationMs = 2_640_000),
-                        if (state == "skip") SkipResolver else StillResolver,
+                        when (state) {
+                            "skip" -> SkipResolver
+                            "scrub" -> ScrubResolver(sheet.path)
+                            else -> StillResolver
+                        },
                     )
                     setContent {
                         CompositionLocalProvider(LocalDensity provides Density(density), LocalInputRouter provides router) {
@@ -131,6 +141,12 @@ class PlayerRenders {
                         "skip" -> {
                             session.play()
                             mainClock.advanceTimeBy(4_600)
+                        }
+                        // Up to the timeline and two steps on: the picture where it lands, over the time.
+                        "scrub" -> {
+                            router.dispatch(NavAction.UP, InputSource.GAMEPAD)
+                            router.dispatch(NavAction.RIGHT, InputSource.GAMEPAD)
+                            router.dispatch(NavAction.RIGHT, InputSource.GAMEPAD)
                         }
                         "settings" -> router.dispatch(NavAction.CONTEXT, InputSource.GAMEPAD)
                         "subtitles" -> {
@@ -175,6 +191,30 @@ class PlayerRenders {
                 }
             }
         }
+    }
+
+    /** A sheet of trickplay frames drawn for the render: ten by ten skies, each a little later in the evening. */
+    private fun previewSheet(): File {
+        val f = File(dir, "trickplay.png")
+        if (f.exists()) return f
+        val img = java.awt.image.BufferedImage(3200, 1800, java.awt.image.BufferedImage.TYPE_INT_RGB)
+        val g = img.createGraphics()
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+        for (i in 0 until 100) {
+            val x = (i % 10) * 320
+            val y = (i / 10) * 180
+            val t = i / 99f
+            g.paint = java.awt.GradientPaint(x.toFloat(), y.toFloat(), java.awt.Color(0x1B, 0x2A, 0x4A), x.toFloat(), y + 180f, java.awt.Color((0xB4 + 0x3E * t).toInt().coerceAtMost(255), (0x56 + 0x50 * t).toInt(), 0x6A))
+            g.fillRect(x, y, 320, 180)
+            g.color = java.awt.Color(0xFF, 0xD5, 0x8A)
+            g.fillOval(x + 190, y + 60 + (60 * t).toInt(), 44, 44)
+            g.color = java.awt.Color(0x0B, 0x10, 0x20)
+            g.fillRect(x, y + 120, 320, 60)
+        }
+        g.dispose()
+        f.parentFile.mkdirs()
+        ImageIO.write(img, "png", f)
+        return f
     }
 
     /** A square album cover drawn for the render: a night sea under a moon. */

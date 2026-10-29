@@ -177,6 +177,19 @@ internal data class ItemDto(
     @SerialName("LocationType") val locationType: String? = null,
     /** For a person, where they were born. */
     @SerialName("ProductionLocations") val productionLocations: List<String>? = null,
+    /** Trickplay pictures by version, then by width (asked for with fields=Trickplay). */
+    @SerialName("Trickplay") val trickplay: Map<String, Map<String, TrickplayInfoDto>>? = null,
+)
+
+/** How a version's trickplay pictures are laid out (Jellyfin 10.9 and later). */
+@Serializable
+internal data class TrickplayInfoDto(
+    @SerialName("Width") val width: Int = 0,
+    @SerialName("Height") val height: Int = 0,
+    @SerialName("TileWidth") val tileWidth: Int = 0,
+    @SerialName("TileHeight") val tileHeight: Int = 0,
+    @SerialName("ThumbnailCount") val thumbnailCount: Int = 0,
+    @SerialName("Interval") val interval: Long = 0,
 )
 
 @Serializable

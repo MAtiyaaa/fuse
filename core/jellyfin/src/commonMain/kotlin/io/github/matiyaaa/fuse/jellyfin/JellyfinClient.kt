@@ -13,6 +13,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.readRawBytes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.URLBuilder
@@ -230,6 +231,40 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
         return introOf(json.decodeFromString(IntroTimestampsDto.serializer(), text))
     }
 
+    // Pictures for seeking ------------------------------------------------------------------------------
+
+    /**
+     * [id]'s trickplay pictures (Jellyfin 10.9 and later, once the Jellyscrub plugin): for its first
+     * version, the width nearest [want]. Null when the server made none for it.
+     */
+    suspend fun trickplay(base: String, a: Account, id: String, want: Int = TRICKPLAY_WIDTH): io.github.matiyaaa.fuse.playback.ScrubPreviews? {
+        val text = call(base, "Items/$id", a.token) {
+            param("userId", a.userId)
+            param("fields", "Trickplay")
+        }
+        return previewsOf(id, json.decodeFromString(ItemDto.serializer(), text).trickplay, want)
+    }
+
+    /** One sheet of trickplay pictures, with the sign-in they need. */
+    suspend fun trickplaySheet(base: String, a: Account, t: JellyfinTrickplay): ByteArray {
+        val url = URLBuilder(base.trimEnd('/')).apply {
+            appendPathSegments("Videos", t.itemId, "Trickplay", t.width.toString(), "${t.index}.jpg")
+            parameters.append("mediaSourceId", t.source)
+        }.buildString()
+        val response: HttpResponse = try {
+            http.get(url) {
+                header(HttpHeaders.Authorization, authorization(a.token))
+                timeout { requestTimeoutMillis = 20_000; connectTimeoutMillis = 8_000 }
+            }
+        } catch (c: CancellationException) {
+            throw c
+        } catch (e: Throwable) {
+            throw JellyfinException(networkText(e), JellyfinException.Kind.NETWORK)
+        }
+        if (!response.status.isSuccess()) throw JellyfinException("The server doesn't have that.", JellyfinException.Kind.NOT_FOUND, response.status.value)
+        return response.readRawBytes()
+    }
+
     // What you have watched ---------------------------------------------------------------------------
 
     suspend fun setFavorite(base: String, a: Account, id: String, favorite: Boolean) {
@@ -430,6 +465,23 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
             val end = (dto.introEnd * 1000).toLong()
             return if (!dto.valid || end - start < MIN_SEGMENT_MS) null else io.github.matiyaaa.fuse.playback.Segment(io.github.matiyaaa.fuse.playback.SegmentKind.INTRO, start, end)
         }
+
+        /** Trickplay as Fuse's previews: the first version's pictures at the width nearest [want]. */
+        internal fun previewsOf(id: String, trickplay: Map<String, Map<String, TrickplayInfoDto>>?, want: Int): io.github.matiyaaa.fuse.playback.ScrubPreviews? {
+            val (source, widths) = trickplay?.entries?.firstOrNull { it.value.isNotEmpty() } ?: return null
+            val info = widths.values.filter { it.width > 0 && it.height > 0 && it.tileWidth > 0 && it.tileHeight > 0 && it.thumbnailCount > 0 && it.interval > 0 }
+                .minByOrNull { kotlin.math.abs(it.width - want) } ?: return null
+            val per = info.tileWidth * info.tileHeight
+            val sheets = (info.thumbnailCount + per - 1) / per
+            return io.github.matiyaaa.fuse.playback.ScrubPreviews(
+                intervalMs = info.interval, width = info.width, height = info.height,
+                columns = info.tileWidth, rows = info.tileHeight, count = info.thumbnailCount,
+                sheets = List(sheets) { JellyfinTrickplay(id, source, info.width, it) },
+            )
+        }
+
+        /** The trickplay width asked for: sharp enough above the timeline, small to fetch. */
+        internal const val TRICKPLAY_WIDTH = 320
 
         /** Spans shorter than this aren't worth a button: a provider's stray mark. */
         internal const val MIN_SEGMENT_MS = 2_000L
