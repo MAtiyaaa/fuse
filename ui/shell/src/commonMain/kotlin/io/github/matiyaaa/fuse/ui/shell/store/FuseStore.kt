@@ -63,6 +63,9 @@ interface FuseStore {
     /** Puts Home back as it was before the last reset here (rejoining the profile's, if the reset left it). */
     fun undoHomeReset() {}
 
+    /** Which app is in front, where the system can say (Android's Usage access): play time on screen only. Null elsewhere. */
+    val usage: AppUsage? get() = null
+
     val library: LibraryOps
     val sources: SourceOps
     val emulators: EmulatorOps

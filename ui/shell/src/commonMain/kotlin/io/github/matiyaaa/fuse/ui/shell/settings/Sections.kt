@@ -490,6 +490,21 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 onSelect = { app.addGame() },
             ))
         }
+        app.store.usage?.let { usage ->
+            labelled("Play time") {
+                val on = usage.allowed()
+                add(MenuAction(
+                    "usage", "Count only time on screen", FuseIcons.Hourglass,
+                    detail = if (on) {
+                        "On: a game's time stops when you switch to another app, not when you come back to Fuse. Usage access in Android's settings turns it off"
+                    } else {
+                        "A game's time stops when you switch to another app, not when you come back to Fuse. Needs Usage access in Android's settings"
+                    },
+                    trailing = Trailing.Value(if (on) "On" else "Off"),
+                    onSelect = { usage.askForAccess() },
+                ))
+            }
+        }
         labelled("Moving in") {
             add(MenuAction(
                 "movein", "Bring in your history", FuseIcons.Import,

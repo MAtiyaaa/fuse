@@ -184,6 +184,7 @@ class AndroidFuseServices(
     private val releaseInstaller = AndroidReleaseInstaller(appContext, http, activities)
     override val installer: ReleaseInstaller = releaseInstaller
     override val packages: PackageBridge = AndroidPackageBridge(appContext, activities)
+    override val usage: io.github.matiyaaa.fuse.ui.shell.store.AppUsage = io.github.matiyaaa.fuse.platform.AndroidAppUsage(appContext, activities)
 
     /** The lists of Android ports carried inside the app as resources (see app/android/build.gradle.kts, portsLists). */
     override val androidPortLists: io.github.matiyaaa.fuse.ui.shell.store.AndroidPortLists = object : io.github.matiyaaa.fuse.ui.shell.store.AndroidPortLists {

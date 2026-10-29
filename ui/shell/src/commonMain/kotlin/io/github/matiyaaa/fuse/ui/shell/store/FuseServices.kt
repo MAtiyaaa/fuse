@@ -99,6 +99,12 @@ interface FuseServices {
      */
     val online: StateFlow<Boolean> get() = io.github.matiyaaa.fuse.sync.Awake.always
 
+    /**
+     * Which app is in front, where the system says once the person allows it (Android's Usage
+     * access): play time then counts only the time the game was on screen. Null where there is none.
+     */
+    val usage: AppUsage? get() = null
+
     /** lsfg-vk is set up here (Linux, its configuration file there), so games can have frame generation. */
     fun frameGenerationReady(): Boolean = false
 

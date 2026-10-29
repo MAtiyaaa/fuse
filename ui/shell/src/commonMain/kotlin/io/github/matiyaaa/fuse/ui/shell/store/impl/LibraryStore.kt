@@ -102,6 +102,8 @@ private data class ActiveSession(
     val clock: SessionClock = SessionClock(0),
     /** Follows [clock] while the game runs. */
     val watch: kotlinx.coroutines.Job? = null,
+    /** On Android, the emulator's package: with Usage access, only its time in front is counted. */
+    val appId: String? = null,
 )
 
 /** Fuse Sync, for the saves around a game: the service and how it knows games. */
@@ -1120,7 +1122,10 @@ internal class DefaultLibraryOps(
                             emulator = installedEmulator.name + (installedEmulator.version?.let { " $it" } ?: ""), core = usedCore,
                             how = LaunchReport.how(plan), target = LaunchReport.target(resolved.target), tookMs = ctx.now() - pressedAt, saveNote = note,
                         ))
-                        startSession(id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null }, plainSave, rommSave?.takeIf { rommMode.sends })
+                        startSession(
+                            id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null }, plainSave, rommSave?.takeIf { rommMode.sends },
+                            appId = installedEmulator.appId.takeIf { installedEmulator.host == io.github.matiyaaa.fuse.model.Host.ANDROID },
+                        )
                         if (note != null) LaunchOutcome.Synced(note) else LaunchOutcome.Started
                     }
                     // Only the app opened; which game gets played there is unknown, so no session is recorded.
@@ -1404,6 +1409,7 @@ internal class DefaultLibraryOps(
     private suspend fun startSession(
         game: GameId, emulator: EmulatorId, awaitExit: (suspend () -> Unit)?, save: io.github.matiyaaa.fuse.sync.SaveQuery? = null,
         plainSave: io.github.matiyaaa.fuse.sync.SaveQuery? = null, romm: Pair<Long, io.github.matiyaaa.fuse.sync.SaveQuery>? = null,
+        appId: String? = null,
     ) {
         val startedAt = ctx.now()
         playedWhileAway = true
@@ -1411,7 +1417,7 @@ internal class DefaultLibraryOps(
         val clock = SessionClock(startedAt)
         active = ActiveSession(
             sessionId, game, endsOnResume = awaitExit == null, save = save, plainSave = plainSave, romm = romm,
-            clock = clock, watch = watchSession(sessionId, clock),
+            clock = clock, watch = watchSession(sessionId, clock), appId = appId,
         )
         // Fuse Sync keeps the save moving while the game runs, and tells the other devices it is being played.
         val link = sync
@@ -1468,7 +1474,10 @@ internal class DefaultLibraryOps(
         session?.romm?.let { (romId, q) -> rommSaves?.let { rs -> afterGame { delay(ROMM_SETTLE_MS); rs.afterExit(q, romId) } } }
         // Played time only: the screen off and the computer asleep don't count.
         val now = ctx.now()
-        val ended = data.playSessions.end(sessionId, session?.clock?.takeIf { it.startedAt > 0 }?.endAt(now) ?: now)
+        val clocked = session?.clock?.takeIf { it.startedAt > 0 }?.endAt(now) ?: now
+        // On Android with Usage access, nor does the time spent in another app before coming back to Fuse.
+        val inFront = session?.takeIf { it.endsOnResume && it.clock.startedAt > 0 }?.let { s -> s.appId?.let { app -> inFrontEnd(app, s.clock.startedAt, now, clocked) } }
+        val ended = data.playSessions.end(sessionId, inFront ?: clocked, if (inFront != null) io.github.matiyaaa.fuse.model.PlaySessionSource.USAGE_STATS else null)
         runCatching { data.cache.remove(SESSION_NS, SESSION_ALIVE) }
         // RomM counts the session too, for a game from RomM, when the person sends their changes there.
         ended?.endedAt?.let { end -> rommChange?.invoke(ended.gameId) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Played(romId, ended.startedAt, end) } }
@@ -1479,6 +1488,19 @@ internal class DefaultLibraryOps(
         }
         // Over once its end is written and what follows it has started ([awaitPlayed] waits for both).
         if (active?.id == sessionId) active = null
+    }
+
+    /**
+     * Where a session that began at [startedAt] ends when only the time [appId] was in front counts
+     * (Android's Usage access, once allowed), never later than [clocked], the screen-on end already
+     * worked out; null when the system can't say, so the screen-on count stands.
+     */
+    private suspend fun inFrontEnd(appId: String, startedAt: Long, now: Long, clocked: Long): Long? {
+        val usage = ctx.services.usage?.takeIf { it.allowed() } ?: return null
+        val moves = runCatching { usage.moves(appId, startedAt, now) }.getOrNull()?.takeIf { it.isNotEmpty() } ?: return null
+        val played = io.github.matiyaaa.fuse.ui.shell.store.timeInFront(moves, startedAt, now)
+        if (played <= 0) return null
+        return startedAt + minOf(played, clocked - startedAt)
     }
 
     private fun afterPlaying() {

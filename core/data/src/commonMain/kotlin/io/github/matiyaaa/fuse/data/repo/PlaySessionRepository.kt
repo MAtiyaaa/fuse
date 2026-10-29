@@ -94,11 +94,20 @@ class PlaySessionRepository(
 
     /**
      * Closes session [sessionId] at [now] and adds its duration to the game's tracked time, session
-     * count and last played date, in one transaction. Returns the closed session, or null when it
-     * does not exist or was already closed.
+     * count and last played date, in one transaction. [source] says how its end was known, when not
+     * the way it started. Returns the closed session, or null when it does not exist or was already
+     * closed.
      */
-    suspend fun end(sessionId: Long, now: Long): PlaySession? = withContext(dispatcher) {
-        db.transactionWithResult { endLocked(sessionId, now) }
+    suspend fun end(sessionId: Long, now: Long, source: PlaySessionSource? = null): PlaySession? = withContext(dispatcher) {
+        db.transactionWithResult {
+            val ended = endLocked(sessionId, now)
+            if (ended != null && source != null) {
+                q.setSource(source.name, sessionId)
+                ended.copy(source = source)
+            } else {
+                ended
+            }
+        }
     }
 
     /**

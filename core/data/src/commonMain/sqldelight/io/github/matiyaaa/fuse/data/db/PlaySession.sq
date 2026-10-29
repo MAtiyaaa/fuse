@@ -33,6 +33,9 @@ DELETE FROM play_session WHERE id = ?;
 setEnded:
 UPDATE play_session SET ended_at = :endedAt WHERE id = :id AND ended_at IS NULL;
 
+setSource:
+UPDATE play_session SET source = ? WHERE id = ?;
+
 endedAfter:
 SELECT started_at, ended_at FROM play_session WHERE ended_at IS NOT NULL AND ended_at > :since;
 

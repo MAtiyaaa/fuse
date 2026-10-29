@@ -144,6 +144,7 @@ internal class DefaultFuseStore private constructor(
         // A restored backup replaces everything: nothing shown before it is carried over.
         writeLock.withLock { restore().also { storedPrefs = null; reloadLocked() } }
     }
+    override val usage: io.github.matiyaaa.fuse.ui.shell.store.AppUsage? get() = ctx.services.usage
     override val library: DefaultLibraryOps
     override val health: DefaultHealthOps
     override val compat: io.github.matiyaaa.fuse.ui.shell.store.CompatOps by lazy { DefaultCompatOps(ctx) }
