@@ -59,9 +59,11 @@ jobs:
           glew=$(apt-cache pkgnames libglew | grep -E '^libglew[0-9.]+$' | sort -V | tail -n 1 || true)
           theora=$(apt-cache pkgnames libtheora | grep -Ev -- '-(dev|doc|bin|dbg|tools)$|ocaml' | sort -u | tr '\n' ' ' || true)
           if [ -z "$glew" ] || [ -z "$theora" ]; then echo "GLEW or Theora isn't packaged on this image" >&2; exit 1; fi
-          echo "GLEW: $glew; Theora: $theora"
+          # MD4C: Ninja Gaiden Black Recompiled's setup tool reads Markdown with it.
+          md4c=$(apt-cache pkgnames libmd4c | grep -E '^libmd4c[0-9]+$' | sort -V | tail -n 1 || true)
+          echo "GLEW: $glew; Theora: $theora; MD4C: ${md4c:-none}"
           sudo apt-get install -y xvfb mesa-vulkan-drivers libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 \
-            "$glew" $theora libopenal1 libxkbcommon-x11-0 libopengl0 libegl1
+            "$glew" $theora $md4c libopenal1 libxkbcommon-x11-0 libopengl0 libegl1
 
       - name: Test the check itself
         working-directory: tools/ports
