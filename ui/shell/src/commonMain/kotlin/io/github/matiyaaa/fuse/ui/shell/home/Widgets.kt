@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +32,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -196,17 +199,25 @@ internal fun widgetEmptyNote(kind: WidgetKind, feed: HomeFeed): String? {
     }
 }
 
-/** A face with nothing to show yet: its header, and what will fill it where the value would be. */
+/**
+ * A face with nothing to show yet: its header, and what will fill it where the value would be. With
+ * [shelf] (the widgets that show games), covers drawn in outline stand where its games will.
+ */
 @Composable
-internal fun ColumnScope.EmptyFace(icon: ImageVector, label: String, note: String) {
+internal fun ColumnScope.EmptyFace(icon: ImageVector, label: String, note: String, shelf: Boolean = false) {
     val c = Fuse.colors
+    val room = LocalWidgetRoom.current
     WidgetHeader(icon, label)
-    if (LocalWidgetRoom.current.roomy) {
+    if (room.roomy) {
         // A large face says it in the middle, under its icon, rather than in a corner of an empty card.
         Spacer(Modifier.weight(1f))
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(Size.touch).clip(androidx.compose.foundation.shape.CircleShape).background(c.text.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
-                FuseIcon(icon, size = Size.iconL, tint = c.textMuted)
+            if (shelf) {
+                GhostShelf(icon, Modifier.height(SHELF_ROOMY))
+            } else {
+                Box(Modifier.size(Size.touch).clip(androidx.compose.foundation.shape.CircleShape).background(c.text.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
+                    FuseIcon(icon, size = Size.iconL, tint = c.textMuted)
+                }
             }
             Spacer(Modifier.height(Space.m))
             FText(note, Fuse.type.label, color = c.textMuted, align = TextAlign.Center, maxLines = 3)
@@ -214,9 +225,60 @@ internal fun ColumnScope.EmptyFace(icon: ImageVector, label: String, note: Strin
         Spacer(Modifier.weight(1.3f))
         return
     }
+    if (shelf && room.wide && !room.compact) {
+        // A strip: what will fill it at the foot, the empty shelf at the right.
+        Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            FText(note, Fuse.type.label, color = c.textMuted, maxLines = 2, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(Space.l))
+            GhostShelf(icon, Modifier.fillMaxHeight(0.9f))
+        }
+        return
+    }
     Spacer(Modifier.weight(1f))
     FText(note, Fuse.type.label, color = c.textMuted, maxLines = 2)
 }
+
+/**
+ * Three covers drawn in outline, the two behind leaning out from the one in front, with the
+ * widget's icon on it: an empty shelf, where a game widget's games will stand. Drawn once; nothing
+ * on it moves.
+ */
+@Composable
+internal fun GhostShelf(icon: ImageVector, modifier: Modifier) {
+    val c = Fuse.colors
+    val line = c.text.copy(alpha = 0.18f)
+    val wash = c.text.copy(alpha = 0.05f)
+    val front = c.surfaceRaised
+    val mark = c.textFaint
+    val painter = androidx.compose.ui.graphics.vector.rememberVectorPainter(icon)
+    Canvas(modifier.aspectRatio(SHELF_ASPECT)) {
+        val h = size.height * 0.84f
+        val w = h * io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect.BOX
+        val r = CornerRadius(w * 0.1f)
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx())
+        val base = size.height - 2.dp.toPx()
+        fun cover(cx: Float, degrees: Float, strength: Float, solid: Boolean) {
+            rotate(degrees, Offset(cx, base)) {
+                val at = Offset(cx - w / 2, base - h)
+                val box = androidx.compose.ui.geometry.Size(w, h)
+                if (solid) drawRoundRect(front, at, box, r)
+                drawRoundRect(wash.copy(alpha = wash.alpha * strength), at, box, r)
+                drawRoundRect(line.copy(alpha = line.alpha * strength), at, box, r, style = stroke)
+            }
+        }
+        cover(size.width / 2 - w * 0.6f, -9f, 0.65f, solid = false)
+        cover(size.width / 2 + w * 0.6f, 9f, 0.65f, solid = false)
+        cover(size.width / 2, 0f, 1f, solid = true)
+        val i = (w * 0.34f).coerceAtMost(28.dp.toPx())
+        translate(size.width / 2 - i / 2, base - h / 2 - i / 2) {
+            with(painter) { draw(androidx.compose.ui.geometry.Size(i, i), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(mark)) }
+        }
+    }
+}
+
+/** The empty shelf's shape, and its height on a large face. */
+private const val SHELF_ASPECT = 1.4f
+private val SHELF_ROOMY = 112.dp
 
 /** The time Home shows on its stage, shared with the clock card so they turn over together. */
 internal val LocalHomeTime = compositionLocalOf<String?> { null }

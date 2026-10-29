@@ -226,6 +226,23 @@ internal fun AuditDriver.fuse046Screens() {
         waitGone("Shown as each will look")
         shoot("added to the board", 1_500)
     }
+    scenario("home", "every widget in the gallery") {
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
+        waitFor("Continue playing")
+        tap(PadButton.DPAD_LEFT)
+        hold(PadButton.A)
+        waitFor("Put down")
+        tap(PadButton.A)
+        waitFor("Pick up")
+        tap(PadButton.DPAD_DOWN, 8)
+        tap(PadButton.A)
+        waitFor("Shown as each will look")
+        // Down through every heading, a page at a time.
+        for (page in 1..7) {
+            tap(PadButton.DPAD_DOWN, 2)
+            shoot("page $page", 900)
+        }
+    }
     scenario("addons", "android ports as box art") {
         val base = androidStore
         // Ports in every state the page shows: playing your game, to attach, installing, your game

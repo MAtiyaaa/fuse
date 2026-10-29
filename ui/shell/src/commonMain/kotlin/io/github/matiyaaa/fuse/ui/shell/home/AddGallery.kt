@@ -176,6 +176,7 @@ internal fun AddGallery(
                                     realW = cellW * span + gapX * (span - 1),
                                     realH = cellH * a.widget.boardSize.height + gapY * (a.widget.boardSize.height - 1),
                                     scale = scale,
+                                    grow = gap / 2 - 1.dp,
                                     onClick = { chosen = index; onAdd(a) },
                                 )
                             }
@@ -187,13 +188,16 @@ internal fun AddGallery(
     }
 }
 
-/** One widget in the gallery: its live face at [scale], what it is called, and what it shows. */
+/**
+ * One widget in the gallery: its live face at [scale], what it is called, and what it shows. Chosen,
+ * it grows by at most [grow] a side, so it never reaches over the next one.
+ */
 @Composable
-private fun GalleryItem(space: BoardSpace, a: Addable, selected: Boolean, realW: Dp, realH: Dp, scale: Float, onClick: () -> Unit) {
+private fun GalleryItem(space: BoardSpace, a: Addable, selected: Boolean, realW: Dp, realH: Dp, scale: Float, grow: Dp, onClick: () -> Unit) {
     val c = Fuse.colors
     val fraction = Fuse.geometry.tileCornerFraction
     val shape = remember(fraction) { SquircleShape.fraction(fraction) }
-    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+    Column {
         Tile(
             selected = selected,
             modifier = Modifier.size(realW * scale, realH * scale),
@@ -201,6 +205,7 @@ private fun GalleryItem(space: BoardSpace, a: Addable, selected: Boolean, realW:
             cornerFraction = fraction,
             label = a.title,
             surface = !space.carousel(a.widget),
+            maxGrow = grow,
             onClick = onClick,
         ) {
             // The face as the board draws it, laid out at its own size and shrunk from its corner.
@@ -219,11 +224,13 @@ private fun GalleryItem(space: BoardSpace, a: Addable, selected: Boolean, realW:
             // Over the face, so a press anywhere on it adds it rather than turning a carousel.
             Box(Modifier.matchParentSize().fuseClickable(scale = false, onClickLabel = "Add ${a.title}", onClick = onClick))
         }
+        // Clear of the accent bar the chosen tile shows under itself.
+        Spacer(Modifier.height(Size.sparkGap + Size.sparkHeight * 1.3f + Space.s))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
             FuseIcon(a.icon, size = Size.iconS, tint = if (selected) c.accent else c.textMuted)
             FText(a.title, Fuse.type.label, color = if (selected) c.text else c.text.copy(alpha = 0.9f), maxLines = 1)
         }
-        a.detail?.let { FText(it, Fuse.type.caption, color = c.textMuted, maxLines = 2) }
+        a.detail?.let { FText(it, Fuse.type.caption, color = c.textMuted, maxLines = 2, modifier = Modifier.padding(top = Space.xs)) }
     }
 }
 

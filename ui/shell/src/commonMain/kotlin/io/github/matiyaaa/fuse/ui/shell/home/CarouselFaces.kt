@@ -81,7 +81,7 @@ private fun roomOf(width: androidx.compose.ui.unit.Dp, height: androidx.compose.
 @Composable
 internal fun GameCarousel(kind: WidgetKind, games: List<GameCard>, feed: HomeFeed, face: FaceSize) {
     if (games.isEmpty()) {
-        Framed(kind, null, null) { EmptyFace(widgetIcon(kind), kind.title(), emptyGamesText(kind)) }
+        Framed(kind, null, null) { EmptyFace(widgetIcon(kind), kind.title(), emptyGamesText(kind), shelf = true) }
         return
     }
     val shown = games.take(CATALOGUE_ITEMS)
@@ -93,6 +93,24 @@ internal fun GameCarousel(kind: WidgetKind, games: List<GameCard>, feed: HomeFee
         header = { dots -> CarouselHeader(widgetIcon(kind), widgetLabel(kind), dots, compact = compact) },
     ) { i, depth ->
         GameSlide(shown[i], gameLine(kind, shown[i], feed), feed.systems.firstOrNull { it.platform.id == shown[i].shownPlatform }, face, depth)
+    }
+}
+
+/**
+ * A widget about one game (today's Spotlight, the game running now), told as the catalogues tell
+ * theirs: its art filling the face, its logo or name, [line] about it, its box beside and its
+ * system, under the widget's name.
+ */
+@Composable
+internal fun SingleGameFace(kind: WidgetKind, game: GameCard, line: String, feed: HomeFeed, face: FaceSize) {
+    val compact = face == FaceSize.SMALL || face == FaceSize.TALL
+    Carousel(
+        count = 1,
+        peek = false,
+        cardShape = cardShape(),
+        header = { dots -> CarouselHeader(widgetIcon(kind), widgetLabel(kind), dots, compact = compact) },
+    ) { _, depth ->
+        GameSlide(game, line, feed.systems.firstOrNull { it.platform.id == game.shownPlatform }, face, depth)
     }
 }
 
