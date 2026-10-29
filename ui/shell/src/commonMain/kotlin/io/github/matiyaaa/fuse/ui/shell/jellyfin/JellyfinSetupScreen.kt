@@ -250,10 +250,13 @@ fun JellyfinSetupScreen(app: AppState, code: Boolean = false) {
             )
             Spacer(Modifier.height(if (compact) Space.m else Space.l))
             Row(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s), horizontalArrangement = Arrangement.spacedBy(Space.xl), verticalAlignment = Alignment.CenterVertically) {
-                Panel(Modifier.widthIn(max = Size.touch * 16).weight(1f).fillMaxHeight()) {
-                    MenuList(rows, sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT && quick == null)
-                }
                 val q = quick
+                // Narrow, a code on show takes the page: beside the list it would be too thin to read.
+                if (wide || q == null) {
+                    Panel(Modifier.widthIn(max = Size.touch * 16).weight(1f).fillMaxHeight()) {
+                        MenuList(rows, sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT && quick == null)
+                    }
+                }
                 if (q != null) {
                     QuickConnectCard(app, q, if (wide) Modifier.width(340.dp).fillMaxHeight() else Modifier.weight(1f).fillMaxHeight())
                 } else if (wide) {

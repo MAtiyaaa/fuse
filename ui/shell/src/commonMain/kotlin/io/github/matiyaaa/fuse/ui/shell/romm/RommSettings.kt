@@ -710,10 +710,13 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
             }
             Spacer(Modifier.height(if (compact) Space.m else Space.l))
             Row(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-                Panel(Modifier.widthIn(max = Size.touch * 16).weight(1f).fillMaxHeight()) {
-                    MenuList(rows, sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT && code == null)
-                }
                 val c = code
+                // Narrow, the code takes the page: beside the list it would be too thin to read.
+                if (wide || c == null) {
+                    Panel(Modifier.widthIn(max = Size.touch * 16).weight(1f).fillMaxHeight()) {
+                        MenuList(rows, sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT && code == null)
+                    }
+                }
                 if (c != null) PairingCard(app, c, if (wide) Modifier.width(340.dp).fillMaxHeight() else Modifier.weight(1f).fillMaxHeight())
             }
         }
