@@ -385,6 +385,83 @@ class JellyfinTest {
     }
 
     @Test
+    fun quickConnectShowsACodeThenSignsInOnceItIsApprovedWithNoPassword() = runTest {
+        val server = FakeServer()
+        val scope = CoroutineScope(SupervisorJob())
+        val s = service(server, MemorySecrets(), scope)
+        s.configure(true, JellyfinConnection(ConnectionMode.REMOTE, remoteAddress = "media.example.com"))
+        var asks = 0
+        var secretSent: String? = null
+        server.routes = { r ->
+            val path = r.url.encodedPath
+            when {
+                path.endsWith("/QuickConnect/Enabled") -> 200 to "true"
+                // A server before 10.9 starts it with a GET only.
+                path.endsWith("/QuickConnect/Initiate") -> if (r.method == io.ktor.http.HttpMethod.Get) 200 to """{"Secret":"sec1","Code":"482913","Authenticated":false}""" else 405 to ""
+                path.endsWith("/QuickConnect/Connect") -> {
+                    asks++
+                    200 to """{"Secret":"sec1","Code":"482913","Authenticated":${asks >= 2}}"""
+                }
+                path.endsWith("/Users/AuthenticateWithQuickConnect") -> {
+                    secretSent = (r.body as TextContent).text
+                    200 to """{"User":{"Id":"u2","Name":"sam"},"AccessToken":"tokqc","ServerId":"srv1"}"""
+                }
+                else -> null
+            }
+        }
+        val start = s.startQuickConnect().getOrThrow()
+        assertEquals("482913", start.code.code)
+        assertEquals("Living Room PC", start.info.name)
+        val account = s.awaitQuickConnect(start).getOrThrow()
+        assertEquals("sam", account.userName)
+        assertEquals(2, asks)
+        assertTrue(secretSent!!.contains("sec1"))
+        assertEquals("tokqc", s.state.value.account?.token)
+        // No password anywhere in what was sent.
+        assertFalse(server.requests.any { it.url.encodedPath.endsWith("/Users/AuthenticateByName") })
+
+        // Turned off on the server: said so, with where to turn it on.
+        server.routes = { r -> if (r.url.encodedPath.endsWith("/QuickConnect/Enabled")) 200 to "false" else null }
+        val off = s.startQuickConnect()
+        assertTrue(off.exceptionOrNull()?.message.orEmpty().contains("Quick Connect is off"))
+        scope.cancel()
+    }
+
+    @Test
+    fun subtitlesFoundElsewhereMadeForTheFileComeFirstThenTheMostUsed() {
+        val found = JellyfinClient.remoteSubtitlesOf(
+            listOf(
+                RemoteSubtitleInfoDto("a", "Popular", "Open Subtitles", "eng", "srt", downloadCount = 9_000),
+                RemoteSubtitleInfoDto("b", "Machine", "Open Subtitles", "eng", "srt", downloadCount = 50_000, machineTranslated = true),
+                RemoteSubtitleInfoDto("c", "Exact", "Open Subtitles", "eng", "srt", downloadCount = 10, isHashMatch = true),
+                RemoteSubtitleInfoDto(null, "No id"),
+                RemoteSubtitleInfoDto("d", "", "Podnapisi", "eng", "srt", downloadCount = 100, hearingImpaired = true),
+            ),
+        )
+        assertEquals(listOf("c", "a", "d", "b"), found.map { it.id })
+        assertTrue(found.first().hashMatch)
+        assertEquals("Subtitles", found[2].name)
+        assertTrue(found[2].hearingImpaired)
+        assertTrue(found.last().machineTranslated)
+    }
+
+    @Test
+    fun aSongsWordsAreTimedOnlyWhenEveryLineIs() {
+        // Ticks to milliseconds, in order; a gap in the singing stays as an empty line.
+        val timed = JellyfinClient.lyricsOf(LyricDto(listOf(LyricLineDto("Second", 52_000_000), LyricLineDto(" First ", 12_000_000), LyricLineDto(null, 30_000_000))))!!
+        assertTrue(timed.synced)
+        assertEquals(listOf("First", "", "Second"), timed.lines.map { it.text })
+        assertEquals(listOf(1_200L, 3_000L, 5_200L), timed.lines.map { it.startMs })
+        // Timed in places only: shown as words, in the file's order.
+        val plain = JellyfinClient.lyricsOf(LyricDto(listOf(LyricLineDto("Verse", 10_000_000), LyricLineDto("Chorus", null))))!!
+        assertFalse(plain.synced)
+        assertEquals(listOf("Verse", "Chorus"), plain.lines.map { it.text })
+        // Nothing to sing: none at all.
+        assertNull(JellyfinClient.lyricsOf(LyricDto(listOf(LyricLineDto("  ", 0)))))
+        assertNull(JellyfinClient.lyricsOf(LyricDto()))
+    }
+
+    @Test
     fun trickplayPicturesBecomeSheetsOfFrames() {
         val info = mapOf(
             "ms1" to mapOf(

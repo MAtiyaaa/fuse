@@ -32,6 +32,19 @@ internal data class UserDto(
     @SerialName("PrimaryImageTag") val primaryImageTag: String? = null,
 )
 
+/** A Quick Connect sign-in under way: the code to show, and the secret to ask after it with. */
+@Serializable
+internal data class QuickConnectDto(
+    @SerialName("Secret") val secret: String? = null,
+    @SerialName("Code") val code: String? = null,
+    @SerialName("Authenticated") val authenticated: Boolean = false,
+)
+
+@Serializable
+internal data class QuickConnectAuthDto(
+    @SerialName("Secret") val secret: String,
+)
+
 @Serializable
 internal data class AuthResultDto(
     @SerialName("User") val user: UserDto? = null,
@@ -252,6 +265,33 @@ internal data class MediaSegmentDto(
 @Serializable
 internal data class MediaSegmentsResultDto(
     @SerialName("Items") val items: List<MediaSegmentDto> = emptyList(),
+)
+
+/** A subtitle the server's subtitle plugins found for an item, to be downloaded onto it. */
+@Serializable
+internal data class RemoteSubtitleInfoDto(
+    @SerialName("Id") val id: String? = null,
+    @SerialName("Name") val name: String? = null,
+    @SerialName("ProviderName") val providerName: String? = null,
+    @SerialName("ThreeLetterISOLanguageName") val language: String? = null,
+    @SerialName("Format") val format: String? = null,
+    @SerialName("DownloadCount") val downloadCount: Int? = null,
+    @SerialName("IsHashMatch") val isHashMatch: Boolean? = null,
+    @SerialName("HearingImpaired") val hearingImpaired: Boolean? = null,
+    @SerialName("MachineTranslated") val machineTranslated: Boolean? = null,
+    @SerialName("AiTranslated") val aiTranslated: Boolean? = null,
+)
+
+/** A song's words (Jellyfin 10.9 and later): each line with where it starts, in ticks, when timed. */
+@Serializable
+internal data class LyricDto(
+    @SerialName("Lyrics") val lyrics: List<LyricLineDto> = emptyList(),
+)
+
+@Serializable
+internal data class LyricLineDto(
+    @SerialName("Text") val text: String? = null,
+    @SerialName("Start") val start: Long? = null,
 )
 
 /** An older Intro Skipper's answer for an episode: its intro, in seconds. */

@@ -24,41 +24,41 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+/** An engine whose picture moves with the real clock while it plays. */
+internal class ClockEngine : PlayerEngine {
+    override val state = MutableStateFlow(EngineState())
+    override val cues = MutableStateFlow<List<Cue>>(emptyList())
+    private var base = 0L
+    private var since = System.currentTimeMillis()
+    val seeks = ArrayList<Long>()
+    override fun load(source: PlaySource, startMs: Long, audioOrder: Int?, subtitleOrder: Int?, play: Boolean) {
+        base = startMs
+        since = System.currentTimeMillis()
+        state.value = EngineState(EngineStatus.READY, playing = true, positionMs = startMs)
+    }
+    override fun play() {}
+    override fun pause() {
+        base = positionMs()
+        state.value = state.value.copy(playing = false)
+    }
+    override fun seekTo(ms: Long) {
+        seeks += ms
+        base = ms
+        since = System.currentTimeMillis()
+    }
+    override fun setSpeed(speed: Float) {}
+    override fun setVolume(volume: Float) {}
+    override fun selectAudio(order: Int) {}
+    override fun selectSubtitle(order: Int?) {}
+    override fun positionMs(): Long = if (state.value.playing) base + (System.currentTimeMillis() - since) else base
+    override fun capabilities(hardwareDecoding: Boolean) = Capabilities(emptyList(), setOf("aac"), containers = setOf("mkv"))
+    override fun stop() {}
+    override fun release() {}
+    @Composable override fun Video(modifier: Modifier) {}
+}
+
 /** Intros and credits the server marks: offered as they play, skipped by themselves where asked, and never ticked for. */
 class SegmentTest {
-    /** An engine whose picture moves with the real clock while it plays. */
-    private class Engine : PlayerEngine {
-        override val state = MutableStateFlow(EngineState())
-        override val cues = MutableStateFlow<List<Cue>>(emptyList())
-        private var base = 0L
-        private var since = System.currentTimeMillis()
-        val seeks = ArrayList<Long>()
-        override fun load(source: PlaySource, startMs: Long, audioOrder: Int?, subtitleOrder: Int?, play: Boolean) {
-            base = startMs
-            since = System.currentTimeMillis()
-            state.value = EngineState(EngineStatus.READY, playing = true, positionMs = startMs)
-        }
-        override fun play() {}
-        override fun pause() {
-            base = positionMs()
-            state.value = state.value.copy(playing = false)
-        }
-        override fun seekTo(ms: Long) {
-            seeks += ms
-            base = ms
-            since = System.currentTimeMillis()
-        }
-        override fun setSpeed(speed: Float) {}
-        override fun setVolume(volume: Float) {}
-        override fun selectAudio(order: Int) {}
-        override fun selectSubtitle(order: Int?) {}
-        override fun positionMs(): Long = if (state.value.playing) base + (System.currentTimeMillis() - since) else base
-        override fun capabilities(hardwareDecoding: Boolean) = Capabilities(emptyList(), setOf("aac"), containers = setOf("mkv"))
-        override fun stop() {}
-        override fun release() {}
-        @Composable override fun Video(modifier: Modifier) {}
-    }
-
     private class Resolver(val parts: List<Segment>) : PlaybackResolver {
         override suspend fun resolve(item: PlayItem, request: PlayRequest) =
             PlaySource(url = "x", method = PlayMethod.DIRECT_PLAY, durationMs = item.durationMs, startMs = request.startMs)
@@ -73,7 +73,7 @@ class SegmentTest {
     @Test
     fun anIntroIsOfferedWhileItPlaysAndGoneAfter() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        val engine = Engine()
+        val engine = ClockEngine()
         val session = PlayerSession(scope) { engine }
         session.start(PlayItem("e1", "Pilot", durationMs = 60_000), Resolver(listOf(intro, credits)), startMs = 0)
         delay(150)
@@ -97,7 +97,7 @@ class SegmentTest {
     @Test
     fun skippedByItselfOnceThenLeftToPlayWhenSoughtBackInto() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        val engine = Engine()
+        val engine = ClockEngine()
         val session = PlayerSession(scope) { engine }
         session.settings = PlayerSettings(skipIntros = SkipMode.AUTO)
         session.start(PlayItem("e1", "Pilot", durationMs = 60_000), Resolver(listOf(intro, credits)), startMs = 0)
@@ -115,7 +115,7 @@ class SegmentTest {
     @Test
     fun theCreditsOfAnEpisodeWithAnotherAfterGoOnToIt() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        val engine = Engine()
+        val engine = ClockEngine()
         val session = PlayerSession(scope) { engine }
         session.start(PlayItem("e1", "Pilot", durationMs = 60_000), Resolver(listOf(intro, credits)), startMs = 50_500)
         delay(150)
@@ -133,7 +133,7 @@ class SegmentTest {
     @Test
     fun pausedItWaitsWithoutLooking() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        val engine = Engine()
+        val engine = ClockEngine()
         val session = PlayerSession(scope) { engine }
         session.settings = PlayerSettings(skipIntros = SkipMode.AUTO)
         session.start(PlayItem("e1", "Pilot", durationMs = 60_000), Resolver(listOf(intro, credits)), startMs = 0)

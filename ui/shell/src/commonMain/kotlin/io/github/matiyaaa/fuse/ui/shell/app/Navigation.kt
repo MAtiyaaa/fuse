@@ -49,8 +49,8 @@ sealed interface Route {
     /** Jellyfin: its settings, an item's page, a library's grid, and Jellyfin's own search. */
     data object JellyfinSettings : Route
 
-    /** Setting up Jellyfin on a page of its own: the server, then signing in. */
-    data object JellyfinSetup : Route
+    /** Setting up Jellyfin on a page of its own: the server, then signing in; with [code], straight to signing in with a code. */
+    data class JellyfinSetup(val code: Boolean = false) : Route
     data class MediaPage(val id: String) : Route
     data class MediaLibrary(val id: String, val name: String, val kind: String? = null) : Route
     data object MediaSearch : Route

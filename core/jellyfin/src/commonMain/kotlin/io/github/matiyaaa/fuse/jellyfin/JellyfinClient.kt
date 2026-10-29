@@ -30,6 +30,9 @@ data class DeviceInfo(val name: String, val id: String, val version: String)
 /** A signed-in user on a server. The token is kept in the secret store; the password never is. */
 data class Account(val serverId: String?, val serverName: String?, val userId: String, val userName: String?, val token: String)
 
+/** A Quick Connect sign-in waiting to be approved: the [code] the person types elsewhere, and the [secret] it is asked after with. */
+data class QuickConnectCode(val code: String, val secret: String)
+
 /** A server's public face: its name, version and id. */
 data class ServerInfo(val name: String?, val version: String?, val id: String?, val localAddress: String?)
 
@@ -92,6 +95,54 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
     suspend fun signIn(base: String, username: String, password: String): Account {
         val body = json.encodeToString(AuthRequestDto.serializer(), AuthRequestDto(username, password))
         val text = call(base, "Users/AuthenticateByName", token = null, method = Method.POST, body = body) { }
+        val r = json.decodeFromString(AuthResultDto.serializer(), text)
+        val user = r.user ?: throw JellyfinException("The server didn't sign you in.", JellyfinException.Kind.AUTH)
+        val token = r.accessToken ?: throw JellyfinException("The server didn't sign you in.", JellyfinException.Kind.AUTH)
+        return Account(r.serverId, null, user.id, user.name, token)
+    }
+
+    // Quick Connect -----------------------------------------------------------------------------------
+
+    /**
+     * Whether [base] lets a device sign in with a code approved elsewhere (Quick Connect). Jellyfin
+     * 10.8 says it as a state instead (Available or Active when on).
+     */
+    suspend fun quickConnectEnabled(base: String): Boolean = try {
+        call(base, "QuickConnect/Enabled", token = null) { }.trim().equals("true", ignoreCase = true)
+    } catch (e: JellyfinException) {
+        if (e.kind != JellyfinException.Kind.NOT_FOUND) throw e
+        val state = call(base, "QuickConnect/Status", token = null) { }.trim().trim('"')
+        state.equals("Available", ignoreCase = true) || state.equals("Active", ignoreCase = true)
+    }
+
+    /**
+     * Starts a Quick Connect sign-in: the six-digit code for the person to approve in Jellyfin on
+     * another device, and the secret this device asks after it with. A POST since Jellyfin 10.9; a
+     * GET before.
+     */
+    suspend fun quickConnectStart(base: String): QuickConnectCode {
+        val text = try {
+            call(base, "QuickConnect/Initiate", token = null, method = Method.POST) { }
+        } catch (e: JellyfinException) {
+            if (e.status != 404 && e.status != 405) throw e
+            call(base, "QuickConnect/Initiate", token = null) { }
+        }
+        val dto = json.decodeFromString(QuickConnectDto.serializer(), text)
+        val secret = dto.secret?.takeIf { it.isNotBlank() } ?: throw JellyfinException("The server didn't give a code.", JellyfinException.Kind.SERVER)
+        val code = dto.code?.takeIf { it.isNotBlank() } ?: throw JellyfinException("The server didn't give a code.", JellyfinException.Kind.SERVER)
+        return QuickConnectCode(code, secret)
+    }
+
+    /** Whether the code behind [secret] has been approved yet; never an answer kept from before. */
+    suspend fun quickConnectApproved(base: String, secret: String): Boolean {
+        val text = call(base, "QuickConnect/Connect", token = null) { param("secret", secret) }
+        return json.decodeFromString(QuickConnectDto.serializer(), text).authenticated
+    }
+
+    /** Signs in with an approved Quick Connect code: no password is ever asked for or sent. */
+    suspend fun signInWithQuickConnect(base: String, secret: String): Account {
+        val body = json.encodeToString(QuickConnectAuthDto.serializer(), QuickConnectAuthDto(secret))
+        val text = call(base, "Users/AuthenticateWithQuickConnect", token = null, method = Method.POST, body = body) { }
         val r = json.decodeFromString(AuthResultDto.serializer(), text)
         val user = r.user ?: throw JellyfinException("The server didn't sign you in.", JellyfinException.Kind.AUTH)
         val token = r.accessToken ?: throw JellyfinException("The server didn't sign you in.", JellyfinException.Kind.AUTH)
@@ -229,6 +280,43 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
             throw e
         }
         return introOf(json.decodeFromString(IntroTimestampsDto.serializer(), text))
+    }
+
+    /**
+     * The words of the song [id] (Jellyfin 10.9 and later): from a lyrics file beside it, its own
+     * tags, or a lyrics plugin such as LrcLib. Null when it has none (the server answers NOT_FOUND).
+     */
+    suspend fun lyrics(base: String, a: Account, id: String): io.github.matiyaaa.fuse.playback.Lyrics? {
+        val text = try {
+            call(base, "Audio/$id/Lyrics", a.token) { }
+        } catch (e: JellyfinException) {
+            if (e.kind == JellyfinException.Kind.NOT_FOUND) return null
+            throw e
+        }
+        return lyricsOf(json.decodeFromString(LyricDto.serializer(), text))
+    }
+
+    // Subtitles from elsewhere ---------------------------------------------------------------------------
+
+    /**
+     * Subtitles for [id] in [language] (ISO 639-2) from the server's subtitle plugins, such as
+     * OpenSubtitles; empty when it has none or they found nothing. The plugins ask the internet,
+     * so this may take a while.
+     */
+    suspend fun remoteSubtitles(base: String, a: Account, id: String, language: String): List<io.github.matiyaaa.fuse.playback.RemoteSubtitle> {
+        val text = call(base, "Items/$id/RemoteSearch/Subtitles/$language", a.token, timeoutMs = REMOTE_SUBTITLES_MS) { param("isPerfectMatch", "false") }
+        return remoteSubtitlesOf(json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(RemoteSubtitleInfoDto.serializer()), text))
+    }
+
+    /** Has the server download subtitle [subtitleId] for [id], beside its file. */
+    suspend fun downloadSubtitle(base: String, a: Account, id: String, subtitleId: String) {
+        call(base, "Items/$id/RemoteSearch/Subtitles/$subtitleId", a.token, method = Method.POST, timeoutMs = REMOTE_SUBTITLES_MS) { }
+    }
+
+    /** How many subtitle tracks [id]'s first version has now, asked afresh (never from the answers kept). */
+    suspend fun subtitleCount(base: String, a: Account, id: String): Int {
+        val request = PlaybackInfoRequestDto(userId = a.userId, deviceProfile = kotlinx.serialization.json.JsonObject(emptyMap()), enableTranscoding = false)
+        return playbackInfo(base, a, id, request).mediaSources.firstOrNull()?.mediaStreams.orEmpty().count { it.type == "Subtitle" }
     }
 
     // Pictures for seeking ------------------------------------------------------------------------------
@@ -466,6 +554,36 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
             return if (!dto.valid || end - start < MIN_SEGMENT_MS) null else io.github.matiyaaa.fuse.playback.Segment(io.github.matiyaaa.fuse.playback.SegmentKind.INTRO, start, end)
         }
 
+        /** Found subtitles as Fuse's: those made for this very file first, then the most downloaded. */
+        internal fun remoteSubtitlesOf(found: List<RemoteSubtitleInfoDto>): List<io.github.matiyaaa.fuse.playback.RemoteSubtitle> = found
+            .mapNotNull { d ->
+                val id = d.id?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                io.github.matiyaaa.fuse.playback.RemoteSubtitle(
+                    id = id,
+                    name = d.name?.takeIf { it.isNotBlank() } ?: "Subtitles",
+                    language = d.language,
+                    provider = d.providerName,
+                    format = d.format,
+                    downloads = d.downloadCount,
+                    hashMatch = d.isHashMatch == true,
+                    hearingImpaired = d.hearingImpaired == true,
+                    machineTranslated = d.machineTranslated == true || d.aiTranslated == true,
+                )
+            }
+            .sortedWith(compareByDescending<io.github.matiyaaa.fuse.playback.RemoteSubtitle> { it.hashMatch }.thenBy { it.machineTranslated }.thenByDescending { it.downloads ?: 0 })
+
+        /**
+         * A song's words as Fuse's: timed lines in order, with their times only when every line has
+         * one (a file timed in places is shown as words); null when there are no words at all.
+         */
+        internal fun lyricsOf(dto: LyricDto): io.github.matiyaaa.fuse.playback.Lyrics? {
+            val lines = dto.lyrics.map { it.text.orEmpty().trim() to it.start }
+            if (lines.none { it.first.isNotEmpty() }) return null
+            val timed = lines.all { it.second != null }
+            val out = lines.map { (t, start) -> io.github.matiyaaa.fuse.playback.LyricLine(t, if (timed) (start!! / 10_000).coerceAtLeast(0) else null) }
+            return io.github.matiyaaa.fuse.playback.Lyrics(if (timed) out.sortedBy { it.startMs } else out)
+        }
+
         /** Trickplay as Fuse's previews: the first version's pictures at the width nearest [want]. */
         internal fun previewsOf(id: String, trickplay: Map<String, Map<String, TrickplayInfoDto>>?, want: Int): io.github.matiyaaa.fuse.playback.ScrubPreviews? {
             val (source, widths) = trickplay?.entries?.firstOrNull { it.value.isNotEmpty() } ?: return null
@@ -485,6 +603,9 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
 
         /** Spans shorter than this aren't worth a button: a provider's stray mark. */
         internal const val MIN_SEGMENT_MS = 2_000L
+
+        /** How long subtitle plugins get to search or download: they ask services on the internet. */
+        internal const val REMOTE_SUBTITLES_MS = 60_000L
 
         internal const val LIST_FIELDS = "PrimaryImageAspectRatio,Overview,ParentId,ChildCount,RecursiveItemCount,Genres,ProductionYear"
         internal const val DETAIL_FIELDS = "Overview,Genres,Studios,People,Taglines,MediaSources,MediaStreams,Chapters,PrimaryImageAspectRatio,ParentId,ChildCount,RecursiveItemCount,ProductionLocations"

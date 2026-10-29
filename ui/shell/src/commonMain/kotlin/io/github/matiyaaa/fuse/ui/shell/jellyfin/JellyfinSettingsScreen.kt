@@ -238,7 +238,7 @@ private fun jellyfinRows(
             "setup", "Set Up Jellyfin", FuseIcons.Sparkles,
             detail = "Find your server, then sign in, on a page of its own",
             trailing = Trailing.Chevron,
-            onSelect = { app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.JellyfinSetup) },
+            onSelect = { app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.JellyfinSetup()) },
         ))
     }
 
@@ -333,6 +333,14 @@ private fun jellyfinRows(
             },
             "Your Jellyfin user name and password. $kept",
             if (state.authRequired) FuseIcons.Warning else FuseIcons.User,
+        ))
+        add(MenuAction(
+            "signin.code", "Sign in with a code", FuseIcons.QrCode,
+            detail = "Approve a six-digit code in Jellyfin on your phone or computer (Quick Connect). No password typed here",
+            trailing = Trailing.Chevron,
+            unavailableReason = if (noAddress) "Add an address first" else null,
+            section = account,
+            onSelect = { app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.JellyfinSetup(code = true)) },
         ))
     }
     if (a != null) {

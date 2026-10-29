@@ -703,7 +703,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 if (!sgdbWorks) add(StepAction(if (sgdbKey) "Change key" else "SteamGridDB key") { askKey() })
                 if (!raConfigured) add(StepAction("Achievements") { connectAchievements() })
                 if (jellyfinAccount == null) add(StepAction("Jellyfin") {
-                    if (store.jellyfin == null) connectJellyfin(app) {} else app.go(Route.JellyfinSetup)
+                    if (store.jellyfin == null) connectJellyfin(app) {} else app.go(Route.JellyfinSetup())
                 })
             },
             content = {

@@ -266,6 +266,46 @@ class JellyfinResolver(
         }
     }
 
+    override val findsSubtitles: Boolean get() = true
+
+    /**
+     * Subtitles from the server's subtitle plugins (OpenSubtitles and the like) in the subtitle
+     * language chosen in Settings, else the audio language, else English. A failure is thrown, for
+     * the player to say what went wrong; a server with no such plugin simply finds none.
+     */
+    override suspend fun findSubtitles(item: PlayItem): List<io.github.matiyaaa.fuse.playback.RemoteSubtitle> {
+        if (item.kind == MediaKind.AUDIO) return emptyList()
+        val q = quality()
+        val language = listOfNotNull(q.subtitleLanguage, q.audioLanguage).map { it.lowercase() }.firstOrNull { it.length == 3 } ?: "eng"
+        return service.call { b, a -> service.client.remoteSubtitles(b, a, item.id, language) }
+    }
+
+    /**
+     * Has the server download [subtitle], then waits (a few times, longer each time) for the item's
+     * refresh to list it: true once it does, so resolving the item again finds it.
+     */
+    override suspend fun fetchSubtitle(item: PlayItem, subtitle: io.github.matiyaaa.fuse.playback.RemoteSubtitle): Boolean {
+        val before = service.call { b, a -> service.client.subtitleCount(b, a, item.id) }
+        service.call { b, a -> service.client.downloadSubtitle(b, a, item.id, subtitle.id) }
+        for (wait in SUBTITLE_WAITS_MS) {
+            kotlinx.coroutines.delay(wait)
+            if (service.call { b, a -> service.client.subtitleCount(b, a, item.id) } > before) return true
+        }
+        return false
+    }
+
+    /** The song's words, timed where the server has them so; null for anything else, or on any failure. */
+    override suspend fun lyrics(item: PlayItem): io.github.matiyaaa.fuse.playback.Lyrics? {
+        if (item.kind != MediaKind.AUDIO) return null
+        return try {
+            service.call { b, a -> service.client.lyrics(b, a, item.id) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /**
      * Where [item]'s intro, credits and recap are: the server's media segments, or on a server
      * before them, an older Intro Skipper's intro for an episode. Empty when nothing is known, so a
@@ -330,5 +370,8 @@ class JellyfinResolver(
 
         /** Reasons that only mean the file is repackaged, not converted. */
         private val CONTAINER_ONLY = setOf("ContainerNotSupported")
+
+        /** The waits for a downloaded subtitle to show on its item: about half a minute in all, asked five times. */
+        private val SUBTITLE_WAITS_MS = listOf(1_500L, 3_000L, 5_000L, 8_000L, 12_000L)
     }
 }

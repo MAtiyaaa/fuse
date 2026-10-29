@@ -105,6 +105,10 @@ internal fun AuditDriver.jellyfinScreens() {
             router.textInput?.submit()
             waitFor("Sign in with your Jellyfin account")
             shoot("the server found: Sign In", 1_200)
+            // Quick Connect: a code to approve on a phone, nothing typed with the controller.
+            tapText("Sign In with a Code")
+            waitFor("Approve in Jellyfin")
+            shoot("a code to approve in Jellyfin", 1_200)
         }
 
         scenario("jellyfin", "addons home") {

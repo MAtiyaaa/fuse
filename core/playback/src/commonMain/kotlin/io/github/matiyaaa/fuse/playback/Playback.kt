@@ -53,6 +53,35 @@ data class ScrubPreviews(
     }
 }
 
+/** A line of a song's words; [startMs] is where it is sung, for words timed to the song (null when not). */
+data class LyricLine(val text: String, val startMs: Long? = null)
+
+/**
+ * A song's words, as its server has them (Jellyfin's lyrics, from a file beside the song, the
+ * song's own tags or the LrcLib plugin). [synced] when every line has its time, for following along.
+ */
+data class Lyrics(val lines: List<LyricLine>) {
+    val synced: Boolean get() = lines.isNotEmpty() && lines.all { it.startMs != null }
+
+    /** The line being sung at [ms]: the last one begun; -1 before the first, and for words without times. */
+    fun lineAt(ms: Long): Int {
+        if (!synced) return -1
+        var lo = 0
+        var hi = lines.lastIndex
+        var found = -1
+        while (lo <= hi) {
+            val mid = (lo + hi) / 2
+            if (lines[mid].startMs!! <= ms) {
+                found = mid
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+        return found
+    }
+}
+
 /**
  * Something to play, as Fuse shows it: names, length, chapters and art. [id] is the provider's own;
  * art is whatever the image loader takes (a URL, or a provider's art key).
@@ -106,6 +135,23 @@ sealed interface SubtitleDelivery {
     /** Drawn into the picture by the server: choosing it asks for a new stream. */
     data object BurnIn : SubtitleDelivery
 }
+
+/**
+ * A subtitle to be had from elsewhere for an item, found by its server's subtitle plugins
+ * (OpenSubtitles, Podnapisi and the like). [hashMatch] when it was made for this very file;
+ * [language] is ISO 639-2 (three letters).
+ */
+data class RemoteSubtitle(
+    val id: String,
+    val name: String,
+    val language: String? = null,
+    val provider: String? = null,
+    val format: String? = null,
+    val downloads: Int? = null,
+    val hashMatch: Boolean = false,
+    val hearingImpaired: Boolean = false,
+    val machineTranslated: Boolean = false,
+)
 
 /** Subtitle formats Fuse reads itself. */
 enum class SubtitleFormat { SRT, VTT, ASS }
@@ -195,4 +241,16 @@ interface PlaybackResolver {
 
     /** Pictures along [item] for seeking by, or null where the provider has none. */
     suspend fun previews(item: PlayItem): ScrubPreviews? = null
+
+    /** The words of the song [item], or null where there are none. */
+    suspend fun lyrics(item: PlayItem): Lyrics? = null
+
+    /** Whether this provider can look for subtitles elsewhere ([findSubtitles]); the player offers it only then. */
+    val findsSubtitles: Boolean get() = false
+
+    /** Subtitles to be had elsewhere for [item], in the viewer's language, the likeliest first; empty when none were found. */
+    suspend fun findSubtitles(item: PlayItem): List<RemoteSubtitle> = emptyList()
+
+    /** Brings [subtitle] in for [item]; true once the item has it among its own tracks, to be resolved again. */
+    suspend fun fetchSubtitle(item: PlayItem, subtitle: RemoteSubtitle): Boolean = false
 }

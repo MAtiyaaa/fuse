@@ -14,6 +14,7 @@ import io.github.matiyaaa.fuse.playback.PlaybackEvent
 import io.github.matiyaaa.fuse.playback.PlaybackResolver
 import io.github.matiyaaa.fuse.playback.Segment
 import io.github.matiyaaa.fuse.playback.SegmentKind
+import io.github.matiyaaa.fuse.playback.RemoteSubtitle
 import io.github.matiyaaa.fuse.playback.SubtitleDelivery
 import io.github.matiyaaa.fuse.playback.SubtitleParser
 import io.github.matiyaaa.fuse.playback.SubtitleTrack
@@ -121,6 +122,18 @@ class PlayerSession(
     var seeks by mutableStateOf(0)
         private set
 
+    /** The words of the song playing, once its server says; null for a song without them (and for video). */
+    var lyrics by mutableStateOf<io.github.matiyaaa.fuse.playback.Lyrics?>(null)
+        private set
+
+    /** The line of [lyrics] being sung now, for words timed to the song; -1 before the first and for plain words. */
+    var lyricLine by mutableStateOf(-1)
+        private set
+
+    /** Looking for subtitles elsewhere, while the sheet for it is up: what was found, or how it went. */
+    var subtitleSearch by mutableStateOf<SubtitleSearch?>(null)
+        private set
+
     /** Cues from a subtitle file of its own (External), on the item's clock. */
     var fileCues by mutableStateOf(CueTimeline.EMPTY)
         private set
@@ -136,6 +149,12 @@ class PlayerSession(
     private var subtitleJob: Job? = null
     private var segmentJob: Job? = null
     private var segmentWatch: Job? = null
+    private var lyricJob: Job? = null
+    private var lyricWatch: Job? = null
+    private var searchJob: Job? = null
+
+    /** The subtitle tracks there were before one was fetched: the new one is chosen when the item comes back with it. */
+    private var subtitlesBefore: Set<Int>? = null
     private var watchedPlaying = false
 
     /** Parts skipped by themselves this time through: seeking back into one leaves it to play. */
@@ -174,7 +193,10 @@ class PlayerSession(
         // The same item asked for again (another track, a lower quality) keeps its parts to skip.
         val another = this.item?.id != item.id
         this.item = item
-        if (another) loadSegments(item, r)
+        if (another) {
+            loadSegments(item, r)
+            loadLyrics(item, r)
+        }
         finished = false
         error = null
         upNext = null
@@ -193,8 +215,13 @@ class PlayerSession(
                     capabilities = e.capabilities(settings.hardwareDecoding),
                     failed = failed,
                 )
-                val s = r.resolve(item, request)
+                var s = r.resolve(item, request)
                 if (this@PlayerSession.item?.id != item.id) return@launch
+                // Back with a subtitle just fetched: that one is shown.
+                subtitlesBefore?.let { before ->
+                    s.subtitleTracks.firstOrNull { it.streamIndex !in before && it.delivery != SubtitleDelivery.BurnIn }?.let { s = s.copy(subtitle = it.id) }
+                }
+                subtitlesBefore = null
                 source = s
                 val audioOrder = s.audioTracks.firstOrNull { it.id == s.audio }?.order
                 val sub = s.subtitleTracks.firstOrNull { it.id == s.subtitle }
@@ -219,6 +246,7 @@ class PlayerSession(
         if (s.playing != watchedPlaying) {
             watchedPlaying = s.playing
             watchSegments()
+            watchLyrics()
         }
         // Remembered for getting back up after a failed stream, which can't ask the engine any more.
         if (s.status == EngineStatus.READY || s.status == EngineStatus.BUFFERING) lastPosition = src.offsetMs + s.positionMs
@@ -360,6 +388,7 @@ class PlayerSession(
             engineOrNull?.seekTo(local.coerceAtLeast(0))
         }
         watchSegments(target)
+        watchLyrics(target)
         seeks++
         progressNow()
     }
@@ -451,6 +480,109 @@ class PlayerSession(
         }
     }
 
+    // Subtitles from elsewhere ---------------------------------------------------------------------
+
+    /** Whether subtitles can be looked for elsewhere for what plays now (a video, on a provider that can). */
+    val findsSubtitles: Boolean get() = isVideo && resolver?.findsSubtitles == true
+
+    /** Asks the provider for subtitles to be had elsewhere; [subtitleSearch] follows it. */
+    fun findSubtitles() {
+        val i = item ?: return
+        val r = resolver ?: return
+        searchJob?.cancel()
+        subtitleSearch = SubtitleSearch.Looking
+        searchJob = scope.launch {
+            val found = try {
+                SubtitleSearch.Found(r.findSubtitles(i))
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                SubtitleSearch.Failed(t.message ?: "The server couldn't look for subtitles.")
+            }
+            if (this@PlayerSession.item?.id == i.id) subtitleSearch = found
+        }
+    }
+
+    /**
+     * Brings [subtitle] in and plays on with it from the same moment: the provider fetches it, the
+     * item is resolved again, and the new track is chosen. [subtitleSearch] is cleared once it shows.
+     */
+    fun fetchSubtitle(subtitle: RemoteSubtitle) {
+        val i = item ?: return
+        val r = resolver ?: return
+        val before = source?.subtitleTracks?.map { it.streamIndex }?.toSet().orEmpty()
+        searchJob?.cancel()
+        subtitleSearch = SubtitleSearch.Fetching(subtitle)
+        searchJob = scope.launch {
+            val added = try {
+                r.fetchSubtitle(i, subtitle)
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                false
+            }
+            if (this@PlayerSession.item?.id != i.id) return@launch
+            if (!added) {
+                subtitleSearch = SubtitleSearch.Failed("${subtitle.name} didn't come through. Another may.")
+                return@launch
+            }
+            subtitleSearch = null
+            subtitlesBefore = before
+            notice = "Subtitles added"
+            reopen(positionMs())
+        }
+    }
+
+    /** The sheet closed: a search stops, but a subtitle on its way still comes in. */
+    fun leaveSubtitleSearch() {
+        if (subtitleSearch is SubtitleSearch.Fetching) return
+        searchJob?.cancel()
+        subtitleSearch = null
+    }
+
+    // The song's words ----------------------------------------------------------------------------
+
+    private fun loadLyrics(item: PlayItem, r: PlaybackResolver) {
+        lyricJob?.cancel()
+        lyricWatch?.cancel()
+        lyrics = null
+        lyricLine = -1
+        if (item.kind != MediaKind.AUDIO) return
+        lyricJob = scope.launch {
+            val found = try {
+                r.lyrics(item)
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                null
+            }
+            if (this@PlayerSession.item?.id != item.id) return@launch
+            lyrics = found
+            watchLyrics()
+        }
+    }
+
+    /**
+     * Follows the line being sung as [watchSegments] follows the parts to skip: it wakes when the
+     * next line begins, worked out from where the song is and how fast it plays, and again when it
+     * is paused, played or moved. Words without times are never followed.
+     */
+    private fun watchLyrics(at: Long? = null) {
+        lyricWatch?.cancel()
+        val words = lyrics?.takeIf { it.synced } ?: return
+        lyricWatch = scope.launch {
+            var p = at ?: positionMs()
+            while (true) {
+                val line = words.lineAt(p)
+                lyricLine = line
+                if (engineOrNull?.state?.value?.playing != true) return@launch
+                val next = words.lines.getOrNull(line + 1)?.startMs ?: return@launch
+                delay(((next - p) / speed.coerceAtLeast(MIN_SPEED)).toLong().coerceIn(LYRIC_WAIT_MIN_MS, SEGMENT_WAIT_MAX_MS))
+                p = positionMs()
+            }
+        }
+    }
+
     /** Where the item is, on its own clock. */
     fun positionMs(): Long {
         val src = source ?: return lastPosition
@@ -464,6 +596,7 @@ class PlayerSession(
         speed = value
         engineOrNull?.setSpeed(value)
         watchSegments()
+        watchLyrics()
     }
 
     fun chooseAudio(track: AudioTrack) {
@@ -580,6 +713,13 @@ class PlayerSession(
         segments = emptyList()
         segment = null
         previews = null
+        lyricJob?.cancel()
+        lyricWatch?.cancel()
+        lyrics = null
+        lyricLine = -1
+        searchJob?.cancel()
+        subtitleSearch = null
+        subtitlesBefore = null
     }
 
     private fun stopCurrent(reportStop: Boolean, keep: Boolean = false) {
@@ -623,6 +763,9 @@ class PlayerSession(
         /** The shortest and longest wait before looking again where the parts to skip are. */
         const val SEGMENT_WAIT_MIN_MS = 250L
         const val SEGMENT_WAIT_MAX_MS = 60_000L
+
+        /** The least a wait for the next line lasts: lines come close together in a fast song. */
+        const val LYRIC_WAIT_MIN_MS = 40L
 
         /** The slowest speed waits are worked out for. */
         const val MIN_SPEED = 0.25f
@@ -677,6 +820,14 @@ object PlayerPlacement {
 }
 
 /** What the player does at a part the server marks to skip: offer a button, skip it by itself, or leave it. */
+/** Where looking for subtitles elsewhere is. */
+sealed interface SubtitleSearch {
+    data object Looking : SubtitleSearch
+    data class Found(val subtitles: List<RemoteSubtitle>) : SubtitleSearch
+    data class Fetching(val subtitle: RemoteSubtitle) : SubtitleSearch
+    data class Failed(val message: String) : SubtitleSearch
+}
+
 enum class SkipMode {
     ASK, AUTO, OFF;
 
