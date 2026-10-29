@@ -254,6 +254,25 @@ class JellyfinResolver(
 
     override suspend fun subtitleText(url: String): String? = runCatching { service.call { _, a -> service.client.text(url, a) } }.getOrNull()
 
+    /**
+     * Where [item]'s intro, credits and recap are: the server's media segments, or on a server
+     * before them, an older Intro Skipper's intro for an episode. Empty when nothing is known, so a
+     * server without either simply never offers a skip.
+     */
+    override suspend fun segments(item: PlayItem): List<io.github.matiyaaa.fuse.playback.Segment> {
+        if (item.kind == MediaKind.AUDIO) return emptyList()
+        return try {
+            service.call { b, a -> service.client.segments(b, a, item.id) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: JellyfinException) {
+            if (e.kind != JellyfinException.Kind.NOT_FOUND || item.seriesId == null) return emptyList()
+            runCatching { service.call { b, a -> listOfNotNull(service.client.introTimestamps(b, a, item.id)) } }.getOrDefault(emptyList())
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     private fun errorText(code: String) = when (code) {
         "NotAllowed" -> "This account isn't allowed to play this."
         "NoCompatibleStream" -> "The server can't make a stream this device plays."

@@ -175,6 +175,8 @@ internal data class ItemDto(
     @SerialName("Status") val status: String? = null,
     @SerialName("IsFolder") val isFolder: Boolean? = null,
     @SerialName("LocationType") val locationType: String? = null,
+    /** For a person, where they were born. */
+    @SerialName("ProductionLocations") val productionLocations: List<String>? = null,
 )
 
 @Serializable
@@ -224,4 +226,25 @@ internal data class PlaybackReportDto(
     @SerialName("SubtitleStreamIndex") val subtitleStreamIndex: Int? = null,
     @SerialName("CanSeek") val canSeek: Boolean = true,
     @SerialName("Failed") val failed: Boolean = false,
+)
+
+/** One of an item's media segments (Jellyfin 10.10 and later), from whichever provider found it. */
+@Serializable
+internal data class MediaSegmentDto(
+    @SerialName("Type") val type: String? = null,
+    @SerialName("StartTicks") val startTicks: Long = 0,
+    @SerialName("EndTicks") val endTicks: Long = 0,
+)
+
+@Serializable
+internal data class MediaSegmentsResultDto(
+    @SerialName("Items") val items: List<MediaSegmentDto> = emptyList(),
+)
+
+/** An older Intro Skipper's answer for an episode: its intro, in seconds. */
+@Serializable
+internal data class IntroTimestampsDto(
+    @SerialName("Valid") val valid: Boolean = false,
+    @SerialName("IntroStart") val introStart: Double = 0.0,
+    @SerialName("IntroEnd") val introEnd: Double = 0.0,
 )

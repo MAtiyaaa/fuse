@@ -378,6 +378,12 @@ private fun jellyfinRows(
         detail = "The most a stream carries away from home. Match it to your upload speed") { v -> set { it.copy(remoteMaxBitrate = v) } }.copy(section = playback))
     add(toggleRow("hw", "Hardware decoding", FuseIcons.Chip, j.hardwareDecoding, "Smoother and cooler. Turn off if the picture shows blocks or stays black") { v -> set { it.copy(hardwareDecoding = v) } }.copy(section = playback))
     add(toggleRow("next", "Play the next episode", FuseIcons.SkipForward, j.autoplayNext, "Counts down at the end, so you can stop it") { v -> set { it.copy(autoplayNext = v) } }.copy(section = playback))
+    // Parts the server marks (Intro Skipper, chapter names): a button to pass them, or passed by themselves.
+    val skipChoices = listOf("ASK" to "Offer a button", "AUTO" to "Skip by itself", "OFF" to "Leave it")
+    add(app.choiceRow("skip.intro", "Intros and recaps", FuseIcons.ChevronsRight, j.skipIntros, skipChoices,
+        detail = "Where your server marks them, with Intro Skipper or chapter names") { v -> set { it.copy(skipIntros = v) } }.copy(section = playback))
+    add(app.choiceRow("skip.credits", "Credits", FuseIcons.SkipForward, j.skipCredits, skipChoices,
+        detail = "Offers the next episode as the credits start") { v -> set { it.copy(skipCredits = v) } }.copy(section = playback))
     add(app.choiceRow("seek", "Skip by", FuseIcons.ChevronsRight, j.seekSeconds, listOf(5, 10, 15, 30, 60).map { it to "$it seconds" },
         detail = "Left and Right while the controls are hidden. Holding goes further") { v -> set { it.copy(seekSeconds = v) } }.copy(section = playback))
     add(app.choiceRow("hide", "Hide controls after", FuseIcons.Timer, j.controlsTimeoutSeconds, listOf(3, 4, 6, 10).map { it to "$it seconds" }) { v -> set { it.copy(controlsTimeoutSeconds = v) } }.copy(section = playback))

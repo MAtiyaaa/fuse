@@ -149,6 +149,11 @@ fun PlayerScreen(
     }
 
     val duration = session.durationMs()
+    // The part to skip playing now, where the settings offer it; and how long until the end.
+    val left = rememberLeft(session, playing)
+    val skip = session.segment?.takeIf { session.isVideo && session.settings.skipFor(it.kind) != SkipMode.OFF }
+    // In the last half minute the Up next card says the same as a credits button, so it alone stays.
+    val skipShown = skip != null && !(left in 0..UP_NEXT_MS && session.upNext != null) && session.error == null && !session.finished
     val hasPrevious = session.queue.size > 1 && session.queueIndex > 0 || item?.season != null
     val hasNext = session.upNext != null
     val buttons = buildList {
@@ -200,7 +205,9 @@ fun PlayerScreen(
                     NavResult.CONSUMED
                 }
                 NavAction.SELECT -> {
-                    if (shown && row == TOP && topFocus == 1 && swap != null) swap()
+                    // With the controls away, A takes the skip on offer (as on a television).
+                    if (!shown && skipShown) session.skipSegment()
+                    else if (shown && row == TOP && topFocus == 1 && swap != null) swap()
                     else if (shown && row == TOP) onExit() else if (shown && row == BUTTONS) all.getOrNull(focus)?.onClick?.invoke() else session.toggle()
                     NavResult.ACTIVATED
                 }
@@ -360,7 +367,18 @@ fun PlayerScreen(
             )
         }
 
-        UpNextCard(session, visible, Modifier.align(Alignment.BottomEnd).padding(end = Space.xl, bottom = if (visible) CONTROLS_HEIGHT else Space.xl))
+        UpNextCard(session, left, Modifier.align(Alignment.BottomEnd).padding(end = Space.xl, bottom = if (visible) CONTROLS_HEIGHT else Space.xl))
+
+        val skipping = remember { arrayOfNulls<io.github.matiyaaa.fuse.playback.Segment>(1) }
+        skip?.let { skipping[0] = it }
+        Appear(
+            skipShown,
+            Modifier.align(Alignment.BottomEnd).padding(end = if (narrow) Space.l else Space.xxl, bottom = if (visible) CONTROLS_HEIGHT else if (short) Space.l else Space.xxl),
+            enter = fadeIn() + slideInHorizontally(Fuse.motion.enter(Durations.BASE)) { it / 4 },
+            exit = fadeOut(),
+        ) {
+            skipping[0]?.let { s -> SkipPill(s, toNext = session.upNext != null && (s.kind == io.github.matiyaaa.fuse.playback.SegmentKind.OUTRO || s.kind == io.github.matiyaaa.fuse.playback.SegmentKind.PREVIEW), glyph = !visible) { session.skipSegment(s); poke() } }
+        }
 
         session.error?.let { message ->
             Problem(message, onRetry = { session.retry() }, onExit = onExit, Modifier.align(Alignment.Center))
@@ -619,19 +637,59 @@ private fun SeekFlash(f: Flash, modifier: Modifier) {
     }
 }
 
-/** The next episode, in the last moments: what it is, a bar running down to it, and RB to go now. */
+/**
+ * How long until the item ends, followed closely only in its last [UP_NEXT_MS], where the Up next
+ * card counts down. Until then it sleeps until that moment (worked out from where the picture is
+ * and how fast it plays), and paused it waits for the next play, so nothing ticks through a film.
+ */
 @Composable
-private fun UpNextCard(session: PlayerSession, controls: Boolean, modifier: Modifier) {
-    val next = session.upNext ?: return
-    if (!session.isVideo) return
+private fun rememberLeft(session: PlayerSession, playing: Boolean): Long {
     var left by remember { mutableLongStateOf(Long.MAX_VALUE) }
-    LaunchedEffect(next.id) {
+    LaunchedEffect(session.item?.id, session.seeks, playing) {
         while (true) {
             val d = session.durationMs()
-            left = if (d == null) Long.MAX_VALUE else d - session.positionMs()
-            delay(250)
+            val l = if (d == null) Long.MAX_VALUE else d - session.positionMs()
+            left = l
+            if (!playing) break
+            val wait = if (l > UP_NEXT_MS) ((l - UP_NEXT_MS) / session.speed.coerceAtLeast(PlayerSession.MIN_SPEED)).toLong() else COUNTDOWN_MS
+            delay(wait.coerceIn(COUNTDOWN_MS, PlayerSession.SEGMENT_WAIT_MAX_MS))
         }
     }
+    return left
+}
+
+/**
+ * The skip on offer while a marked part plays: "Skip Intro", "Skip Recap", or at the credits of an
+ * episode with another after it, "Next Episode". Solid white, so it reads over any picture; with
+ * the controls away it shows A, which takes it.
+ */
+@Composable
+private fun SkipPill(s: io.github.matiyaaa.fuse.playback.Segment, toNext: Boolean, glyph: Boolean, onClick: () -> Unit) {
+    val ink = Color(0xFF101114)
+    Row(
+        Modifier
+            .height(48.dp)
+            .clip(RoundedCornerShape(50))
+            .background(Color.White)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(start = Space.l, end = if (glyph) Space.s else Space.l),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FuseIcon(if (toNext) FuseIcons.SkipForward else FuseIcons.ChevronsRight, size = 18.dp, tint = ink)
+        Spacer(Modifier.width(Space.s))
+        FText(if (toNext) "Next Episode" else "Skip ${segmentName(s.kind)}", Fuse.type.bodyStrong, color = ink, maxLines = 1)
+        if (glyph) {
+            Spacer(Modifier.width(Space.m))
+            ButtonGlyph(HintButton.CONFIRM, size = 24.dp, color = ink.copy(alpha = 0.72f))
+        }
+    }
+}
+
+/** The next episode, in the last moments: what it is, a bar running down to it, and RB to go now. */
+@Composable
+private fun UpNextCard(session: PlayerSession, left: Long, modifier: Modifier) {
+    val next = session.upNext ?: return
+    if (!session.isVideo) return
     val shown = left in 0..UP_NEXT_MS && session.error == null
     Appear(shown, modifier, enter = fadeIn(), exit = fadeOut()) {
         Panel(Modifier.width(320.dp).clickable { session.next() }) {
@@ -878,6 +936,9 @@ private val SUB_DELAYS = listOf(0L, 250L, 500L, 1_000L, 2_000L, -2_000L, -1_000L
 
 /** Up next shows in the last half minute. */
 private const val UP_NEXT_MS = 30_000L
+
+/** How often the last half minute's countdown looks at the clock. */
+private const val COUNTDOWN_MS = 250L
 private const val FLASH_MS = 700L
 
 /** The subtitle layer's own bottom margin, which the lift above the controls already includes. */

@@ -6,6 +6,8 @@ import io.github.matiyaaa.fuse.playback.HdrFormat
 import io.github.matiyaaa.fuse.playback.PlayItem
 import io.github.matiyaaa.fuse.playback.PlayMethod
 import io.github.matiyaaa.fuse.playback.PlayRequest
+import io.github.matiyaaa.fuse.playback.Segment
+import io.github.matiyaaa.fuse.playback.SegmentKind
 import io.github.matiyaaa.fuse.playback.SubtitleDelivery
 import io.github.matiyaaa.fuse.playback.SubtitleFormat
 import io.github.matiyaaa.fuse.playback.VideoCodec
@@ -334,6 +336,51 @@ class JellyfinTest {
         assertTrue("\"AudioStreamIndex\":2" in again && "\"SubtitleStreamIndex\":4" in again, again.take(400))
         assertEquals("2", src.audio)
         assertEquals("4", src.subtitle)
+        scope.cancel()
+    }
+
+    @Test
+    fun introsAndCreditsComeFromMediaSegmentsOrAnOlderIntroSkipper() = runTest {
+        val server = FakeServer()
+        val scope = CoroutineScope(SupervisorJob())
+        val s = service(server, MemorySecrets(), scope)
+        s.configure(true, JellyfinConnection(ConnectionMode.REMOTE, remoteAddress = "media.example.com"))
+        s.signIn("pat", "pw").getOrThrow()
+        server.routes = { r ->
+            val path = r.url.encodedPath
+            when {
+                // Jellyfin 10.10: the intro, the credits, a stray mark too short to offer, and a kind Fuse doesn't skip.
+                path.endsWith("/MediaSegments/e1") -> 200 to """{"Items":[
+                    {"Type":"Outro","StartTicks":12000000000,"EndTicks":13200000000},
+                    {"Type":"Intro","StartTicks":300000000,"EndTicks":1200000000},
+                    {"Type":"Recap","StartTicks":0,"EndTicks":5000000},
+                    {"Type":"Unknown","StartTicks":0,"EndTicks":100000000}]}"""
+                path.endsWith("/MediaSegments/m1") -> 200 to """{"Items":[]}"""
+                // Jellyfin 10.9 has no media segments; an older Intro Skipper there answers in seconds.
+                path.contains("/MediaSegments/") -> 404 to ""
+                path.endsWith("/Episode/e2/IntroTimestamps/v1") -> 200 to """{"EpisodeId":"e2","Valid":true,"IntroStart":30.5,"IntroEnd":90.25,"ShowSkipPromptAt":25.5,"HideSkipPromptAt":40.5}"""
+                path.endsWith("/Episode/e3/IntroTimestamps/v1") -> 404 to ""
+                else -> null
+            }
+        }
+        val resolver = JellyfinResolver(s) { JellyfinQuality() }
+        assertEquals(
+            listOf(Segment(SegmentKind.INTRO, 30_000, 120_000), Segment(SegmentKind.OUTRO, 1_200_000, 1_320_000)),
+            resolver.segments(PlayItem("e1", "Pilot", seriesId = "show1")),
+        )
+        // A film with none: nothing to offer.
+        assertEquals(emptyList(), resolver.segments(PlayItem("m1", "Dune")))
+
+        // A server before media segments: an episode's intro from Intro Skipper, or none found.
+        assertEquals(listOf(Segment(SegmentKind.INTRO, 30_500, 90_250)), resolver.segments(PlayItem("e2", "Second", seriesId = "show1")))
+        assertEquals(emptyList(), resolver.segments(PlayItem("e3", "Third", seriesId = "show1")))
+        // There a film asks no further, and music never asks at all.
+        val before = server.requests.size
+        assertEquals(emptyList(), resolver.segments(PlayItem("m2", "Arrival")))
+        assertFalse(server.requests.drop(before).any { it.url.encodedPath.contains("IntroTimestamps") })
+        val asked = server.requests.size
+        assertEquals(emptyList(), resolver.segments(PlayItem("s1", "Song", kind = io.github.matiyaaa.fuse.playback.MediaKind.AUDIO)))
+        assertEquals(asked, server.requests.size)
         scope.cancel()
     }
 

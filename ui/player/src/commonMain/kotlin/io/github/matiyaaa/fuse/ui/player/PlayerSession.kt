@@ -12,6 +12,8 @@ import io.github.matiyaaa.fuse.playback.PlayRequest
 import io.github.matiyaaa.fuse.playback.PlaySource
 import io.github.matiyaaa.fuse.playback.PlaybackEvent
 import io.github.matiyaaa.fuse.playback.PlaybackResolver
+import io.github.matiyaaa.fuse.playback.Segment
+import io.github.matiyaaa.fuse.playback.SegmentKind
 import io.github.matiyaaa.fuse.playback.SubtitleDelivery
 import io.github.matiyaaa.fuse.playback.SubtitleParser
 import io.github.matiyaaa.fuse.playback.SubtitleTrack
@@ -37,6 +39,10 @@ data class PlayerSettings(
     val seekSeconds: Int = 10,
     val controlsTimeoutMs: Long = 4_000,
     val autoplayNext: Boolean = true,
+    /** At an intro, a recap or an advert the server marks. */
+    val skipIntros: SkipMode = SkipMode.ASK,
+    /** At the credits, or a preview after them. */
+    val skipCredits: SkipMode = SkipMode.ASK,
     val rememberSpeed: Boolean = false,
     val hardwareDecoding: Boolean = true,
     /** The most the connection should carry, in bits per second; null for no limit. */
@@ -99,6 +105,18 @@ class PlayerSession(
     /** A short note for the screen (the quality was lowered); the screen clears it once shown. */
     var notice by mutableStateOf<String?>(null)
 
+    /** The parts of the item that can be skipped (its intro, its credits), once its server says. */
+    var segments by mutableStateOf<List<Segment>>(emptyList())
+        private set
+
+    /** The skippable part playing now, while it plays (or the picture is paused in it); null between them. */
+    var segment by mutableStateOf<Segment?>(null)
+        private set
+
+    /** Goes up with every seek, so what follows the clock can look again where the picture is. */
+    var seeks by mutableStateOf(0)
+        private set
+
     /** Cues from a subtitle file of its own (External), on the item's clock. */
     var fileCues by mutableStateOf(CueTimeline.EMPTY)
         private set
@@ -112,6 +130,12 @@ class PlayerSession(
     private var watcher: Job? = null
     private var reporter: Job? = null
     private var subtitleJob: Job? = null
+    private var segmentJob: Job? = null
+    private var segmentWatch: Job? = null
+    private var watchedPlaying = false
+
+    /** Parts skipped by themselves this time through: seeking back into one leaves it to play. */
+    private val autoSkipped = HashSet<Segment>()
     private var started = false
     private var recoveries = 0
     private var lastPosition = 0L
@@ -143,7 +167,10 @@ class PlayerSession(
 
     private fun open(item: PlayItem, startMs: Long, audio: Int? = null, subtitle: Int? = null, failed: PlaySource? = null) {
         val r = resolver ?: return
+        // The same item asked for again (another track, a lower quality) keeps its parts to skip.
+        val another = this.item?.id != item.id
         this.item = item
+        if (another) loadSegments(item, r)
         finished = false
         error = null
         upNext = null
@@ -184,6 +211,11 @@ class PlayerSession(
     private fun onEngine(s: EngineState) {
         val i = item ?: return
         val src = source ?: return
+        // Playing or paused again: when the next part to skip comes is worked out afresh.
+        if (s.playing != watchedPlaying) {
+            watchedPlaying = s.playing
+            watchSegments()
+        }
         // Remembered for getting back up after a failed stream, which can't ask the engine any more.
         if (s.status == EngineStatus.READY || s.status == EngineStatus.BUFFERING) lastPosition = src.offsetMs + s.positionMs
         when (s.status) {
@@ -323,10 +355,87 @@ class PlayerSession(
         } else {
             engineOrNull?.seekTo(local.coerceAtLeast(0))
         }
+        watchSegments(target)
+        seeks++
         progressNow()
     }
 
     fun seekBy(deltaMs: Long) = seekTo(positionMs() + deltaMs)
+
+    // Parts to skip ------------------------------------------------------------------------------
+
+    private fun loadSegments(item: PlayItem, r: PlaybackResolver) {
+        segmentJob?.cancel()
+        segmentWatch?.cancel()
+        segments = emptyList()
+        segment = null
+        autoSkipped.clear()
+        if (item.kind == MediaKind.AUDIO) return
+        segmentJob = scope.launch {
+            val found = try {
+                r.segments(item)
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                emptyList()
+            }
+            if (this@PlayerSession.item?.id != item.id) return@launch
+            segments = found
+            watchSegments()
+        }
+    }
+
+    /**
+     * Follows which part to skip is playing, without a clock ticking: it wakes at the next edge (the
+     * end of this part, or the start of the next), worked out from where the picture is and how fast
+     * it plays, and again whenever it is paused, played or moved. Paused, it waits for the next play.
+     */
+    private fun watchSegments(at: Long? = null) {
+        segmentWatch?.cancel()
+        val list = segments
+        if (list.isEmpty()) {
+            segment = null
+            return
+        }
+        segmentWatch = scope.launch {
+            var p = at ?: positionMs()
+            while (true) {
+                val now = list.firstOrNull { p in it }
+                if (now != segment) {
+                    segment = now
+                    if (now != null && arrived(now)) return@launch
+                }
+                if (engineOrNull?.state?.value?.playing != true) return@launch
+                val edge = now?.endMs ?: list.firstOrNull { it.startMs > p }?.startMs ?: return@launch
+                delay(((edge - p) / speed.coerceAtLeast(MIN_SPEED)).toLong().coerceIn(SEGMENT_WAIT_MIN_MS, SEGMENT_WAIT_MAX_MS))
+                p = positionMs()
+            }
+        }
+    }
+
+    /** [s] has begun: skipped at once where the settings say so (once per item), else offered. True when it was skipped. */
+    private fun arrived(s: Segment): Boolean {
+        if (settings.skipFor(s.kind) != SkipMode.AUTO || s in autoSkipped) return false
+        autoSkipped += s
+        notice = "${segmentName(s.kind)} skipped"
+        skipSegment(s)
+        return true
+    }
+
+    /**
+     * Passes over [s] (the part playing now when null): to its end, or for the credits of an episode
+     * with another after it, on to that episode.
+     */
+    fun skipSegment(s: Segment? = segment) {
+        val part = s ?: return
+        val d = durationMs()
+        val toTheEnd = d == null || d - part.endMs < END_SLACK_MS
+        if ((part.kind == SegmentKind.OUTRO || part.kind == SegmentKind.PREVIEW) && toTheEnd && upNext != null) {
+            next()
+        } else {
+            seekTo(part.endMs)
+        }
+    }
 
     /** Where the item is, on its own clock. */
     fun positionMs(): Long {
@@ -340,6 +449,7 @@ class PlayerSession(
     fun changeSpeed(value: Float) {
         speed = value
         engineOrNull?.setSpeed(value)
+        watchSegments()
     }
 
     fun chooseAudio(track: AudioTrack) {
@@ -451,6 +561,10 @@ class PlayerSession(
         upNext = null
         finished = false
         error = null
+        segmentJob?.cancel()
+        segmentWatch?.cancel()
+        segments = emptyList()
+        segment = null
     }
 
     private fun stopCurrent(reportStop: Boolean, keep: Boolean = false) {
@@ -490,6 +604,16 @@ class PlayerSession(
         const val STALLS_TO_LOWER = 3
         const val STALL_WINDOW_MS = 90_000L
         const val LONG_STALL_MS = 8_000L
+
+        /** The shortest and longest wait before looking again where the parts to skip are. */
+        const val SEGMENT_WAIT_MIN_MS = 250L
+        const val SEGMENT_WAIT_MAX_MS = 60_000L
+
+        /** The slowest speed waits are worked out for. */
+        const val MIN_SPEED = 0.25f
+
+        /** Credits ending this close to the end run to it, so skipping them goes to the next episode. */
+        const val END_SLACK_MS = 15_000L
 
         /** A stream of unknown bitrate is taken to be this; quality never goes below [MIN_BITRATE]. */
         const val ASSUMED_BITRATE = 20_000_000L
@@ -535,6 +659,31 @@ object PlayerPlacement {
     fun swap() {
         if (canSwap || !withMenus) withMenus = !withMenus
     }
+}
+
+/** What the player does at a part the server marks to skip: offer a button, skip it by itself, or leave it. */
+enum class SkipMode {
+    ASK, AUTO, OFF;
+
+    companion object {
+        /** A setting's word as a mode; anything else asks. */
+        fun of(word: String): SkipMode = entries.firstOrNull { it.name == word } ?: ASK
+    }
+}
+
+/** The mode for [kind]: the credits and a preview after them have their own. */
+fun PlayerSettings.skipFor(kind: SegmentKind): SkipMode = when (kind) {
+    SegmentKind.OUTRO, SegmentKind.PREVIEW -> skipCredits
+    else -> skipIntros
+}
+
+/** A part to skip by name, for its button and notes: "Intro", "Credits". */
+fun segmentName(kind: SegmentKind): String = when (kind) {
+    SegmentKind.INTRO -> "Intro"
+    SegmentKind.RECAP -> "Recap"
+    SegmentKind.PREVIEW -> "Preview"
+    SegmentKind.OUTRO -> "Credits"
+    SegmentKind.COMMERCIAL -> "Advert"
 }
 
 /** How music repeats: not at all, the whole queue, or the one song. */

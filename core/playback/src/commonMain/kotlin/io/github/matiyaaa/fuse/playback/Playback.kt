@@ -16,6 +16,17 @@ enum class PlayMethod(val label: String) {
 /** A named point in an item, for the timeline's ticks and skipping by chapter. */
 data class Chapter(val startMs: Long, val title: String)
 
+/** A part of an episode or film a viewer may want to pass over, as the server marks it. */
+enum class SegmentKind { INTRO, RECAP, PREVIEW, OUTRO, COMMERCIAL }
+
+/**
+ * [kind] from [startMs] to [endMs] on the item's clock: an intro, the credits, a recap, found by
+ * the server (Jellyfin's media segments, from Intro Skipper or chapter names).
+ */
+data class Segment(val kind: SegmentKind, val startMs: Long, val endMs: Long) {
+    operator fun contains(ms: Long): Boolean = ms in startMs until endMs
+}
+
 /**
  * Something to play, as Fuse shows it: names, length, chapters and art. [id] is the provider's own;
  * art is whatever the image loader takes (a URL, or a provider's art key).
@@ -152,4 +163,7 @@ interface PlaybackResolver {
 
     /** Downloads an external subtitle file's text. */
     suspend fun subtitleText(url: String): String? = null
+
+    /** The parts of [item] that can be skipped (its intro, its credits), earliest first; empty when none are known. */
+    suspend fun segments(item: PlayItem): List<Segment> = emptyList()
 }

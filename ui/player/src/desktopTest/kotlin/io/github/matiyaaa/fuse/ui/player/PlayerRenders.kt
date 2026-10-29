@@ -86,6 +86,11 @@ internal object StillResolver : PlaybackResolver {
     override suspend fun next(item: PlayItem) = PlayItem("e4", "The Long Way Round", "Season 1, Episode 4", season = 1, episode = 4)
 }
 
+/** The same episode with an intro marked where the still stands, as Intro Skipper marks one. */
+internal object SkipResolver : PlaybackResolver by StillResolver {
+    override suspend fun segments(item: PlayItem) = listOf(io.github.matiyaaa.fuse.playback.Segment(io.github.matiyaaa.fuse.playback.SegmentKind.INTRO, 1_200_000, 1_300_000))
+}
+
 internal object MusicResolver : PlaybackResolver {
     override suspend fun resolve(item: PlayItem, request: PlayRequest) =
         PlaySource(url = "song", method = PlayMethod.DIRECT_PLAY, durationMs = item.durationMs, description = "FLAC, Stereo")
@@ -104,7 +109,7 @@ class PlayerRenders {
         if (dir.isBlank()) return
         val sizes = listOf(Triple("H", 1920 to 1080, 2.25f), Triple("M", 1920 to 1080, 1.5f), Triple("V", 1080 to 2400, 2.75f))
         for ((name, px, density) in sizes) {
-            for (state in listOf("controls", "settings", "subtitles")) {
+            for (state in listOf("controls", "settings", "subtitles", "skip")) {
                 runDesktopComposeUiTest(px.first, px.second) {
                     // The player's clocks run for ever; time moves only when told to.
                     mainClock.autoAdvance = false
@@ -113,7 +118,7 @@ class PlayerRenders {
                     val session = PlayerSession(scope) { StillEngine() }
                     session.start(
                         PlayItem("e3", "The Harbour at Night", "Season 1, Episode 3  ·  Undertow", chapters = listOf(Chapter(0, "Intro"), Chapter(600_000, "Act 1"), Chapter(1_500_000, "Act 2")), season = 1, episode = 3, durationMs = 2_640_000),
-                        StillResolver,
+                        if (state == "skip") SkipResolver else StillResolver,
                     )
                     setContent {
                         CompositionLocalProvider(LocalDensity provides Density(density), LocalInputRouter provides router) {
@@ -122,6 +127,11 @@ class PlayerRenders {
                     }
                     mainClock.advanceTimeBy(600)
                     when (state) {
+                        // Playing in the intro with the controls gone: the skip on offer, and A beside it.
+                        "skip" -> {
+                            session.play()
+                            mainClock.advanceTimeBy(4_600)
+                        }
                         "settings" -> router.dispatch(NavAction.CONTEXT, InputSource.GAMEPAD)
                         "subtitles" -> {
                             router.dispatch(NavAction.RIGHT, InputSource.GAMEPAD)

@@ -204,6 +204,32 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
     suspend fun albumTracks(base: String, a: Account, albumId: String): List<MediaItem> =
         items(base, a, "Items", mapOf("userId" to a.userId, "parentId" to albumId, "sortBy" to "ParentIndexNumber,IndexNumber,SortName", "fields" to "$LIST_FIELDS,MediaSources")).items
 
+    // Parts to skip ------------------------------------------------------------------------------------
+
+    /**
+     * The parts of [id] the server marks (Jellyfin 10.10 and later): its intro, credits, recap,
+     * preview and adverts, from Intro Skipper, chapter names or an EDL file, earliest first. A
+     * server before media segments answers that it doesn't have them (NOT_FOUND).
+     */
+    suspend fun segments(base: String, a: Account, id: String): List<io.github.matiyaaa.fuse.playback.Segment> {
+        val text = call(base, "MediaSegments/$id", a.token) { }
+        return segmentsOf(json.decodeFromString(MediaSegmentsResultDto.serializer(), text))
+    }
+
+    /**
+     * An older Intro Skipper's intro for the episode [id], on a server before media segments; null
+     * when it found none (it answers NOT_FOUND then, and for anything that isn't an episode).
+     */
+    suspend fun introTimestamps(base: String, a: Account, id: String): io.github.matiyaaa.fuse.playback.Segment? {
+        val text = try {
+            call(base, "Episode/$id/IntroTimestamps/v1", a.token) { }
+        } catch (e: JellyfinException) {
+            if (e.kind == JellyfinException.Kind.NOT_FOUND) return null
+            throw e
+        }
+        return introOf(json.decodeFromString(IntroTimestampsDto.serializer(), text))
+    }
+
     // What you have watched ---------------------------------------------------------------------------
 
     suspend fun setFavorite(base: String, a: Account, id: String, favorite: Boolean) {
@@ -383,6 +409,31 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
     internal fun <T> decode(serializer: KSerializer<T>, text: String): T = json.decodeFromString(serializer, text)
 
     companion object {
+        /** Media segments as Fuse's, earliest first: the kinds a viewer skips, each a real span. */
+        internal fun segmentsOf(dto: MediaSegmentsResultDto): List<io.github.matiyaaa.fuse.playback.Segment> = dto.items.mapNotNull { s ->
+            val kind = when (s.type) {
+                "Intro" -> io.github.matiyaaa.fuse.playback.SegmentKind.INTRO
+                "Outro" -> io.github.matiyaaa.fuse.playback.SegmentKind.OUTRO
+                "Recap" -> io.github.matiyaaa.fuse.playback.SegmentKind.RECAP
+                "Preview" -> io.github.matiyaaa.fuse.playback.SegmentKind.PREVIEW
+                "Commercial" -> io.github.matiyaaa.fuse.playback.SegmentKind.COMMERCIAL
+                else -> null
+            } ?: return@mapNotNull null
+            val start = s.startTicks / 10_000
+            val end = s.endTicks / 10_000
+            if (end - start < MIN_SEGMENT_MS) null else io.github.matiyaaa.fuse.playback.Segment(kind, start.coerceAtLeast(0), end)
+        }.sortedBy { it.startMs }
+
+        /** An older Intro Skipper's intro as a segment; null when it says it found none. */
+        internal fun introOf(dto: IntroTimestampsDto): io.github.matiyaaa.fuse.playback.Segment? {
+            val start = (dto.introStart * 1000).toLong().coerceAtLeast(0)
+            val end = (dto.introEnd * 1000).toLong()
+            return if (!dto.valid || end - start < MIN_SEGMENT_MS) null else io.github.matiyaaa.fuse.playback.Segment(io.github.matiyaaa.fuse.playback.SegmentKind.INTRO, start, end)
+        }
+
+        /** Spans shorter than this aren't worth a button: a provider's stray mark. */
+        internal const val MIN_SEGMENT_MS = 2_000L
+
         internal const val LIST_FIELDS = "PrimaryImageAspectRatio,Overview,ParentId,ChildCount,RecursiveItemCount,Genres,ProductionYear"
         internal const val DETAIL_FIELDS = "Overview,Genres,Studios,People,Taglines,MediaSources,MediaStreams,Chapters,PrimaryImageAspectRatio,ParentId,ChildCount,RecursiveItemCount,ProductionLocations"
         internal const val IMAGE_TYPES = "Primary,Backdrop,Logo,Thumb"

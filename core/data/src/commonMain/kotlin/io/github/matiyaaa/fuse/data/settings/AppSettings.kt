@@ -265,6 +265,13 @@ data class JellyfinSettings(
     val remoteMaxBitrate: Long = 20_000_000,
     val hardwareDecoding: Boolean = true,
     val autoplayNext: Boolean = true,
+    /**
+     * At an intro or a recap the server marks (Intro Skipper, chapter names): "ASK" (a button to
+     * skip it), "AUTO" (skipped by itself) or "OFF".
+     */
+    val skipIntros: String = "ASK",
+    /** The same at the credits and a preview after them; asking offers the next episode. */
+    val skipCredits: String = "ASK",
     val seekSeconds: Int = 10,
     val controlsTimeoutSeconds: Int = 4,
     val rememberSpeed: Boolean = false,
