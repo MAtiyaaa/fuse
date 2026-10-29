@@ -569,6 +569,12 @@ interface LibraryOps {
 
     /** Today's game in [platform]'s spotlight, and why; null while the system has no games. */
     fun spotlight(platform: PlatformId): Flow<Suggestion?> = kotlinx.coroutines.flow.flowOf(null)
+
+    /**
+     * Games here like [id], for its page: the rest of its series, its maker's, then games of its
+     * kinds, the ones not played yet first, each with why. Empty when nothing is like it.
+     */
+    fun similar(id: GameId): Flow<List<Suggestion>> = kotlinx.coroutines.flow.flowOf(emptyList())
     val platforms: StateFlow<List<PlatformCard>>
     fun games(query: GameQuery): Flow<List<GameCard>>
 

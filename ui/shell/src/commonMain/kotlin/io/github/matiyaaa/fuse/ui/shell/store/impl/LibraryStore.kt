@@ -377,6 +377,19 @@ internal class DefaultLibraryOps(
         }
     }.flowOn(Dispatchers.Default)
 
+    override fun similar(id: GameId): Flow<List<io.github.matiyaaa.fuse.ui.shell.store.Suggestion>> = recGames.map { games ->
+        ctx.work.run(BackgroundWork.Job.SUGGESTIONS) { Recommender.similar(id, games, limit = SIMILAR_MOST) }
+    }.distinctUntilChanged().flatMapLatest { picks ->
+        if (picks.isEmpty()) {
+            flowOf(emptyList())
+        } else {
+            val why = picks.associate { it.key to it.reason }
+            ctx.cards(data.games.observeSummariesInOrder(picks.map { it.key })).map { cards ->
+                cards.mapNotNull { card -> why[card.id]?.let { io.github.matiyaaa.fuse.ui.shell.store.Suggestion(card, it) } }
+            }
+        }
+    }.flowOn(Dispatchers.Default)
+
     /** Each series' first game's art, for the series' tile. */
     private val seriesArt: Flow<Map<io.github.matiyaaa.fuse.model.CollectionId, io.github.matiyaaa.fuse.ui.shell.store.Art>> =
         data.collections.observeSeriesLeads().flatMapLatest { leads ->
@@ -2291,6 +2304,9 @@ private const val WEEK_GAMES = 3
 
 /** How long the library stays still before suggestions are worked out again (a scan changes many games). */
 private const val RECOMMEND_SETTLE_MS = 2_000L
+
+/** The most games a game's page shows as like it. */
+private const val SIMILAR_MOST = 16
 
 /** How long suggestions' inputs are kept after the last screen using them goes (moving between pages). */
 private const val RECOMMEND_KEEP_MS = 30_000L
