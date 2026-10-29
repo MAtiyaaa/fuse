@@ -29,8 +29,21 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
 - **BIOS checks** report Unknown, never Missing, when a location cannot be read.
 - **Transfers that follow your rules**: how many at once, a bandwidth limit, slower or paused while
   you play, only on Wi-Fi, only while charging, a battery level to wait below, and quiet hours.
-- **Patches** (IPS, UPS, BPS and xdelta) applied from a game's options as a copy beside it, checked
-  against the game they were made for where the patch says; the game itself is never changed.
+- **Patches** (IPS, UPS, BPS, xdelta and PPF) applied from a game's options as a copy beside it,
+  checked against the game they were made for where the patch says; the game itself is never
+  changed. A PPF patch is written into a copy as it streams, so a big disc never has to fit in
+  memory, and a .cue game's data track is the one patched.
+- **Download later**: a RomM game, a whole RomM collection or system, or any waiting download can
+  go once the device is charging on Wi-Fi with no game running, never keeping it awake meanwhile.
+  Download All says how much a collection is and where it goes before anything is queued.
+- **Make Room**: Storage suggests games that can go, each with an identical copy on RomM or another
+  device and none played lately or a favourite, to look over before anything is deleted.
+- **Saves from anywhere**: PlayStation saves kept on their own or in a card wrapper, GameCube .gci
+  saves, and PlayStation 2 saves (.psu, .max, .cbs, .sps, .xps) written onto PCSX2's card as the
+  console writes one.
+- **Move in**: favourites, hidden games, play time, ratings, finished games and collections from
+  ES-DE, RetroArch, Pegasus and Steam, and a RetroAchievements Want to Play list, shown first and
+  undoable.
 - **Storage** shows every drive by name, connected or not, every game by the space it takes, and
   Fuse's own files: the saves Fuse One keeps here, a host's household saves, kept saves of removed
   profiles, and art and caches.
@@ -81,7 +94,13 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   put where each emulator reads them (Dolphin's Gecko and Action Replay codes in the game's own
   settings), with every file shown first, a mod that changes the same files as another said before
   it goes in, and each taken out again exactly.
-- **PlayStation disc details**: the serial and PCSX2's CRC, read from ISO and BIN images.
+- **PlayStation disc details**: the serial and PCSX2's CRC, read from ISO, BIN, CHD, CSO and ZSO
+  images.
+- **Continue where you left off**: a game left mid-play opens on Continue, starting the emulator on
+  the state it was left in (DuckStation's and PCSX2's resume state, RetroArch's automatic state),
+  on this device or another.
+- **The same hotkeys everywhere**: Select + Start quits, Select + R1 and L1 save and load a state,
+  in DuckStation, PCSX2, PPSSPP and RetroArch, beside your own, and taken out exactly when off.
 - **How a PS3 game runs in RPCS3**, from RPCS3's compatibility list, asked only when you choose it.
 - **Play Together**: host a game in RetroArch or PPSSPP for others to join, or join one your
   household is hosting (Fuse One says who hosts what), and online play set up as each emulator keeps
@@ -130,8 +149,15 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   two swap live. The second screen keeps its pages (Status and Controls) a swipe away.
 - **Home widgets** for Continue watching, Next up and Recently added, and the quick menu's Now
   playing to pause or skip.
+- **Skip Intro**: intros, recaps and credits as your server marks them (Intro Skipper, chapter
+  providers or Jellyfin's media segments), offered as a button or skipped by themselves, the
+  credits of an episode going straight on to the next.
+- **Pictures while seeking** from the server's trickplay, **lyrics** that follow the song line by
+  line (lyrics files, tags or LrcLib), and **subtitles found online** by the server's subtitle
+  plugins, played on with from the same moment.
 - **Setup explains Jellyfin** for anyone who hasn't met it, finds servers on your network and signs
-  you in. Your password goes to your server and nowhere else.
+  you in, with your password or with Quick Connect, a six-digit code approved on your phone. Your
+  password goes to your server and nowhere else.
 
 </details>
 
@@ -177,8 +203,12 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   finishes well and a double knock when something didn't, on Android and on the controller in use on
   Windows and macOS.
 - **Home** as a board of widgets you move and resize like a phone's home screen (Fused, the one
-  we recommend) or a flowing dashboard of rows (Network): 19 kinds of widgets, each designed for every size from one cell to
-  four by three.
+  we recommend) or a flowing dashboard of rows (Network): 30 kinds of widgets, each designed for
+  every size from one cell to four by three, chosen from a gallery that shows each as it will look.
+- **Your Journal**: a status, a rating in half stars (set by touch, mouse, keyboard or D-pad, as on
+  Letterboxd) and a note for every game, on every device through Fuse One, both ways with RomM, and
+  an Up next widget of what you want to play.
+- **Your Year**: recaps of this year, this month and every year before, saved as a picture to keep.
 - **Library** layouts from square box art to capsules to covers to a compact list; **Systems**, **Apps**
   (on Android), **Search** with filters, game pages, a media manager, a folder browser, the **quick
   menu** you arrange (tiles and widgets moved, resized, added and taken out by controller, touch or
@@ -254,6 +284,7 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
         <li>Keys and passwords kept in the Android Keystore</li>
         <li>Interface sounds and haptics</li>
         <li>Screenshots and screen recordings of Fuse</li>
+        <li>Play time counted only while a game is on screen, with Usage access</li>
       </ul>
     </td>
     <td width="50%" valign="top">
