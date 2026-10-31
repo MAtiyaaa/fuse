@@ -126,6 +126,17 @@ private const val DRIFT_PAN = 0.012f
 /** The drift moves about a pixel a second, so 30 updates a second are more than enough. */
 private const val DRIFT_FRAME_MS = 33L
 
+/**
+ * Whether a [HeroBackdrop]'s art covers everything under it now: a picture (or the lit room of an
+ * item without one) fully shown. What is drawn beneath (the theme's moving room) can rest meanwhile:
+ * nobody sees it, and redrawn every frame it cost a whole screen of drawing for nothing.
+ */
+@androidx.compose.runtime.Stable
+class HeroCover {
+    var covered by mutableStateOf(false)
+        internal set
+}
+
 private class HeroLayer(val source: HeroSource) {
     val alpha = FuselineValue(0f)
     var ready = false
@@ -165,6 +176,8 @@ fun HeroBackdrop(
     settleMs: Long = 110,
     /** Vertical parallax offset in px (content scroll); the art moves a fraction of it. */
     parallax: () -> Float = { 0f },
+    /** Told whether the art covers what is under it ([HeroCover]). */
+    cover: HeroCover? = null,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val colors = Fuse.colors
@@ -181,6 +194,8 @@ fun HeroBackdrop(
                     // No background here: the room fades back to the theme's own.
                     val fading = layers.filterNot { it.leaving }
                     fading.forEach { it.leaving = true }
+                    // The room under the art shows again as it fades.
+                    cover?.covered = false
                     launch {
                         coroutineScope { fading.forEach { l -> launch { l.alpha.animateTo(0f, motion.tween(Durations.BASE, Curves.Fade)) } } }
                         layers.removeAll(fading)
@@ -217,6 +232,7 @@ fun HeroBackdrop(
                             // Everything under a fully shown layer is invisible: release it.
                             val index = layers.indexOf(layer)
                             if (index > 0) repeat(index) { layers.removeAt(0) }
+                            if (!layer.leaving) cover?.covered = true
                         },
                     )
                 }

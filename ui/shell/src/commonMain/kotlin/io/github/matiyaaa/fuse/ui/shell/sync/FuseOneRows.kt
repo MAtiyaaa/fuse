@@ -269,7 +269,8 @@ internal fun syncRows(
                     }
                 },
             ))
-        } else {
+        } else if (app.platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
+            // Never on Android: a handheld or a phone doesn't manage the household.
             add(MenuAction(
                 "hostsignin", "Sign In as the Host", FuseIcons.LogIn,
                 detail = "With the host's username and password, once. This device then manages $hostName, and stays signed in through updates and restarts",
@@ -560,10 +561,7 @@ private fun manageDevices(app: AppState, svc: SyncService, devices: List<DeviceI
         icon = FuseIcons.MonitorSmartphone,
         message = "Every device connected to this host",
         options = devices.map { d ->
-            val icon = when (d.platform) {
-                "ANDROID" -> FuseIcons.Smartphone
-                else -> FuseIcons.Laptop
-            }
+            val icon = io.github.matiyaaa.fuse.ui.shell.reach.deviceIcon(d.platform, d.name)
             MenuAction(
                 "d.${d.id}", d.name + if (d.id == self) " (this one)" else "", icon,
                 detail = listOfNotNull(

@@ -453,7 +453,8 @@ internal fun lifeLine(item: MediaItem): String? {
 private fun Facts(item: MediaItem) {
     val c = Fuse.colors
     val parts = listOfNotNull(
-        item.year?.let { y -> if (item.type == MediaType.SERIES && item.endYear != null && item.endYear != y) "$y to ${item.endYear}" else "$y" },
+        // A show by the year it began: Regular Show, 2010.
+        item.year?.toString(),
         item.runtimeMs?.takeIf { item.type != MediaType.SERIES }?.let { minutes(it) },
         item.officialRating,
         item.videoFacts,

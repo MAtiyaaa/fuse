@@ -115,9 +115,11 @@ internal class BoardEditor {
 
 /**
  * The board's cells in pixels: [cellW] by [cellH] with [gapX] and [gapY] between them, from the
- * board's top left corner.
+ * board's top left corner. A value: two geometries of the same board are equal, so what reads one
+ * (each widget's handles and drags) isn't built again when the board is redrawn the same.
  */
-internal class BoardGeometry(val columns: Int, val cellW: Float, val cellH: Float, val gapX: Float, val gapY: Float, val offsetX: Float = 0f) {
+@androidx.compose.runtime.Immutable
+internal data class BoardGeometry(val columns: Int, val cellW: Float, val cellH: Float, val gapX: Float, val gapY: Float, val offsetX: Float = 0f) {
     val stepX: Float get() = cellW + gapX
     val stepY: Float get() = cellH + gapY
 

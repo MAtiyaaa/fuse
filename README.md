@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.6.1 is the <b>Continue Update</b>: carry on where you left off on any device, your Journal with half-star ratings, your history brought in, Your Year, saves from anywhere, the same hotkeys in every emulator, and Skip Intro, lyrics and Quick Connect on Jellyfin; 0.4.6.1 tells RomM's games apart and fits Jellyfin's posters to the screen</sub><br>
+<sub>0.4.7 is the <b>Cool Running Update</b>: a notebook for every game on the second screen, a page for every Android port, each person's own emulators, filters for your other devices' games, and the same motion for far less work: cooler, and longer on a battery</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -166,15 +166,13 @@ second-screen companion, Storage, backups and System health: everything is in
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.6.1 "The Continue Update"**: Fuse remembers the person, not only the games. Continue
-> carries on from the moment you stopped, on this device or another; the Journal keeps where you
-> are with each game, a rating in half stars and a note; Move In brings the years before Fuse from
-> ES-DE, RetroArch, Pegasus, Steam and RetroAchievements; Your Year recaps your play; saves from
-> any tool or console come home; one set of hotkeys works in every emulator; downloads can wait for
-> the charger; and on Jellyfin, Skip Intro, lyrics, subtitles found online and Quick Connect.
-> 0.4.6.1 tells RomM's games apart by system and by name, fits Jellyfin's posters to the screen and
-> asks again when an answer doesn't come. See [the release notes](docs/releases/0.4.6.1.md),
-> [0.4.6's](docs/releases/0.4.6.md) and every earlier release in [CHANGELOG.md](CHANGELOG.md).
+> **Fuse 0.4.7 "The Cool Running Update"**: the same motion for far less work. Moving through the
+> Library, Home, Systems and the second screen builds only what changes, the theme's room rests
+> while art covers it, and art is asked for once, so a handheld stays cooler and lasts longer. On the
+> second screen each game has a notebook of your own, as many pages as you like; each Android port
+> has a page of its own; two people sharing a device each keep their own emulator for a system; and
+> games on your other devices can be sorted and narrowed by system and device. See
+> [the release notes](docs/releases/0.4.7.md) and every earlier release in [CHANGELOG.md](CHANGELOG.md).
 
 Fuse runs on Android handhelds and phones, Linux (SteamOS and its Game Mode too), Windows and macOS,
 and every screen is checked at 23 screen sizes. Not there yet: translations and native patches for

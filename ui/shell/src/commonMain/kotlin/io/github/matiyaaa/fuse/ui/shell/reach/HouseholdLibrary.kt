@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -241,7 +242,7 @@ private fun LibraryHead(state: HouseholdState, actions: List<String>, selected: 
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                 FText("Fuse Library", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                    state.devices.take(4).forEach { d -> DeviceChip(d.name, deviceIcon(d.platform), d.online) }
+                    state.devices.take(4).forEach { d -> DeviceChip(d.name, deviceIcon(d.platform, d.name), d.online) }
                 }
             }
             Spacer(Modifier.width(Space.m))
@@ -275,16 +276,112 @@ internal fun DeviceChip(name: String, icon: androidx.compose.ui.graphics.vector.
     }
 }
 
-/** One system's games on the household's other devices (or every system's), in Fuse's grid. */
+/** How the household's games are listed: by name, newest first, largest first, or by system. */
+internal enum class HouseholdSort(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    NAME("A to Z", FuseIcons.SortAlpha),
+    ADDED("Newest", FuseIcons.Sparkles),
+    SIZE("Largest", FuseIcons.HardDrive),
+    SYSTEM("System", FuseIcons.Chip),
+}
+
+/** What the household's games are narrowed to on their page, kept while it is open. */
+internal class HouseholdFilter {
+    var system by androidx.compose.runtime.mutableStateOf<PlatformId?>(null)
+    var device by androidx.compose.runtime.mutableStateOf<String?>(null)
+    var sort by androidx.compose.runtime.mutableStateOf(HouseholdSort.NAME)
+}
+
+/** [games] narrowed to [f]'s system and device, in its order. */
+internal fun filtered(games: List<HouseholdGame>, f: HouseholdFilter): List<HouseholdGame> {
+    val kept = games.filter { g -> (f.system == null || g.card.platformId == f.system) && (f.device == null || f.device in g.holders) }
+    return when (f.sort) {
+        HouseholdSort.NAME -> kept.sortedBy { it.card.title.lowercase() }
+        HouseholdSort.ADDED -> kept.sortedByDescending { it.addedAt }
+        HouseholdSort.SIZE -> kept.sortedByDescending { it.sizeBytes }
+        HouseholdSort.SYSTEM -> kept.sortedWith(compareBy({ it.card.platformShort.lowercase() }, { it.card.title.lowercase() }))
+    }
+}
+
+/**
+ * One system's games on the household's other devices (or every system's), in Fuse's grid, with
+ * what narrows them above it: a system, a device (each with its own picture), and an order.
+ */
 @Composable
 fun HouseholdGamesScreen(app: AppState, platform: PlatformId?, name: String) {
     io.github.matiyaaa.fuse.ui.shell.app.CompanionShowsCopies(true)
     val ops = app.store.reach
     val flow = remember(platform) { ops.games(platform) }
     val games by flow.collectAsState(initial = null)
-    val list = games.orEmpty()
+    val household by ops.state.collectAsState()
+    val filter = rememberPageState(app.navigator, "household.filter.${platform?.value ?: "all"}") { HouseholdFilter() }
+    val everything = games.orEmpty()
+    val list = remember(everything, filter.system, filter.device, filter.sort) { filtered(everything, filter) }
     val romm by app.store.romm.state.collectAsState()
     val sel = rememberPageState(app.navigator, "household.grid.${platform?.value ?: "all"}") { SectionedGridSelection() }
+    // Every system and device the games are on, each with how many, for their pickers.
+    val bySystem = remember(everything) { everything.groupBy { it.card.platformId }.mapValues { (_, g) -> g.size to g.first().card.platformShort } }
+    val byDevice = remember(everything) { everything.flatMap { it.holders }.groupingBy { it }.eachCount() }
+    fun pickSystem() {
+        app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = "Show games from", icon = FuseIcons.Chip,
+            options = listOf(
+                io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                    "sys.all", "Every system", FuseIcons.Layers, detail = io.github.matiyaaa.fuse.ui.shell.components.gamesText(everything.size),
+                    trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Check(filter.system == null),
+                    onSelect = { app.choice = null; filter.system = null; sel.select(0, 0) },
+                ),
+            ) + bySystem.entries.sortedBy { it.value.second.lowercase() }.map { (id, v) ->
+                io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                    "sys.${id.value}", io.github.matiyaaa.fuse.library.PlatformCatalog.byId(id)?.name ?: v.second, FuseIcons.Chip,
+                    detail = io.github.matiyaaa.fuse.ui.shell.components.gamesText(v.first),
+                    trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Check(filter.system == id),
+                    onSelect = { app.choice = null; filter.system = id; sel.select(0, 0) },
+                )
+            },
+        )
+    }
+    fun pickDevice() {
+        app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = "Show games on", icon = FuseIcons.MonitorSmartphone,
+            options = listOf(
+                io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                    "dev.all", "Every device", FuseIcons.MonitorSmartphone, detail = io.github.matiyaaa.fuse.ui.shell.components.gamesText(everything.size),
+                    trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Check(filter.device == null),
+                    onSelect = { app.choice = null; filter.device = null; sel.select(0, 0) },
+                ),
+            ) + byDevice.entries.sortedByDescending { it.value }.map { (deviceName, n) ->
+                val d = household.devices.firstOrNull { it.name == deviceName }
+                val kind = deviceKind(deviceName, d?.platform.orEmpty())
+                io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                    "dev.$deviceName", deviceName, kind.icon,
+                    detail = listOfNotNull(kind.words, io.github.matiyaaa.fuse.ui.shell.components.gamesText(n), if (d?.online == true) "On now" else "Away").joinToString("  ·  "),
+                    trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Check(filter.device == deviceName),
+                    onSelect = { app.choice = null; filter.device = deviceName; sel.select(0, 0) },
+                )
+            },
+        )
+    }
+    fun pickSort() {
+        app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = "Sort by", icon = FuseIcons.Sort,
+            options = HouseholdSort.entries.map { s ->
+                io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                    "sort.${s.name}", s.label, s.icon,
+                    trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Check(filter.sort == s),
+                    onSelect = { app.choice = null; filter.sort = s; sel.select(0, 0) },
+                )
+            },
+        )
+    }
+    val actions = buildList {
+        if (platform == null && bySystem.size > 1) {
+            add(io.github.matiyaaa.fuse.ui.shell.downloads.TopAction(filter.system?.let { bySystem[it]?.second } ?: "Every System", FuseIcons.Filter) { pickSystem() })
+        }
+        if (byDevice.size > 1 || filter.device != null) {
+            add(io.github.matiyaaa.fuse.ui.shell.downloads.TopAction(filter.device ?: "Every Device", filter.device?.let { n -> deviceIcon(household.devices.firstOrNull { it.name == n }?.platform.orEmpty(), n) } ?: FuseIcons.MonitorSmartphone) { pickDevice() })
+        }
+        add(io.github.matiyaaa.fuse.ui.shell.downloads.TopAction(filter.sort.label, filter.sort.icon) { pickSort() })
+    }
     val section = GameSection(
         "main", name, FuseIcons.MonitorSmartphone, null,
         list.map { g ->
@@ -296,17 +393,26 @@ fun HouseholdGamesScreen(app: AppState, platform: PlatformId?, name: String) {
             )
         },
     )
-    SectionedGameGrid(app, sel, listOf(section), loading = games == null, empty = "No other device has games here this device doesn't.", tag = "household.grid") {
+    val narrowed = filter.system != null || filter.device != null
+    SectionedGameGrid(
+        app, sel, listOf(section), loading = games == null,
+        empty = if (narrowed) "Nothing here with those filters. Choose Every System or Every Device to see the rest." else "No other device has games here this device doesn't.",
+        tag = "household.grid", actions = actions,
+    ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(Fuse.geometry.control)).background(Fuse.colors.accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
-                FuseIcon(FuseIcons.MonitorSmartphone, size = 20.dp, tint = Fuse.colors.accent)
+                FuseIcon(filter.device?.let { n -> deviceIcon(household.devices.firstOrNull { it.name == n }?.platform.orEmpty(), n) } ?: FuseIcons.MonitorSmartphone, size = 20.dp, tint = Fuse.colors.accent)
             }
             Spacer(Modifier.width(Space.m))
             Column(Modifier.weight(1f)) {
                 FText(name, Fuse.type.title, maxLines = 1)
                 val holders = list.flatMap { it.holders }.distinct()
+                val count = io.github.matiyaaa.fuse.ui.shell.library.countText(list.size)
                 FText(
-                    listOfNotNull("${list.size} ${if (list.size == 1) "game" else "games"} not on this device", holders.takeIf { it.isNotEmpty() }?.let { "on " + it.joinToString(", ") }).joinToString("  ·  "),
+                    listOfNotNull(
+                        if (narrowed) "$count of ${io.github.matiyaaa.fuse.ui.shell.library.countText(everything.size)} games" else "$count ${if (list.size == 1) "game" else "games"} not on this device",
+                        holders.takeIf { it.isNotEmpty() && filter.device == null }?.let { "on " + it.joinToString(", ") },
+                    ).joinToString("  ·  "),
                     Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1,
                 )
             }

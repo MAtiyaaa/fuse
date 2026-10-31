@@ -52,7 +52,8 @@ internal object MediaArtPrefetch {
         val loader = SingletonImageLoader.get(context)
         for (item in order) {
             val backdrop = (item.backdrop ?: item.thumb ?: item.poster)?.sized(ArtworkSizing.bucket(heroPx))
-            val logoPx = ArtworkSizing.bucket((heroPx / 3).coerceAtLeast(256))
+            // Every logo is fetched at one size wherever it is drawn (JellyfinImages.LOGO_PX).
+            val logoPx = io.github.matiyaaa.fuse.ui.shell.platform.JellyfinImages.LOGO_PX
             val logo = item.logo?.sized(logoPx)
             if (backdrop != null) prefetch(scope, "b:${backdrop.key}:$heroPx") {
                 loader.execute(heroRequest(context, backdrop, heroPx)) is SuccessResult

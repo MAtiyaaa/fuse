@@ -8,6 +8,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -34,7 +35,6 @@ import coil3.size.Scale
 import coil3.size.Dimension
 import coil3.size.Size
 import coil3.size.SizeResolver
-import io.github.matiyaaa.fuse.model.ArtworkPixels
 import io.github.matiyaaa.fuse.model.ArtworkSizing
 import androidx.compose.ui.graphics.painter.Painter
 import io.github.matiyaaa.fuse.ui.designsystem.effects.shimmer
@@ -106,19 +106,23 @@ fun Artwork(
     val sizer = rememberConstraintsSizeResolver()
     // The size it is decoded at only ever grows: a picture decoded larger serves a smaller slot just
     // as well, so a grid of tiles shrinking with a folding header (a change of size every frame)
-    // never asks for its pictures again, and never recomposes for it.
-    var pixels by remember(zoom) { mutableStateOf<ArtworkPixels?>(null) }
-    val decodeSizer = remember(sizer, zoom, pixels) {
+    // never asks for its pictures again, and never recomposes for it. The largest size asked for is
+    // kept outside the snapshot: a tile's first layout used to write it as state, which built every
+    // tile twice and sent each its picture's request twice (the first called off) as a grid opened.
+    // Only a slot that grows past it (a tile unfolding larger than it ever was) asks again.
+    val decoded = remember(zoom) { IntArray(2) }
+    var grown by remember(zoom) { mutableIntStateOf(0) }
+    val decodeSizer = remember(sizer, zoom, grown) {
         SizeResolver {
-            val ready = pixels
-            if (ready != null) return@SizeResolver Size(ready.width, ready.height)
             val measured = sizer.size()
             val target = ArtworkSizing.decode(
                 (measured.width as? Dimension.Pixels)?.px ?: 512,
                 (measured.height as? Dimension.Pixels)?.px ?: 512,
                 enlargement = maxOf(1.15f, zoom),
             )
-            Size(target.width, target.height)
+            decoded[0] = maxOf(decoded[0], target.width)
+            decoded[1] = maxOf(decoded[1], target.height)
+            Size(decoded[0], decoded[1])
         }
     }
     // A picture that failed is asked for again a few times ([ArtRetry]), not kept failed while shown.
@@ -189,16 +193,23 @@ fun Artwork(
         }
     }
     // Quick loads (memory or disk) never show the fallback; slow ones (network) do after a moment.
+    // Only while it is still loading: art that came at once never wakes again to say it was slow
+    // (every tile on screen used to be built once more, 400 ms after it appeared, for nothing).
     var slow by remember(model) { mutableStateOf(false) }
-    LaunchedEffect(model) {
+    val arrived = success != null || held != null
+    LaunchedEffect(model, arrived) {
+        if (arrived) return@LaunchedEffect
         delay(fallbackDelayMs)
         slow = true
     }
     Box(modifier.then(sizer).onSizeChanged { measured ->
+        // Asked again only when the slot grows past every size decoded so far.
+        if (decoded[0] == 0) return@onSizeChanged
         val need = ArtworkSizing.decode(measured.width, measured.height, enlargement = maxOf(1.15f, zoom))
-        val had = pixels
-        if (had == null || need.width > had.width || need.height > had.height) {
-            pixels = if (had == null) need else ArtworkPixels(maxOf(had.width, need.width), maxOf(had.height, need.height))
+        if (need.width > decoded[0] || need.height > decoded[1]) {
+            decoded[0] = maxOf(decoded[0], need.width)
+            decoded[1] = maxOf(decoded[1], need.height)
+            grown++
         }
     }) {
         val waiting = success == null && !failed

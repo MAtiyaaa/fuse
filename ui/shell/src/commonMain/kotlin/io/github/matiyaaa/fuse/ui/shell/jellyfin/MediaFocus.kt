@@ -21,14 +21,16 @@ internal object MediaFocus {
     fun get(key: Any?): MediaItem? = (key as? String)?.takeIf { it.startsWith("jf:") }?.let { synchronized(items) { items[it] } }
 }
 
-/** The facts line for the second screen: year (or years), length or seasons, rating. */
+/**
+ * The facts line for the second screen: the year (a show's first), a film's length, its rating. A
+ * show is never a run of years or a count of seasons.
+ */
 internal fun mediaFacts(item: MediaItem): String = listOfNotNull(
     when (item.type) {
         MediaType.EPISODE -> listOfNotNull(item.seriesName, item.episodeLabel).joinToString("  ·  ").ifEmpty { null }
-        MediaType.SERIES -> item.year?.let { y -> if (item.endYear != null && item.endYear != y) "$y to ${item.endYear}" else "$y" }
         else -> item.year?.toString()
     },
-    if (item.type == MediaType.SERIES) seriesCount(item) else item.runtimeMs?.let { minutes(it) },
+    item.runtimeMs?.takeIf { item.type != MediaType.SERIES && item.type != MediaType.SEASON }?.let { minutes(it) },
     item.officialRating,
     item.rating?.let { r -> "${(r * 10).toInt() / 10.0}" },
 ).joinToString("  ·  ")

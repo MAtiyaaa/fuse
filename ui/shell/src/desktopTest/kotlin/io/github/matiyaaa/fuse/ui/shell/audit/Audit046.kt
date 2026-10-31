@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.audit
 
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -165,16 +166,45 @@ internal fun AuditDriver.fuse046Screens() {
         }
         try {
             pumpUntil("the open session to show", 20_000) { base.library.home.value.playtime.currentGame != null }
+            // A Journal already begun: playing it, rated, and two pages of notes.
+            runBlocking {
+                base.library.setJournal(card.id, GameJournal(
+                    status = PlayStatus.PLAYING, statusAt = start, rating = 7,
+                    note = io.github.matiyaaa.fuse.model.NoteBook.join(listOf(
+                        "Chapter three\nRing the bell before lighting the lamp.",
+                        "Door codes\nLighthouse: 4-1-7-3\nCellar: 9-0-2",
+                    )),
+                ))
+            }
             io.github.matiyaaa.fuse.ui.shell.app.CompanionPage.current.value = 0
             view = AuditView.Companion(store, platform, io.github.matiyaaa.fuse.model.DualScreenMode.GAME_COMPANION)
             settle(1_500)
-            shoot("the game running, with its Journal and Quit", 1_200)
+            shoot("the game running: its logo, the session and what's left to earn", 1_200)
             tapDescribed("Journal")
-            shoot("choosing where you are with it", 900)
-            val beaten = textCentre("Beaten")
-            touch { click(beaten) }
+            settle(900)
+            shoot("the Journal, a scroll below", 900)
+            touch { click(textCentre("Beaten")) }
             settle(900)
             shoot("marked Beaten", 900)
+            // Writing: the page opens, the keys rise at the foot of the screen, the line stays above them.
+            // The page itself, by its top (the rest is below the screen): writing brings its lines up
+            // above the keys.
+            val paper = describedBounds("touch to write").first()
+            touch { click(androidx.compose.ui.geometry.Offset(paper.center.x, minOf(paper.top + 60f, height - 40f))) }
+            settle(900)
+            io.github.matiyaaa.fuse.ui.shell.app.CompanionTyping.field.replaceAll("Door codes\nLighthouse: 4-1-7-3\nCellar: 9-0-2\nBoathouse: try 5-5-1")
+            settle(900)
+            shoot("writing on a page, the keys risen", 1_200)
+            tapDescribed("Done")
+            settle(900)
+            shoot("the page kept", 900)
+            tapDescribed("New Page")
+            settle(900)
+            shoot("a new page begun", 1_200)
+            tapDescribed("Done")
+            settle(700)
+            repeat(4) { touch { swipeDown(startY = height * 0.2f, endY = height * 0.9f, durationMillis = 200) }; settle(300) }
+            settle(900)
             tapDescribed("Quit")
             shoot("Quit asks for a second tap", 600)
         } finally {
@@ -277,18 +307,29 @@ internal fun AuditDriver.fuse046Screens() {
         try {
             show(object : FuseStore by base { override val ports = portsOps })
             home()
-            repeat(6) { if (!hasText("Games rebuilt for Android")) tap(PadButton.R1) }
-            waitFor("Games rebuilt for Android")
+            repeat(6) { if (!hasText("Every System")) tap(PadButton.R1) }
+            waitFor("Every System")
             settle(1_500)
-            shoot("box art for every port, the chosen one told above", 1_500)
+            shoot("every port, the chosen one told above", 1_500)
             tap(PadButton.DPAD_RIGHT, 2)
             settle(900)
             shoot("one installing, the stage following", 1_200)
-            tap(PadButton.DPAD_UP)
-            tap(PadButton.DPAD_RIGHT, 3)
-            tap(PadButton.DPAD_DOWN)
+            tap(PadButton.DPAD_DOWN, 2)
+            settle(1_200)
+            shoot("further down: the heading folded away, more rows in view", 1_200)
+            // Confirm opens the port's own page; nothing is installed until its button says so.
+            tap(PadButton.A)
+            waitFor("Project Page")
+            settle(1_200)
+            shoot("a port's own page", 1_500)
+            tap(PadButton.DPAD_DOWN, 3)
             settle(900)
-            shoot("everything, with ports for games you haven't got", 1_200)
+            shoot("its page, further down", 1_200)
+            tap(PadButton.B)
+            // Back on the list as it was left: folded, where the controller was.
+            waitGone("Project Page")
+            settle(1_200)
+            shoot("back on the list, where it was", 1_200)
         } finally {
             base.updatePrefs { it.copy(portsEnabled = false, addonsOrder = emptyList()) }
         }

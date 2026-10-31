@@ -473,8 +473,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
     /** HowLongToBeat's times for the game, with your progress, and the way to say it's another game. */
     fun showBeat(view: io.github.matiyaaa.fuse.ui.shell.store.HltbView) {
         val g = view.game
+        // Time played is said once, apart from the times to beat, never as a share of them.
         val played = game.play.totalSeconds
-        fun progress(seconds: Long) = if (played > 0 && seconds > 0) "${((played.toFloat() / seconds).coerceAtMost(1f) * 100).toInt()}% played" else null
         val times = listOf(
             Triple("main", "Main story", g.mainSeconds),
             Triple("plus", "Main story and extras", g.plusSeconds),
@@ -483,10 +483,13 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
         app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
             title = g.name,
             icon = FuseIcons.Hourglass,
-            message = listOfNotNull(g.year?.toString(), g.platforms.takeIf { it.isNotBlank() }, "HowLongToBeat").joinToString("  ·  "),
+            message = listOfNotNull(
+                g.year?.toString(), g.platforms.takeIf { it.isNotBlank() }, "HowLongToBeat",
+                if (played > 0) "You've played ${playtimeText(played)}" else null,
+            ).joinToString("  ·  "),
             options = times.map { (id, label, seconds) ->
                 io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
-                    "beat.$id", label, FuseIcons.Clock3, detail = progress(seconds),
+                    "beat.$id", label, FuseIcons.Clock3,
                     trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Value(beatText(seconds)),
                     section = "Times", onSelect = { app.choice = null },
                 )
@@ -1346,16 +1349,13 @@ private fun androidx.compose.foundation.layout.RowScope.ProgressWords(part: Prog
             FuseIcon(FuseIcons.Sparkle, size = Size.iconS, tint = c.textMuted)
             FText("Not played yet", Fuse.type.body, color = c.textMuted, maxLines = 1)
         }
+        // How long the game takes, said on its own: "26 h to beat". Never as a share of the time
+        // played, which meant nothing (time spent isn't progress, and any slower run read 100%).
+        // The time played is its own part beside it.
         ProgressPart.BEAT -> {
             val (seconds, what) = beat?.let { beatGoal(it.game) } ?: (0L to "")
-            if (played > 0 && seconds > 0) {
-                val fill = (played.toFloat() / seconds).coerceIn(0f, 1f)
-                io.github.matiyaaa.fuse.ui.designsystem.components.ProgressBar(fill, Modifier.width(Size.touch), color = c.accent)
-                words("${(fill * 100).toInt()}%", "of ${beatText(seconds)}", full = what)
-            } else {
-                FuseIcon(FuseIcons.Hourglass, size = Size.iconS, tint = c.textMuted)
-                words(beatText(seconds), what)
-            }
+            FuseIcon(FuseIcons.Hourglass, size = Size.iconS, tint = c.textMuted)
+            words(beatText(seconds), what)
         }
         ProgressPart.ACHIEVEMENTS -> {
             val a = d.achievements ?: return

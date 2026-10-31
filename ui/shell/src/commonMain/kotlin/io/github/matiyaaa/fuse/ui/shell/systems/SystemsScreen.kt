@@ -172,7 +172,9 @@ fun SystemsScreen(app: AppState) {
             Spacer(Modifier.height(Size.hudHeight + if (compactHeader) Space.s else Space.xl))
             // On a short screen (a handheld's lower screen) the header shrinks to one line once you are
             // past the board's first row, so more systems fit; back on the first row it opens again.
-            val headerFold by io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat(
+            // Read only as the header is laid out: read here, it composed the whole page again on
+            // every frame of the fold.
+            val headerFold = io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat(
                 if (compactHeader && chosenRow > 0) 1f else 0f, Fuse.motion.followSpring(), label = "systems header fold",
             )
             // On a short screen the header folds away while systems are arranged, so the board has the room.
@@ -183,7 +185,7 @@ fun SystemsScreen(app: AppState) {
             ) {
                 SystemHeader(
                     current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0), widthFraction = headerWidth,
-                    collapse = headerFold,
+                    collapseBy = { headerFold.floatValue },
                     activity = played?.takeIf { it.first == currentId }?.second,
                     playLine = true,
                 )
@@ -770,6 +772,8 @@ internal fun SystemHeader(
     modifier: Modifier = Modifier,
     widthFraction: Float = 0.62f,
     collapse: Float = 0f,
+    /** As [collapse], read only while the header is laid out, for a fold that moves every frame. */
+    collapseBy: (() -> Float)? = null,
     /** The maker line, game count and emulator around the logo; the system's own page leaves them out. */
     showMeta: Boolean = true,
     logoHeight: Dp = if (compact) Size.touch - Space.s else Size.touch + Space.l,
@@ -785,7 +789,7 @@ internal fun SystemHeader(
     val motion = Fuse.motion
     Swap(
         targetState = card,
-        modifier = modifier.fillMaxWidth(widthFraction).foldAway(collapse),
+        modifier = modifier.fillMaxWidth(widthFraction).then(if (collapseBy != null) Modifier.foldAway(collapseBy) else Modifier.foldAway(collapse)),
         contentKey = { it?.platform?.id },
         transitionSpec = { fadeIn(motion.fade(Durations.BASE)) togetherWith fadeOut(motion.exit(Durations.INSTANT)) },
         contentAlignment = Alignment.BottomStart,
@@ -904,11 +908,14 @@ private fun FirmwareProblem(problem: String) {
  * Folds content away upwards by [fraction]: it slides up under its own top edge, fades out a little
  * ahead of the slide, and gives its height back to whatever follows.
  */
-internal fun Modifier.foldAway(fraction: Float): Modifier = this
+internal fun Modifier.foldAway(fraction: Float): Modifier = foldAway { fraction }
+
+/** [foldAway] by a fraction read only while laid out, so a fold in motion lays out again without composing. */
+internal fun Modifier.foldAway(fraction: () -> Float): Modifier = this
     .clipToBounds()
     .layout { measurable, constraints ->
         val p = measurable.measure(constraints)
-        val f = fraction.coerceIn(0f, 1f)
+        val f = fraction().coerceIn(0f, 1f)
         val h = (p.height * (1f - f)).roundToInt()
         layout(p.width, h) {
             p.placeWithLayer(0, h - p.height) { alpha = (1f - f * 1.6f).coerceIn(0f, 1f) }

@@ -103,7 +103,8 @@ internal fun ContinueCard(item: MediaItem, selected: Boolean, width: Dp, onClick
     val title = if (episode) item.seriesName ?: item.name else item.name
     val line = when {
         episode -> listOfNotNull(item.episodeLabel, item.name.takeIf { it != title }).joinToString("  \u00B7  ")
-        else -> listOfNotNull(item.year?.toString(), item.runtimeMs?.let { minutes(it) }).joinToString("  \u00B7  ")
+        // A film by its year; how long is left is on the bar below.
+        else -> item.year?.toString().orEmpty()
     }.ifEmpty { null }
     Tile(
         selected = selected, label = listOfNotNull(title, line).joinToString(", "),
@@ -190,16 +191,15 @@ private fun CardText(title: String, line: String?, selected: Boolean) {
     }
 }
 
-/** A tick when watched; for a show or season, how many episodes are left. */
+/**
+ * A tick when watched, a heart for a favourite. A show carries no count of the episodes left on its
+ * poster: a number on every show said little and crowded the art.
+ */
 @Composable
 private fun Badges(item: MediaItem, modifier: Modifier) {
-    val unplayed = item.unplayed?.takeIf { it > 0 && (item.type == MediaType.SERIES || item.type == MediaType.SEASON) }
     when {
         item.played -> Box(modifier.size(24.dp).clip(CircleShape).background(Fuse.colors.accent), contentAlignment = Alignment.Center) {
             FuseIcon(FuseIcons.Check, size = 14.dp, tint = Fuse.colors.onAccent)
-        }
-        unplayed != null -> Box(modifier.height(24.dp).clip(RoundedCornerShape(12.dp)).background(Fuse.colors.accent).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-            FText(unplayed.toString(), Fuse.type.caption.tabular(), color = Fuse.colors.onAccent, maxLines = 1)
         }
         item.favorite -> Box(modifier.size(24.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
             FuseIcon(FuseIcons.HeartFilled, size = 13.dp, tint = Color.White)
@@ -215,9 +215,13 @@ private fun Progress(fraction: Float, modifier: Modifier) {
     }
 }
 
+/**
+ * The line under a poster: what tells it apart at a glance, and no more. A show is its first year
+ * (Regular Show, 2010), never a run of years or a count of its seasons or episodes.
+ */
 private fun posterLine(item: MediaItem): String? = when (item.type) {
-    MediaType.SERIES -> listOfNotNull(item.year?.let { y -> if (item.endYear != null && item.endYear != y) "$y to ${item.endYear}" else "$y" }, seriesCount(item)).joinToString("  ·  ").ifEmpty { null }
-    MediaType.SEASON -> item.childCount?.let { if (it == 1) "1 episode" else "$it episodes" }
+    MediaType.SERIES -> item.year?.toString()
+    MediaType.SEASON -> item.year?.toString()
     MediaType.EPISODE -> listOfNotNull(item.episodeLabel, item.seriesName).joinToString("  ·  ")
     MediaType.ALBUM -> item.albumArtist ?: item.artists.firstOrNull() ?: item.year?.toString()
     MediaType.SONG -> item.artists.firstOrNull() ?: item.album
@@ -241,6 +245,3 @@ private const val LOGO_WIDTH = 480
 /** A logo's height on a [ContinueCard], as a share of the card's width. */
 private const val LOGO_SHARE = 0.15f
 
-/** A show's count for its line: its new episodes in a list of what's new, else its seasons. */
-internal fun seriesCount(item: MediaItem): String? = item.newEpisodes?.let { if (it == 1) "1 new episode" else "$it new episodes" }
-    ?: item.childCount?.let { if (it == 1) "1 season" else "$it seasons" }

@@ -277,11 +277,23 @@ class UiAudit {
 
     @Test fun fuse046L() = audit(AuditSize.L) { fuse046Screens() }
 
+    /** The AYN Thor's upper screen at its largest display size: the shortest a handheld's main screen gets. */
+    @Test fun fuse046J() = audit(AuditSize.J) { fuse046Screens() }
+
+    @Test fun probeL() = audit(AuditSize.L) { motionProbe("L") }
+
+    @Test fun probeJ() = audit(AuditSize.J) { motionProbe("J") }
+
     @Test fun reachM() = audit(AuditSize.M) { reachScreens() }
 
     @Test fun reachV() = audit(AuditSize.V) { reachScreens() }
 
     @Test fun reachC() = audit(AuditSize.C) { reachScreens() }
+
+    /** The household's games on an AYN Thor: its upper screen, and its lower screen with the menus flipped there. */
+    @Test fun reachJ() = audit(AuditSize.J) { reachScreens() }
+
+    @Test fun reachL() = audit(AuditSize.L) { reachScreens() }
 
     @Test fun rommH() = audit(AuditSize.H) { rommScreens() }
 

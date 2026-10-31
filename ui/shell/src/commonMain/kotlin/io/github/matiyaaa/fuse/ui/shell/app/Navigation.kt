@@ -43,6 +43,9 @@ sealed interface Route {
     /** An app's page in the Store, by its key in the catalogue. */
     data class StoreApp(val key: String) : Route
 
+    /** An Android port's own page: its game, the port, how it stands here and what can be done. */
+    data class AndroidPort(val id: String) : Route
+
     /** Every installed app's updates in one place (see StoreUpdatesScreen). */
     data object StoreUpdates : Route
 

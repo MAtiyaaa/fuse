@@ -583,7 +583,22 @@ class HostStore(
         true
     }
 
-    private fun deviceInfoOf(d: DeviceRecord) = DeviceInfo(d.id, d.name, d.platform, d.profile, d.lastSeen, d.lastSync, d.connection, d.revoked, d.fuseVersion, d.protocol, d.manager)
+    /**
+     * A device as the household sees it. The host computer's own Fuse ([DeviceRecord.owner]) is seen
+     * now whenever the host answers: the host runs on it, so it is plainly there. Its Fuse may stay
+     * closed for days while the host's service keeps running, and the household then called the very
+     * computer it was talking to "away, seen 7 days ago" beside its RomM shown online.
+     */
+    private fun deviceInfoOf(d: DeviceRecord): DeviceInfo {
+        val here = d.owner && !d.revoked
+        return DeviceInfo(
+            d.id, d.name, d.platform, d.profile,
+            lastSeen = if (here) maxOf(d.lastSeen, clock()) else d.lastSeen,
+            lastSync = d.lastSync,
+            connection = if (here) d.connection.ifEmpty { "LOCAL" } else d.connection,
+            revoked = d.revoked, fuseVersion = d.fuseVersion, protocol = d.protocol, manager = d.manager,
+        )
+    }
 
     /** Notes the Fuse [id] calls from, kept only when it changed (an update, or the first call from 0.4.2). */
     internal fun noteVersion(id: String, fuseVersion: String, protocol: Int) = synchronized(lock) {

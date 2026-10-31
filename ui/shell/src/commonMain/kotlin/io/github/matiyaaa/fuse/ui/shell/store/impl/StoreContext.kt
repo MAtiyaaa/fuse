@@ -60,6 +60,11 @@ internal class StoreContext(
 
     val data = services.data
     val host = services.host
+
+    init {
+        // A system's emulator is each person's own, for this kind of device (ScopedSettingsRepository).
+        data.scopedSettings.personalKind = host.name.lowercase()
+    }
     val platforms: PlatformLookup = PlatformCatalog
     val registry: AdapterRegistry = AdapterRegistry.Default
 

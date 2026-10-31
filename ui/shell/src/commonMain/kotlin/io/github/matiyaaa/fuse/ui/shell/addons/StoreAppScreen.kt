@@ -172,7 +172,8 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
         val compact = maxHeight < 600.dp
         val wide = maxWidth > 900.dp
         Column(
-            Modifier.fillMaxSize().fadingEdges(top = if (scroll.value > 0) Space.xl else 0.dp).dragVerticalScroll(scroll)
+            // Read from the scroll itself: read here, every frame of a scroll composed the page again.
+            Modifier.fillMaxSize().fadingEdges(scroll, top = Space.xl, bottom = 0.dp).dragVerticalScroll(scroll)
                 .padding(top = Size.hudHeight + Space.s, bottom = Size.hintHeight + Space.xl)
                 .padding(horizontal = Space.gutter),
         ) {

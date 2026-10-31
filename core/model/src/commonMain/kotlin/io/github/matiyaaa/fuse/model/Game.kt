@@ -245,9 +245,42 @@ data class GameJournal(
         /** The top rating: ten halves of five stars, as RomM keeps it. */
         const val MOST_RATING = 10
 
-        /** A note is a few lines, not a diary: longer is cut here. */
-        const val LONGEST_NOTE = 2_000
+        /**
+         * The most a game's notes hold, every page together: a notebook's worth, so writing never
+         * runs out while playing, and still one small field to keep, back up and sync.
+         */
+        const val LONGEST_NOTE = 40_000
     }
+}
+
+/**
+ * A game's notes as pages of a notebook, kept in [GameJournal.note] as one text: the pages one after
+ * another, each begun with a page break (form feed, the character that has always meant "new page").
+ * One page is just its text, so a note written before notebooks, a note from RomM and one read on an
+ * older Fuse all stay as they are; a notebook goes everywhere a note already goes (Fuse One, backups,
+ * RomM), with nothing new to sync.
+ */
+object NoteBook {
+    /** What starts each page after the first. */
+    const val PAGE_BREAK = '\u000C'
+
+    /** The pages of [note], at least one (empty when there is no note yet). */
+    fun pages(note: String?): List<String> {
+        if (note.isNullOrEmpty()) return listOf("")
+        return note.split(PAGE_BREAK).map { it.trim('\n', '\r') }.ifEmpty { listOf("") }
+    }
+
+    /** [pages] kept as one note: empty pages left out, null when nothing is written at all. */
+    fun join(pages: List<String>): String? {
+        val kept = pages.map { it.trimEnd() }.filter { it.isNotBlank() }
+        if (kept.isEmpty()) return null
+        return kept.joinToString("\n$PAGE_BREAK\n").take(GameJournal.LONGEST_NOTE)
+    }
+
+    /** A page's title: its first line, a little of it. */
+    fun title(page: String): String? = page.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }?.take(TITLE_LENGTH)
+
+    private const val TITLE_LENGTH = 40
 }
 
 @Serializable

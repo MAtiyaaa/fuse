@@ -197,6 +197,38 @@ internal fun AuditDriver.reachScreens() {
         shoot("a shelf's See all chosen", 1_400)
     }
 
+    scenario("reach", "other devices' games, filtered") {
+        useLibrary { it.copy(romm = it.romm.copy(enabled = true)) }
+        show(withReach(libraryStore))
+        libraryTab()
+        waitFor("Recently played")
+        settle(1_400)
+        // The places lead the All page, where it opens: Other devices is the third.
+        tap(PadButton.DPAD_RIGHT, 2)
+        shoot("Other devices chosen, its light clear of the shelf below", 1_200)
+        tap(PadButton.A)
+        waitFor("On other devices")
+        settle(1_200)
+        shoot("every game on the other devices, its filters above", 1_500)
+        // Up to the page's own buttons (icons until chosen on a small screen): each filter there is
+        // opened in turn, the hint line naming the one chosen.
+        tap(PadButton.DPAD_UP)
+        settle(600)
+        for ((label, sheet, what) in listOf(
+            Triple("Every System", "Show games from", "choosing a system"),
+            Triple("Every Device", "Show games on", "choosing a device, each by its kind"),
+            Triple("A to Z", "Sort by", "choosing an order"),
+        )) {
+            if (runCatching { focusHint(label) { tap(PadButton.DPAD_RIGHT) } }.isFailure) continue
+            shoot("$label chosen", 900)
+            tap(PadButton.A)
+            waitFor(sheet)
+            shoot(what, 1_200)
+            tap(PadButton.B)
+            settle(700)
+        }
+    }
+
     scenario("reach", "game info") {
         useLibrary { it.copy(romm = it.romm.copy(enabled = true)) }
         show(withReach(libraryStore))

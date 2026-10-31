@@ -541,6 +541,13 @@ data class LibraryPreferences(
     val systemOrder: List<String> = emptyList(),
     /** Systems whose firmware the user marked as set up although Fuse didn't find it all, by platform id. */
     val biosConfirmed: List<String> = emptyList(),
+    /**
+     * The emulator this person starts each system's games in, their own whoever else plays here
+     * (one picks Eden for Switch, another Ryujinx): by the kind of device and the system
+     * ("android:switch") to the emulator, or empty for the device's automatic choice. A system they
+     * never chose follows this device's choice.
+     */
+    val systemEmulators: Map<String, String> = emptyMap(),
     /** Drives Fuse asked about setting up for games (yes or no), by drive id, so it asks once. */
     val drivesAsked: List<String> = emptyList(),
     /**

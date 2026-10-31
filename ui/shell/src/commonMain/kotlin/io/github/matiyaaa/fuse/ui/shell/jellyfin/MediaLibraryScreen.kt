@@ -295,10 +295,10 @@ internal fun MediaLibraryScreen(app: AppState, id: String, name: String, kind: S
 }
 
 /**
- * The chosen title above a library's grid: its logo (or name), a line of facts (year, length, age
- * rating, the server's score, genres) and the start of its story. On a short screen it is one line,
- * the name and its facts, so every poster below still shows whole with its title. It keeps one
- * height whatever it shows, so the grid under it never moves; with nothing chosen it holds its place.
+ * The chosen title above a library's grid: its name (or logo, where there is room) with its year
+ * under it, and on a tall screen the start of its story. Nothing more: the poster and the second
+ * screen tell the rest. It keeps one height whatever it shows, so the grid under it never moves;
+ * with nothing chosen it holds its place.
  */
 @Composable
 private fun MediaStage(item: MediaItem?, compact: Boolean, modifier: Modifier) {
@@ -306,13 +306,11 @@ private fun MediaStage(item: MediaItem?, compact: Boolean, modifier: Modifier) {
     val height = if (compact) STAGE_COMPACT else STAGE_TALL
     io.github.matiyaaa.fuse.ui.fuseline.Crossfade(item, modifier.fillMaxWidth().height(height), animationSpec = Fuse.motion.fade(), label = "mediaStage") { it ->
         val m = it ?: return@Crossfade
-        val facts = stageFacts(m)
-        val rating: @Composable () -> Unit = { StageRating(m) }
+        val year = stageFacts(m)
         if (compact) {
-            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                FText(m.name, Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                rating()
-                if (facts.isNotEmpty()) FText(facts, Fuse.type.label, color = c.text.copy(alpha = 0.86f), maxLines = 1)
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                FText(m.name, Fuse.type.titleSmall, maxLines = 1)
+                if (year.isNotEmpty()) FText(year, Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1)
             }
             return@Crossfade
         }
@@ -327,23 +325,14 @@ private fun MediaStage(item: MediaItem?, compact: Boolean, modifier: Modifier) {
             } else {
                 name()
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                rating()
-                FText(facts, Fuse.type.label, color = c.text.copy(alpha = 0.86f), maxLines = 1)
-            }
+            if (year.isNotEmpty()) FText(year, Fuse.type.label.tabular(), color = c.text.copy(alpha = 0.86f), maxLines = 1)
             m.overview?.let { FText(it, Fuse.type.body, color = c.textMuted, maxLines = 2, modifier = Modifier.widthIn(max = 760.dp)) }
         }
     }
 }
 
-/** A title's facts in one line: its years, its length, its age rating, two genres, and what is left of it. */
-internal fun stageFacts(m: MediaItem): String = listOfNotNull(
-    m.year?.let { y -> if (m.endYear != null && m.endYear != y) "$y to ${m.endYear}" else "$y" },
-    m.runtimeMs?.let { minutes(it) },
-    m.officialRating,
-    m.genres.take(2).joinToString(", ").ifEmpty { null },
-    m.leftMs?.takeIf { m.resumeMs > 0 }?.let { "${minutes(it)} left" },
-).joinToString("  \u00B7  ")
+/** What the stage says under a title: its year (a show's first), and nothing else. */
+internal fun stageFacts(m: MediaItem): String = m.year?.toString().orEmpty()
 
 /** The server's score for a title, after a gold star; nothing where it has none. */
 @Composable
@@ -356,7 +345,7 @@ internal fun StageRating(m: MediaItem) {
 }
 
 private val STAGE_TALL = 156.dp
-private val STAGE_COMPACT = 36.dp
+private val STAGE_COMPACT = 42.dp
 
 /** Narrower than this (a phone held upright), the grid is three posters across with tighter edges. */
 private val NARROW_GRID = 480.dp
