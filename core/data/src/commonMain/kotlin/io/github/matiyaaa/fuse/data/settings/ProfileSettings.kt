@@ -28,6 +28,8 @@ object ProfileSettings {
         "library.selectOpensGamePage", "library.collectionsEnabled", "library.autoSeries", "library.hiddenSeries", "library.systemSpotlight",
         "library.systemColors", "library.systemTiles", "library.appsFilter", "library.gameArt", "library.opensOn",
         "library.pinnedFilters", "library.settingProfiles",
+        // The emulator they play each system in, by kind of device.
+        "library.systemEmulators",
         // Games whose saves they sync on none of their devices.
         "sync.offEverywhereGames",
         "videoPreview.enabled", "videoPreview.delaySeconds",

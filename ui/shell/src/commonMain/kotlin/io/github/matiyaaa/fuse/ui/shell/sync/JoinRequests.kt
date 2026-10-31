@@ -121,7 +121,7 @@ internal fun JoinRequestOverlay(app: AppState) {
                         Box(
                             Modifier.size(if (compact) 40.dp else 48.dp).clip(RoundedCornerShape(14.dp)).background(c.accent.copy(alpha = 0.16f)),
                             contentAlignment = Alignment.Center,
-                        ) { FuseIcon(platformIcon(a.platform), size = Size.iconM, tint = c.accent) }
+                        ) { FuseIcon(io.github.matiyaaa.fuse.ui.shell.reach.deviceIcon(a.platform, a.deviceName), size = Size.iconM, tint = c.accent) }
                         Spacer(Modifier.width(Space.l))
                         Column(Modifier.weight(1f)) {
                             FText("${a.deviceName} wants to join", Fuse.type.title, maxLines = 2, modifier = Modifier.semantics { heading() })
@@ -163,11 +163,6 @@ internal fun MatchNumber(match: String, compact: Boolean, modifier: Modifier = M
             }
         }
     }
-}
-
-private fun platformIcon(platform: String) = when (platform.uppercase()) {
-    "ANDROID" -> FuseIcons.Smartphone
-    else -> FuseIcons.MonitorSmartphone
 }
 
 private fun platformWord(platform: String) = when (platform.uppercase()) {

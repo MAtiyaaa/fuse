@@ -61,6 +61,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.graphics.graphicsLayer
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
@@ -69,11 +73,13 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 /**
- * The second screen while a game runs: its logo, how long this session has run and when it began,
- * its time this week and in all; and, for a game with achievements, how far through the set you
- * are, what this session unlocked and the next few to go for. Touching the achievements opens the
- * whole list. Under the figures, by touch: where you are with it in the Journal, and Quit where
- * Fuse can close the game. Side by side on a screen wider than tall, one above the other otherwise.
+ * The second screen while a game runs, made to be read at a glance and touched. The first screenful
+ * is the game: its logo centred, Playing and when it began, this session's time with the week's and
+ * the game's in all, its achievements a little under them (touch for the whole list), and Quit where
+ * Fuse can close it. Scroll down (a finger on this screen) for its Journal: where you are with it,
+ * your rating, and your notes, a notebook of as many pages as you like, kept with this game and your
+ * profile on every device ([SessionJournal]). Laid out for a two-screen handheld's lower screen (an
+ * AYN Thor's is 496 by 432 dp) and for any second screen, wider or taller.
  */
 @Composable
 internal fun SessionPage(store: FuseStore, game: GameCard, since: Long?, onAchievements: (GameId) -> Unit) {
@@ -84,7 +90,8 @@ internal fun SessionPage(store: FuseStore, game: GameCard, since: Long?, onAchie
             delay(15_000)
         }
     }
-    val flow = remember(game.id) { store.library.game(game.id) }
+    val shared = LocalCompanionDetails.current
+    val flow = remember(game.id, shared) { shared?.of(game.id) ?: store.library.game(game.id) }
     val detail by flow.collectAsState(initial = null)
     val play by store.achievements.playing.collectAsState()
     val prefs by store.prefs.collectAsState()
@@ -95,15 +102,13 @@ internal fun SessionPage(store: FuseStore, game: GameCard, since: Long?, onAchie
     val sessionSeconds = since?.let { ((now - it) / 1000).coerceAtLeast(0) } ?: 0L
     val total = detail?.game?.play?.totalSeconds
     val figures = listOfNotNull(
-        playtimeText(sessionSeconds).takeIf { sessionSeconds >= 60 }.orEmpty().ifEmpty { "Just now" } to "this session",
-        detail?.secondsThisWeek?.takeIf { it > 0 }?.let { playtimeText(it) to "this week" },
-        total?.takeIf { it > 0 }?.let { playtimeText(it) to "in all" },
+        (playtimeText(sessionSeconds).takeIf { sessionSeconds >= 60 } ?: "Just now") to "This session",
+        detail?.secondsThisWeek?.takeIf { it > 0 }?.let { playtimeText(it) to "This week" },
+        total?.takeIf { it > 0 }?.let { playtimeText(it) to "In all" },
     )
     val started = since?.let { "Started at " + clockWords(it, prefs.clock24h) }
     val journal = detail?.game?.journal
     val scope = rememberCoroutineScope()
-    // Choosing where you are with it in the Journal; asking once more before the game is closed.
-    var choosing by remember(game.id) { mutableStateOf(false) }
     var quitting by remember(game.id) { mutableStateOf(false) }
     LaunchedEffect(quitting) {
         if (quitting) {
@@ -112,176 +117,143 @@ internal fun SessionPage(store: FuseStore, game: GameCard, since: Long?, onAchie
         }
     }
     val c = Fuse.colors
-    BoxWithConstraints(Modifier.fillMaxSize().padding(start = Space.xl, end = Space.xl, top = CompanionTopBar, bottom = CompanionDotsBar + Space.s)) {
-        // A soft pool of shade behind it all, so it reads over any art.
-        Box(
-            Modifier.align(Alignment.Center).fillMaxWidth().fillMaxHeight(0.8f)
-                .ditheredBackground(Brush.radialGradient(listOf(Color.Black.copy(alpha = if (c.isDark) 0.4f else 0.55f), Color.Transparent))),
-        )
-        val wide = maxWidth > maxHeight * 1.1f && set != null
-        val short = maxHeight < 560.dp
-        val logoHeight = if (wide) minOf(maxHeight * 0.26f, 120.dp) else minOf(maxHeight * (if (set != null) 0.16f else 0.3f), 150.dp)
-        val heading: @Composable (Alignment.Horizontal) -> Unit = { align ->
-            Column(horizontalAlignment = align) {
-                Artwork(
-                    game.art.logo, Modifier.height(logoHeight).fillMaxWidth(if (wide) 1f else 0.82f),
-                    contentScale = ContentScale.Fit, fadeIn = true,
-                    focusX = if (align == Alignment.Start) 0f else 0.5f,
-                    fallback = {
-                        Box(Modifier.fillMaxSize(), contentAlignment = if (align == Alignment.Start) Alignment.CenterStart else Alignment.Center) {
-                            FText(game.title, Fuse.type.display, maxLines = 2, align = if (align == Alignment.Start) TextAlign.Start else TextAlign.Center)
-                        }
-                    },
+    val scroll = rememberScrollState()
+    // While a note is being written the page holds still: the keys are at its foot.
+    val typing = CompanionTyping.active
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val viewport = maxHeight
+        val short = viewport < 560.dp
+        val reading = minOf(maxWidth - Space.xl * 2, 600.dp)
+        Column(
+            // Writing, the finger no longer scrolls it, and it stays where it is: the line being
+            // written is kept above the keys by the notebook itself.
+            Modifier.fillMaxSize()
+                .dragScroll(scroll, enabled = !typing)
+                .verticalScroll(scroll, enabled = !typing),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // The game: the first screenful, everything centred on it.
+            Box(Modifier.fillMaxWidth().heightIn(min = viewport), contentAlignment = Alignment.Center) {
+                // A soft pool of shade behind it, so it reads over any art.
+                Box(
+                    Modifier.matchParentSize().padding(vertical = CompanionTopBar)
+                        .ditheredBackground(Brush.radialGradient(listOf(Color.Black.copy(alpha = if (c.isDark) 0.42f else 0.58f), Color.Transparent))),
                 )
-                Spacer(Modifier.height(Space.m))
-                Row(
-                    Modifier.clip(PillShape).background(c.ink.copy(alpha = 0.55f)).padding(horizontal = Space.m, vertical = Space.xs + 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Space.s),
+                Column(
+                    Modifier.width(reading).padding(top = CompanionTopBar, bottom = CompanionDotsBar + Space.xl),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(c.accent))
-                    FText(listOfNotNull("Playing", game.platformShort.takeIf { it.isNotBlank() }).joinToString("  ·  "), Fuse.type.label, maxLines = 1)
-                }
-                if (started != null) {
-                    Spacer(Modifier.height(Space.xs))
-                    FText(started, Fuse.type.caption, color = c.textMuted, maxLines = 1)
-                }
-                Spacer(Modifier.height(Space.l))
-                // Beside the achievements there is room for two: this session's and the game's in all.
-                val shown = if (wide && figures.size > 2) listOf(figures.first(), figures.last()) else figures
-                // Choosing a Journal status takes the figures' place for a moment, so nothing below moves.
-                Swap(targetState = choosing, label = "sessionJournal") { picking ->
-                    if (picking) {
-                        StatusGrid(journal?.status, Modifier.widthIn(max = 520.dp).fillMaxWidth()) { picked ->
-                            choosing = false
-                            val j = journal ?: return@StatusGrid
-                            val at = clockNow()
-                            scope.launch { store.library.setJournal(game.id, j.copy(status = picked, statusAt = if (j.status == picked) j.statusAt else picked?.let { at })) }
+                    val logoHeight = (viewport * if (set != null) 0.2f else 0.3f).coerceIn(56.dp, 150.dp)
+                    Artwork(
+                        game.art.logo, Modifier.height(logoHeight).fillMaxWidth(0.84f),
+                        contentScale = ContentScale.Fit, fadeIn = true, fallbackDelayMs = 160,
+                        fallback = {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                FText(game.title, if (short) Fuse.type.title else Fuse.type.display, maxLines = 2, align = TextAlign.Center, fit = true)
+                            }
+                        },
+                    )
+                    Spacer(Modifier.height(Space.m))
+                    Row(
+                        Modifier.clip(PillShape).background(c.ink.copy(alpha = 0.55f)).padding(horizontal = Space.m, vertical = Space.xs + 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Space.s),
+                    ) {
+                        LivePulse()
+                        FText(listOfNotNull("Playing", game.platformShort.takeIf { it.isNotBlank() }, started).joinToString("  \u00B7  "), Fuse.type.label, maxLines = 1)
+                    }
+                    Spacer(Modifier.height(if (short) Space.m else Space.l))
+                    SessionFigures(figures, Modifier.fillMaxWidth())
+                    if (set != null) {
+                        Spacer(Modifier.height(if (short) Space.m else Space.l))
+                        SessionAchievements(set, unlocked, next = if (short) 1 else 3, Modifier.fillMaxWidth()) { onAchievements(game.id) }
+                    }
+                    Spacer(Modifier.height(Space.m))
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
+                        if (journal != null) {
+                            // Its heading comes to rest under the status line, never behind it.
+                            val toJournal = with(densityOf()) { (viewport - CompanionTopBar).roundToPx() }
+                            SessionPill(FuseIcons.NotebookPen, "Journal") { scope.launch { scroll.animateScrollTo(scroll.maxValue.coerceAtMost(toJournal)) } }
                         }
-                    } else {
-                        SessionFigures(shown, Modifier.widthIn(max = 520.dp).fillMaxWidth())
+                        if (store.library.canQuitPlaying) {
+                            SessionPill(FuseIcons.Power, if (quitting) "Tap again to quit" else "Quit", warn = quitting) {
+                                if (!quitting) quitting = true else {
+                                    quitting = false
+                                    scope.launch { store.library.quitPlaying() }
+                                }
+                            }
+                        }
                     }
                 }
-                Spacer(Modifier.height(Space.m))
-                SessionActions(
-                    journal?.status, choosing, quitting, hasJournal = journal != null, canQuit = store.library.canQuitPlaying,
-                    onJournal = { choosing = !choosing; quitting = false },
-                    onQuit = {
-                        choosing = false
-                        if (!quitting) quitting = true else {
-                            quitting = false
-                            scope.launch { store.library.quitPlaying() }
-                        }
-                    },
-                )
-            }
-        }
-        if (wide) {
-            Row(Modifier.align(Alignment.Center).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) { heading(Alignment.Start) }
-                Spacer(Modifier.width(Space.xl))
-                SessionAchievements(set!!, unlocked, next = 2, Modifier.weight(1.1f), narrow = true) { onAchievements(game.id) }
-            }
-        } else {
-            Column(Modifier.align(Alignment.Center).widthIn(max = 560.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                heading(Alignment.CenterHorizontally)
-                if (set != null) {
-                    Spacer(Modifier.height(Space.l))
-                    SessionAchievements(set, unlocked, next = if (short) 2 else 3, Modifier.fillMaxWidth()) { onAchievements(game.id) }
+                // Below: the Journal, a finger's scroll away.
+                if (journal != null) {
+                    Row(
+                        Modifier.align(Alignment.BottomCenter).padding(bottom = CompanionDotsBar + Space.xs)
+                            .graphicsLayer { alpha = (1f - scroll.value / 120f).coerceIn(0f, 1f) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        FuseIcon(FuseIcons.ChevronDown, size = 14.dp, tint = c.textMuted)
+                        Spacer(Modifier.width(Space.xs))
+                        FText("Scroll for your Journal", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                    }
                 }
             }
+            if (journal != null) {
+                SessionJournal(store, game, journal, Modifier.width(reading).padding(bottom = CompanionDotsBar + Space.xxl), scroll)
+            }
         }
-    }
-}
-
-/**
- * What can be done for the game while it runs, by touch: where you are with it in the Journal (a
- * tap lays the statuses out to choose from), and Quit, which asks for a second tap before the game
- * closes as its own window would.
- */
-@Composable
-private fun SessionActions(
-    status: io.github.matiyaaa.fuse.model.PlayStatus?,
-    choosing: Boolean,
-    quitting: Boolean,
-    hasJournal: Boolean,
-    canQuit: Boolean,
-    onJournal: () -> Unit,
-    onQuit: () -> Unit,
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
-        if (hasJournal) SessionPill(
-            status?.let(::statusIcon) ?: FuseIcons.NotebookPen,
-            status?.let(io.github.matiyaaa.fuse.ui.shell.store.JournalWords::label) ?: "Journal",
-            lit = choosing, onClick = onJournal,
+        // A third of the way down, the Journal has the screen: the page dots step aside.
+        val readingFrom = with(densityOf()) { (viewport / 3).roundToPx() }
+        LaunchedEffect(scroll, readingFrom) { androidx.compose.runtime.snapshotFlow { scroll.value > readingFrom }.collect { CompanionTyping.reading = it } }
+        androidx.compose.runtime.DisposableEffect(Unit) { onDispose { CompanionTyping.reading = false } }
+        // Scrolled, the page passes under the status line: a shade keeps the two apart.
+        Box(
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().height(CompanionTopBar + Space.m)
+                .graphicsLayer { alpha = (scroll.value / SHADE_AFTER_PX).coerceIn(0f, 1f) }
+                .ditheredBackground(Brush.verticalGradient(0f to c.ink, 0.55f to c.ink.copy(alpha = 0.9f), 1f to Color.Transparent)),
         )
-        if (canQuit) SessionPill(FuseIcons.Power, if (quitting) "Tap again to quit" else "Quit", warn = quitting, onClick = onQuit)
+        // The keys for writing a note, over the page's foot while one is being written.
+        NotebookKeys(Modifier.align(Alignment.BottomCenter))
     }
 }
 
-/** A round-ended touch button on the session page, lit while what it opened is open, red while it waits to be sure. */
+/** A small dot that breathes while the game runs: the session is live. Still under Reduced motion. */
 @Composable
-private fun SessionPill(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, lit: Boolean = false, warn: Boolean = false, onClick: () -> Unit) {
+private fun LivePulse() {
+    val c = Fuse.colors
+    val moving = !Fuse.motion.reduced && Fuse.quality.animatedBackground
+    val beat = if (moving) io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock(label = "live").animateFloat(
+        0.45f, 1f, io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable(io.github.matiyaaa.fuse.ui.fuseline.tween(1400, easing = io.github.matiyaaa.fuse.ui.fuseline.Curves.Standard), io.github.matiyaaa.fuse.ui.fuseline.RepeatMode.Reverse), label = "livePulse",
+    ) else null
+    Box(Modifier.size(7.dp).graphicsLayer { alpha = beat?.value ?: 1f }.clip(CircleShape).background(c.accent))
+}
+
+@Composable
+private fun densityOf() = androidx.compose.ui.platform.LocalDensity.current
+
+/** A round-ended touch button on the session page, red while it waits to be sure. */
+@Composable
+private fun SessionPill(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, warn: Boolean = false, onClick: () -> Unit) {
     val c = Fuse.colors
     val bg by io.github.matiyaaa.fuse.ui.fuseline.fuselineColor(
-        when {
-            warn -> c.danger
-            lit -> c.text
-            else -> c.ink.copy(alpha = 0.55f)
-        },
+        if (warn) c.danger else c.ink.copy(alpha = 0.55f),
         Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST), label = "sessionPill",
     )
-    val fg = when {
-        warn -> Color.White
-        lit -> c.ink
-        else -> c.text
-    }
+    val fg = if (warn) Color.White else c.text
     Row(
         Modifier
             .heightIn(min = 44.dp)
             .clip(PillShape)
             .background({ bg })
-            .border(1.dp, c.text.copy(alpha = if (lit || warn) 0f else 0.12f), PillShape)
+            .border(1.dp, c.text.copy(alpha = if (warn) 0f else 0.12f), PillShape)
             .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
             .semantics { contentDescription = label }
-            .padding(horizontal = Space.m),
+            .padding(horizontal = Space.l),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         FuseIcon(icon, size = 18.dp, tint = fg)
         Spacer(Modifier.width(Space.s))
         FText(label, Fuse.type.label, color = fg, maxLines = 1)
-    }
-}
-
-/** The Journal's statuses as a grid of touch tiles, the game's own lit; touching it again clears it. */
-@Composable
-private fun StatusGrid(current: io.github.matiyaaa.fuse.model.PlayStatus?, modifier: Modifier, onPick: (io.github.matiyaaa.fuse.model.PlayStatus?) -> Unit) {
-    val c = Fuse.colors
-    val statuses = io.github.matiyaaa.fuse.ui.shell.store.JournalWords.order.filterNotNull()
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-        statuses.chunked(3).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                row.forEach { s ->
-                    val on = s == current
-                    Row(
-                        Modifier
-                            .weight(1f)
-                            .heightIn(min = 40.dp)
-                            .clip(PillShape)
-                            .background(if (on) c.accent else c.ink.copy(alpha = 0.55f))
-                            .clickable(remember { MutableInteractionSource() }, null) { onPick(if (on) null else s) }
-                            .semantics { selected = on }
-                            .padding(horizontal = Space.s),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        FuseIcon(statusIcon(s), size = 16.dp, tint = if (on) c.onAccent else c.textMuted)
-                        Spacer(Modifier.width(Space.xs))
-                        FText(io.github.matiyaaa.fuse.ui.shell.store.JournalWords.label(s), Fuse.type.label, color = if (on) c.onAccent else c.text, maxLines = 1)
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -293,8 +265,9 @@ private fun SessionFigures(figures: List<Pair<String, String>>, modifier: Modifi
         figures.forEachIndexed { i, (value, label) ->
             if (i > 0) Box(Modifier.padding(horizontal = Space.m).width(1.dp).fillMaxHeight().background(c.text.copy(alpha = 0.14f)))
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                FText(value, Fuse.type.titleSmall, maxLines = 1, align = TextAlign.Center)
-                FText(label, Fuse.type.caption, color = c.textMuted, maxLines = 1, align = TextAlign.Center)
+                // Whole, always: set smaller rather than cut short in a narrow column.
+                FText(value, Fuse.type.titleSmall, maxLines = 1, align = TextAlign.Center, fit = true, fitMin = 0.7f)
+                FText(label, Fuse.type.caption, color = c.textMuted, maxLines = 1, align = TextAlign.Center, fit = true, fitMin = 0.8f)
             }
         }
     }
@@ -410,3 +383,6 @@ private const val SHOWN_BADGES = 6
 
 /** How long Quit waits for its second tap before it goes back to asking. */
 private const val QUIT_ARMED_MS = 4_000L
+
+/** How far the page scrolls before the shade under the status line is whole. */
+private const val SHADE_AFTER_PX = 80f

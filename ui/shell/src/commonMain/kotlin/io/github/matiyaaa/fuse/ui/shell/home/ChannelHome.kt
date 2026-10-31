@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -323,22 +324,29 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         // Two columns only on a screen held upright (a phone) or a very thin one. A small screen
         // that is wider than tall (a two-screen handheld's lower screen) keeps the full board, its
         // cells as tall as a handheld's.
-        val narrow = maxWidth < NARROW_BELOW && (maxWidth < maxHeight || maxWidth < TINY_BELOW)
-        val small = maxHeight < SMALL_BELOW || maxWidth < NARROW_BELOW
-        val gutter = if (narrow || small) Space.gutterCompact else Space.gutter
-        val gapX = if (narrow || small) Space.m else Space.l
-        // Rows stay clear of the spark under a focused widget.
-        val gapY = Size.sparkClearance
-        fun cellWidth(columns: Int) = (maxWidth - gutter * 2 - gapX * (columns - 1)) / columns
+        val tight = maxWidth < NARROW_BELOW && (maxWidth < maxHeight || maxWidth < TINY_BELOW)
+        val short = maxHeight < SMALL_BELOW || maxWidth < NARROW_BELOW
+        val spacing = boardSpacing(tight, short)
         // A board with room to spare may take fewer, larger columns, as long as all of it still shows
         // between the top and the hints (the Systems page with a few systems on a tall screen).
         val room = maxHeight - space.top - Space.l - Size.hintHeight - Space.l
-        val columns = space.fill(space.columns(narrow, small, maxWidth), narrow || small) { cols ->
+        val fitted = space.fill(space.columns(tight, short, maxWidth), tight || short) { cols ->
             val rows = BoardGrid.layout(widgets.map { BoardGrid.Item(it.id, space.allowed(it.boardSize, cols), null) }, cols).rows
-            val cellH = space.cellHeight(cellWidth(cols), gapX, gapY, narrow)
-            cellH * rows + gapY * (rows - 1).coerceAtLeast(0) <= room
+            val cellH = space.cellHeight(spacing.cellWidth(maxWidth, cols), spacing.gapX, spacing.gapY, tight)
+            cellH * rows + spacing.gapY * (rows - 1).coerceAtLeast(0) <= room
         }
-        val cellW = cellWidth(columns)
+        // Everything below follows only from the board's shape. The room it has changes every frame
+        // while a header folds away above it (Systems on a handheld), and the board was composed
+        // again each of those frames, every widget on it, for a shape that stayed the same.
+        BoardFrame(BoardShape(maxWidth, tight, short, fitted)) { shape ->
+        val narrow = shape.narrow
+        val small = shape.small
+        val columns = shape.columns
+        val spaced = boardSpacing(narrow, small)
+        val gutter = spaced.gutter
+        val gapX = spaced.gapX
+        val gapY = spaced.gapY
+        val cellW = spaced.cellWidth(shape.width, columns)
         val cellH = space.cellHeight(cellW, gapX, gapY, narrow)
         val density = LocalDensity.current
         val packed = space.packed
@@ -354,7 +362,9 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         val leftOver = if (packed) (columns - (committed.rects.values.maxOfOrNull { it.right } ?: columns)).coerceAtLeast(0) else 0
         val narrowest = committed.rects.values.minOfOrNull { it.width } ?: 1
         val spare = if (leftOver < narrowest) leftOver else 0
-        val geometry = with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx(), offsetX = spare * (cellW + gapX).toPx() / 2) }
+        val geometry = remember(density, columns, cellW, cellH, gapX, gapY, spare) {
+            with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx(), offsetX = spare * (cellW + gapX).toPx() / 2) }
+        }
         val shown = editor.preview ?: committed
         // Options let go (or arranging left): the steps taken are saved, once. They stay shown until
         // the saved board has them, so it never springs back to the old size for a moment.
@@ -821,7 +831,29 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
             val live = widgets.map { it.id }.toSet()
             controls.keys.retainAll { k -> k.substringAfter(':') in live }
         }
+        }
     }
+}
+
+/** What a board's layout follows from the room it is given: its width, whether it is narrow or small, and its columns. */
+@androidx.compose.runtime.Immutable
+private data class BoardShape(val width: androidx.compose.ui.unit.Dp, val narrow: Boolean, val small: Boolean, val columns: Int)
+
+/** A board's gutters and gaps, tighter on a narrow or small screen. Rows stay clear of the spark under a focused widget. */
+private class BoardSpacing(val gutter: androidx.compose.ui.unit.Dp, val gapX: androidx.compose.ui.unit.Dp, val gapY: androidx.compose.ui.unit.Dp) {
+    fun cellWidth(width: androidx.compose.ui.unit.Dp, columns: Int): androidx.compose.ui.unit.Dp = (width - gutter * 2 - gapX * (columns - 1)) / columns
+}
+
+private fun boardSpacing(narrow: Boolean, small: Boolean) = BoardSpacing(
+    gutter = if (narrow || small) Space.gutterCompact else Space.gutter,
+    gapX = if (narrow || small) Space.m else Space.l,
+    gapY = Size.sparkClearance,
+)
+
+/** Composes [content] for [shape], and again only when the shape changes: never for the room alone. */
+@Composable
+private fun BoardFrame(shape: BoardShape, content: @Composable androidx.compose.foundation.layout.BoxScope.(BoardShape) -> Unit) {
+    Box(Modifier.fillMaxSize()) { content(shape) }
 }
 
 /** A board's own options: arranging, and for a chosen item moving, resizing and removing it; pages. */
@@ -900,8 +932,10 @@ private fun BoardItem(
     // Wider widgets wobble less, so a large one doesn't swing its corners about.
     val swing = WOBBLE_DEGREES / size.width.coerceAtLeast(1)
     val shake = remember { FuselineValue(0f) }
-    PageEffect(bump?.nonce) {
-        if (bump == null) return@PageEffect
+    // Its own animation, never the page's: a page effect here rebuilt every widget on the board each
+    // time Home (or Systems) became the tab shown, for a shake none of them were doing.
+    LaunchedEffect(bump?.nonce) {
+        if (bump == null) return@LaunchedEffect
         shake.snapTo(0f)
         shake.animateTo(1f, tween(SHAKE_MS, easing = Curves.Linear))
         shake.snapTo(0f)
@@ -973,13 +1007,18 @@ private fun Modifier.boardPlace(rect: Rect, animate: Boolean): Modifier {
     val w = remember { FuselineValue(rect.width) }
     val h = remember { FuselineValue(rect.height) }
     val spec = remember { spring(dampingRatio = 0.78f, stiffness = 420f) }
-    PageEffect(rect, animate) {
+    // Not a PageEffect: a page shown again restarted this for every widget on it, four moves each
+    // (hundreds on a page of systems) to the places they were already in. A widget already where it
+    // belongs, and not on its way, does nothing at all.
+    LaunchedEffect(rect, animate) {
+        val still = !x.isRunning && !y.isRunning && !w.isRunning && !h.isRunning
+        if (still && x.value == rect.left && y.value == rect.top && w.value == rect.width && h.value == rect.height) return@LaunchedEffect
         if (!animate) {
             x.snapTo(rect.left)
             y.snapTo(rect.top)
             w.snapTo(rect.width)
             h.snapTo(rect.height)
-            return@PageEffect
+            return@LaunchedEffect
         }
         launch { x.animateTo(rect.left, spec) }
         launch { y.animateTo(rect.top, spec) }

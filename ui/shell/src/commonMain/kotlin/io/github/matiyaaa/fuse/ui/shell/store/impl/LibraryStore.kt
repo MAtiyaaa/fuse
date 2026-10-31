@@ -323,9 +323,13 @@ internal class DefaultLibraryOps(
     private val continuePlaying: Flow<List<GameCard>> = combine(
         flow { while (true) { emit(Unit); kotlinx.coroutines.delay(HOUR_MS) } }
             .flatMapLatest { ctx.cards(data.games.observeContinuePlaying(days = 14, limit = 40)) },
+        // Someone who last played a while ago (another profile back after a few weeks) still finds
+        // where they were: their last games, never "games you play show here".
+        ctx.cards(data.games.observeRecentlyPlayed(CONTINUE_FALLBACK)),
         data.settings.settings.map { it.home.continueDismissed }.distinctUntilChanged(),
-    ) { cards, dismissed ->
-        cards.filter { c -> dismissed[c.id.value.toString()]?.let { at -> (c.lastPlayedAt ?: 0) > at } ?: true }.take(20)
+    ) { cards, last, dismissed ->
+        fun kept(c: GameCard) = dismissed[c.id.value.toString()]?.let { at -> (c.lastPlayedAt ?: 0) > at } ?: true
+        cards.filter(::kept).take(20).ifEmpty { last.filter(::kept) }
     }
 
     /**
@@ -2316,6 +2320,9 @@ private fun SortOrder.comparator(): Comparator<io.github.matiyaaa.fuse.data.repo
 }
 
 private const val HOUR_MS = 3_600_000L
+
+/** How many of a person's last games Continue playing shows when none were played in the last two weeks. */
+private const val CONTINUE_FALLBACK = 6
 
 /** How many games a Your Year recap shows by time, and of those first played in it. */
 private const val RECAP_GAMES = 10

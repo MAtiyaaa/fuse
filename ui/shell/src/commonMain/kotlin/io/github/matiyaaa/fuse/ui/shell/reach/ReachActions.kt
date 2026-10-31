@@ -21,17 +21,13 @@ import kotlinx.coroutines.launch
 
 internal fun nowMs(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()
 
-/** The picture for one of the household's devices, by its system. */
-fun deviceIcon(platform: String): ImageVector = when (platform.uppercase()) {
-    "ANDROID" -> FuseIcons.Smartphone
-    "LINUX", "WINDOWS", "MACOS" -> FuseIcons.Monitor
-    else -> FuseIcons.MonitorSmartphone
-}
+/** The picture for one of the household's devices, by its system alone (see [deviceKind] with its name). */
+fun deviceIcon(platform: String): ImageVector = deviceIcon(platform, "")
 
 /** The picture for a copy of a game. */
 fun copyIcon(copy: CopyView): ImageVector = when (copy.place) {
     CopyPlace.HERE -> FuseIcons.MonitorSmartphone
-    CopyPlace.DEVICE -> deviceIcon(copy.platform)
+    CopyPlace.DEVICE -> deviceIcon(copy.platform, copy.name)
     CopyPlace.ROMM -> FuseIcons.Server
 }
 
@@ -112,7 +108,7 @@ fun AppState.downloadAsking(id: GameId, title: String, best: suspend () -> Strin
                 }
                 MenuAction(
                     "from.${c.place}.${c.id}", if (c.place == CopyPlace.ROMM) "RomM" else c.name,
-                    if (c.place == CopyPlace.ROMM) FuseIcons.CloudDownload else deviceIcon(c.platform),
+                    if (c.place == CopyPlace.ROMM) FuseIcons.CloudDownload else deviceIcon(c.platform, c.name),
                     detail = listOfNotNull(c.sizeBytes.takeIf { it > 0 }?.let(::bytesText), where, "Largest".takeIf { c.sizeBytes == largest }).joinToString("  ·  "),
                     onSelect = {
                         choice = null
@@ -162,7 +158,7 @@ private fun AppState.sendOption(id: GameId, title: String, t: SendTarget, now: L
         SendState.REFUSES -> "Doesn't take games from other devices"
     }
     return MenuAction(
-        "send.${t.device}", label, if (here) FuseIcons.Download else deviceIcon(t.platform), detail = detail,
+        "send.${t.device}", label, if (here) FuseIcons.Download else deviceIcon(t.platform, t.name), detail = detail,
         enabled = t.state == SendState.THIS_DEVICE || t.state == SendState.READY || t.state == SendState.QUEUED,
         onSelect = {
             choice = null

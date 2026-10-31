@@ -249,10 +249,8 @@ private fun ColumnScope.RecentLines(lines: List<Pair<String, Long>>) {
     }
 }
 
-private fun deviceIcon(d: DeviceInfo) = when (d.platform) {
-    "ANDROID" -> FuseIcons.Smartphone
-    else -> FuseIcons.Laptop
-}
+/** A device's picture by its kind: a two-screen handheld, a handheld, a TV, a server, a computer. */
+private fun deviceIcon(d: DeviceInfo) = io.github.matiyaaa.fuse.ui.shell.reach.deviceIcon(d.platform, d.name)
 
 /** Devices as overlapping discs, each with its online dot. */
 @Composable

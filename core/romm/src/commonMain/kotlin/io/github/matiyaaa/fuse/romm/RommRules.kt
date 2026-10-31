@@ -180,7 +180,7 @@ object RommNames {
                 val clashing = named.groupBy { key(it.name) + "|" + it.suffixes.joinToString("|") }.values.filter { it.size > 1 }
                 if (clashing.isEmpty()) break
                 for (same in clashing) {
-                    val values = same.map { tell(it.parsed) }
+                    val values = same.map { tell(it) }
                     if (values.toSet().size < 2) continue
                     same.forEachIndexed { i, n -> values[i]?.let { n.suffixes += it } }
                 }
@@ -207,13 +207,24 @@ object RommNames {
 
     private val BRACKETED = Regex("""\s*[\[(][^\])]*[\])]""")
 
-    private val TELLERS: List<(io.github.matiyaaa.fuse.library.parse.ParsedName) -> String?> = listOf(
-        { p -> p.tags.discNumber?.let { "Disc $it" } },
-        { p -> p.tags.regions.takeIf { it.isNotEmpty() }?.joinToString(", ") },
-        { p -> p.tags.revision?.let { "Rev $it" } },
-        { p -> p.tags.version?.let { "v$it" } },
-        { p -> p.extension.takeIf { it.isNotEmpty() }?.uppercase() },
+    private val TELLERS: List<(Named) -> String?> = listOf(
+        { n -> n.parsed.tags.discNumber?.let { "Disc $it" } },
+        { n -> n.parsed.tags.regions.takeIf { it.isNotEmpty() }?.joinToString(", ") },
+        { n -> n.parsed.tags.revision?.let { "Rev $it" } },
+        { n -> n.parsed.tags.version?.let { "v$it" } },
+        { n -> n.parsed.extension.takeIf { it.isNotEmpty() }?.uppercase() },
+        // Two copies whose names say nothing more (two dumps of one game, put on the server twice):
+        // how large each is, the one thing that still tells them apart at a glance.
+        { n -> sizeLabel(n.rom.sizeBytes) },
     )
+
+    /** "12.4 GB", "640 MB", "96 KB"; null for a size the server didn't give. */
+    internal fun sizeLabel(bytes: Long): String? = when {
+        bytes <= 0 -> null
+        bytes >= 1_000_000_000 -> (bytes / 100_000_000.0).let { kotlin.math.round(it).toLong() }.let { t -> "${t / 10}.${t % 10} GB" }
+        bytes >= 1_000_000 -> "${kotlin.math.round(bytes / 1_000_000.0).toLong()} MB"
+        else -> "${maxOf(1L, kotlin.math.round(bytes / 1_000.0).toLong())} KB"
+    }
 }
 
 /** A library folder Fuse knows on this device, with the folders directly inside it. */

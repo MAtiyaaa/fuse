@@ -65,6 +65,19 @@ class RommNamesTest {
     }
 
     @Test
+    fun copiesNothingElseTellsApartAreToldByTheirSize() {
+        // The Last of Us put on the server twice, two folders of one name: their sizes tell them apart.
+        val names = RommNames.apart(listOf(
+            RommRom(id = 7, platformId = 1, platformSlug = "ps3", name = "The Last of Us", fsName = "The Last of Us", sizeBytes = 26_843_545_600, multi = true),
+            RommRom(id = 8, platformId = 1, platformSlug = "ps3", name = "The Last of Us", fsName = "The Last of Us", sizeBytes = 31_138_512_896, multi = true),
+        )) { it.name }
+        assertEquals(mapOf(7L to "The Last of Us (26.8 GB)", 8L to "The Last of Us (31.1 GB)"), names)
+        assertEquals("640 MB", RommNames.sizeLabel(640_000_000))
+        assertEquals("1 KB", RommNames.sizeLabel(12))
+        assertEquals(null, RommNames.sizeLabel(0))
+    }
+
+    @Test
     fun copiesLeftUnfinishedAreKnown() {
         assertTrue(RommContent.unfinished(rom(112, "ps2", "Jak II", "Jak II.iso.part")))
         assertTrue(RommContent.unfinished(rom(1, "ps2", "Game", "Game.iso.filepart")))

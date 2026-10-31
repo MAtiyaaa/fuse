@@ -455,7 +455,7 @@ private fun HouseholdMap(
                             .border(2.dp, if (up) tint else tint.copy(alpha = 0.35f), CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
-                        FuseIcon(if (d.platform == "ANDROID") FuseIcons.Smartphone else FuseIcons.Laptop, size = node * 0.44f, tint = if (up) tint else c.textMuted)
+                        FuseIcon(io.github.matiyaaa.fuse.ui.shell.reach.deviceIcon(d.platform, d.name), size = node * 0.44f, tint = if (up) tint else c.textMuted)
                     }
                 }
                 NodeLabel(x, y + node / 2 + 4.dp, d.name, if (crowded) null else if (d.id == self) "You" else if (up) "Online" else null, strong = d.id == self)

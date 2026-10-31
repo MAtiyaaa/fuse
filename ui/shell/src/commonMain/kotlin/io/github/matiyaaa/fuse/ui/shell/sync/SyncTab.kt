@@ -104,6 +104,10 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     val alone = status is SyncStatus.NotSetUp || status is SyncStatus.Off
     // Signed in as the host on this device (it manages the household from here).
     val managing = !host && devices.any { it.id == prefs.sync.deviceId && it.manager }
+    // Managing the household is a computer's job: an Android device (a handheld, a phone) never offers
+    // to sign in as the host here. One already signed in can still sign out, in Fuse One's settings.
+    val offersHostSignIn = !host && !managing && app.platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID
+    val showsHostAccess = !host && (managing || offersHostSignIn)
     val hostName = prefs.sync.hostName.ifBlank { "your host" }
     val tints = DeviceTints.of(devices, Fuse.colors.accent)
     var index by remember { mutableIntStateOf(0) }
@@ -173,7 +177,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                     ) + listOfNotNull(
                         // The host's username and password, once: this device then manages the household for good.
                         MenuAction("sync.hostsignin", "Sign In as the Host", FuseIcons.LogIn, detail = "With the host's username and password. It stays signed in", onSelect = { app.contextMenu = null; signInAsHost(app, svc, hostName) })
-                            .takeIf { !host && !managing },
+                            .takeIf { offersHostSignIn },
                     ),
                 ),
             )
@@ -336,7 +340,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                     item("household") { HouseholdInvite(app, svc.canHost, Modifier.padding(top = Space.l)) }
                     item("lately") { ActivityCard(activity, Modifier.padding(top = Space.s)) }
                 } else if (!side) {
-                    if (!host) item("hostaccess") { HostAccessCard(hostName, managing, { signInAsHost(app, svc, hostName) }, { app.go(Route.Settings("fuseone")) }, Modifier.padding(top = Space.l)) }
+                    if (showsHostAccess) item("hostaccess") { HostAccessCard(hostName, managing, { signInAsHost(app, svc, hostName) }, { app.go(Route.Settings("fuseone")) }, Modifier.padding(top = Space.l)) }
                     item("devices") { DeviceCard(devices, prefs.sync.deviceId, profiles, tints, Modifier.padding(top = Space.s)) }
                     item("play") { if (report != null && report.devicePlay.size > 1) Card("Play time by device", FuseIcons.ChartPie, Modifier.padding(top = Space.s)) { PlayRing(report.devicePlay, names, tints) } }
                     item("lately") { ActivityCard(activity, Modifier.padding(top = Space.s)) }
@@ -348,7 +352,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                         if (alone) {
                             HouseholdInvite(app, svc.canHost)
                         } else {
-                            if (!host) HostAccessCard(hostName, managing, { signInAsHost(app, svc, hostName) }, { app.go(Route.Settings("fuseone")) })
+                            if (showsHostAccess) HostAccessCard(hostName, managing, { signInAsHost(app, svc, hostName) }, { app.go(Route.Settings("fuseone")) })
                             DeviceCard(devices, prefs.sync.deviceId, profiles, tints)
                             if (report != null && report.devicePlay.size > 1) Card("Play time by device", FuseIcons.ChartPie) { PlayRing(report.devicePlay, names, tints) }
                         }
@@ -673,7 +677,7 @@ private fun DeviceCard(devices: List<DeviceInfo>, self: String, profiles: List<P
                     Modifier.size(36.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)).border(1.5.dp, tint.copy(alpha = if (online) 0.9f else 0.35f), CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    FuseIcon(if (d.platform == "ANDROID") FuseIcons.Smartphone else FuseIcons.Laptop, size = Size.iconS, tint = if (online) tint else c.textMuted)
+                    FuseIcon(io.github.matiyaaa.fuse.ui.shell.reach.deviceIcon(d.platform, d.name), size = Size.iconS, tint = if (online) tint else c.textMuted)
                 }
                 Spacer(Modifier.width(Space.m))
                 Column(Modifier.weight(1f)) {

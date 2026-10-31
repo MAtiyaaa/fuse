@@ -85,6 +85,37 @@ class SettingsTest {
     }
 
     @Test
+    fun aSystemsEmulatorIsEachPersonsOwnOnTheirKindOfDevice() = runBlocking {
+        TestDb().use { t ->
+            val scoped = t.data.scopedSettings
+            val store = t.data.settings
+            val switch = PlatformId("switch")
+            scoped.personalKind = "android"
+            // One person picks Eden: theirs, and the device's for anyone who never chose.
+            scoped.set(ScopedSettings.Emulator, ScopeRef.platform(switch), "android.eden")
+            assertEquals("android.eden", store.current().library.systemEmulators["android:switch"])
+            assertEquals(Resolved("android.eden", SettingScope.PLATFORM, false), scoped.resolve(ScopedSettings.Emulator, switch, null))
+            // Another person (their own settings in place) picked Ryujinx on a device like this one.
+            store.update { it.copy(library = it.library.copy(systemEmulators = mapOf("android:switch" to "android.ryujinx", "linux:switch" to "linux.ryujinx"))) }
+            assertEquals("android.ryujinx", scoped.resolve(ScopedSettings.Emulator, switch, null).value)
+            assertEquals("android.ryujinx", scoped.observeResolved(ScopedSettings.Emulator, switch, GameId(9)).first().value)
+            // A game's own choice still comes first.
+            scoped.set(ScopedSettings.Emulator, ScopeRef.game(game), "android.citron")
+            assertEquals("android.citron", scoped.resolve(ScopedSettings.Emulator, switch, game).value)
+            // Someone who never chose follows the device's.
+            store.update { it.copy(library = it.library.copy(systemEmulators = emptyMap())) }
+            assertEquals("android.eden", scoped.resolve(ScopedSettings.Emulator, switch, null).value)
+            // Choosing the automatic one is a choice too, over the device's.
+            scoped.set(ScopedSettings.Emulator, ScopeRef.platform(switch), "android.eden")
+            store.update { it.copy(library = it.library.copy(systemEmulators = mapOf("android:switch" to ""))) }
+            assertEquals(Resolved("", SettingScope.GLOBAL, true), scoped.resolve(ScopedSettings.Emulator, switch, null))
+            // A system's settings reset forgets the person's choice for it too.
+            scoped.clearAll(ScopeRef.platform(switch))
+            assertEquals(emptyMap(), store.current().library.systemEmulators)
+        }
+    }
+
+    @Test
     fun globalLevelOfBoundKeysIsAppSettings() = runBlocking {
         TestDb().use { t ->
             val scoped = t.data.scopedSettings

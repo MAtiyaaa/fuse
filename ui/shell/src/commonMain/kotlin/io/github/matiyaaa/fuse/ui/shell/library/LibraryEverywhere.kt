@@ -567,6 +567,14 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
                             onPoint = { i -> point(key, i) },
                             noun = if (key == ROW_STREAM) "app" else "game",
                             named = !stage,
+                            // What See all opens holds every game of its place, not only the newest
+                            // the shelf shows: it says so ("1,923 games", never the shelf's 40).
+                            total = when (key) {
+                                ROW_ELSEWHERE -> householdState.games
+                                ROW_ROMM -> rommSystems.sumOf { (it.games - it.installed).coerceAtLeast(0) }
+                                ROW_RECENT -> platforms.sumOf { it.gameCount }
+                                else -> null
+                            },
                         )
                     }
                 }
@@ -715,7 +723,9 @@ private fun SourcesBand(sources: List<SourceCard>, selected: Int, width: Dp, onO
     LazyRow(
         state = state,
         modifier = Modifier.dragScroll(state, Orientation.Horizontal),
-        contentPadding = PaddingValues(horizontal = Space.gutter, vertical = Space.m),
+        // Below the cards, room for the chosen one's lift and its accent bar, so neither ever reaches
+        // the next shelf's title.
+        contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.m, bottom = Size.sparkClearance + Space.s),
         horizontalArrangement = Arrangement.spacedBy(gap),
     ) {
         itemsIndexed(sources, key = { _, s -> s.key }) { i, s ->
@@ -745,40 +755,54 @@ private fun SourceTile(s: SourceCard, selected: Boolean, modifier: Modifier, onC
         maxGrow = Space.s,
         label = "${s.title}, ${s.count}, ${s.detail}",
     ) {
-        io.github.matiyaaa.fuse.ui.shell.components.CoverCollage(s.covers, SOURCE_H, fanAt = Alignment.BottomEnd, tint = tint, coverShare = SOURCE_COVER)
-        // The place's colour rising from the left, where its words sit, over the covers too: on a
-        // narrow card the fan reaches under the words, and a bright box would take them.
+        val night = io.github.matiyaaa.fuse.ui.shell.components.ART_NIGHT
+        // The card's ground: the place's own colour, deep, lit a little from its top left.
+        val ground = androidx.compose.ui.graphics.lerp(night, tint, 0.26f)
         Box(
             Modifier.fillMaxSize().background(
-                androidx.compose.ui.graphics.Brush.horizontalGradient(
-                    0f to androidx.compose.ui.graphics.lerp(io.github.matiyaaa.fuse.ui.shell.components.ART_NIGHT, tint, 0.3f).copy(alpha = 0.94f),
-                    0.45f to androidx.compose.ui.graphics.lerp(io.github.matiyaaa.fuse.ui.shell.components.ART_NIGHT, tint, 0.2f).copy(alpha = 0.66f),
-                    0.72f to androidx.compose.ui.graphics.Color.Transparent,
+                androidx.compose.ui.graphics.Brush.linearGradient(
+                    listOf(androidx.compose.ui.graphics.lerp(night, tint, 0.36f), ground),
                 ),
             ),
         )
-        if (s.covers.isEmpty()) {
-            // Nothing to fan yet (a place still answering): its mark, large and quiet, where the covers would be.
-            FuseIcon(s.icon, size = SOURCE_H * 0.62f, tint = tint.copy(alpha = 0.32f), modifier = Modifier.align(Alignment.CenterEnd).padding(end = Space.l))
+        // Its games stand in their own part of the card, at the right, and melt into the ground at
+        // their left edge. The words never sit over a cover: on any art, at any card width, they are
+        // on the place's own colour (a fan reaching under them made them hard to read on a handheld).
+        Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(SOURCE_FAN_SHARE)) {
+            if (s.covers.isNotEmpty()) {
+                io.github.matiyaaa.fuse.ui.shell.components.CoverCollage(s.covers, SOURCE_H, fanAt = Alignment.BottomCenter, tint = tint, coverShare = SOURCE_COVER)
+            } else {
+                // Nothing to fan yet (a place still answering): its mark, large and quiet, where the covers would be.
+                FuseIcon(s.icon, size = SOURCE_H * 0.5f, tint = tint.copy(alpha = 0.34f), modifier = Modifier.align(Alignment.Center))
+            }
+            Box(
+                Modifier.fillMaxSize().background(
+                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        0f to ground,
+                        0.32f to ground.copy(alpha = 0.55f),
+                        0.6f to ground.copy(alpha = 0f),
+                    ),
+                ),
+            )
         }
         Row(
-            Modifier.fillMaxSize().padding(horizontal = Space.l),
+            Modifier.fillMaxHeight().fillMaxWidth(1f - SOURCE_FAN_SHARE * 0.62f).padding(start = Space.l, end = Space.s),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 Modifier
-                    .size(Size.touch)
+                    .size(SOURCE_MARK)
                     .clip(CircleShape)
-                    .background(tint.copy(alpha = 0.3f))
-                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.16f), androidx.compose.ui.graphics.Color.Transparent))),
+                    .background(tint.copy(alpha = 0.34f))
+                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.18f), androidx.compose.ui.graphics.Color.Transparent))),
                 contentAlignment = Alignment.Center,
             ) {
-                FuseIcon(s.icon, size = Size.iconL, tint = c.onArt)
+                FuseIcon(s.icon, size = Size.iconM, tint = c.onArt)
             }
             Spacer(Modifier.width(Space.m))
-            Column(Modifier.weight(1f)) {
-                FText(s.title, Fuse.type.label, color = c.onArtMuted, maxLines = 1)
-                FText(s.count, Fuse.type.titleSmall, color = c.onArt, maxLines = 1)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.hair)) {
+                FText(s.title, Fuse.type.label, color = c.onArt.copy(alpha = 0.88f), maxLines = 1)
+                FText(s.count, Fuse.type.titleSmall.copy(fontFeatureSettings = "tnum"), color = c.onArt, maxLines = 1)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (s.live != null) {
                         Box(Modifier.size(STATUS_DOT).clip(CircleShape).background(if (s.live) c.success else c.onArtMuted.copy(alpha = 0.5f)))
@@ -790,6 +814,12 @@ private fun SourceTile(s: SourceCard, selected: Boolean, modifier: Modifier, onC
         }
     }
 }
+
+/** How much of a place's card its games' fan takes, at its right. */
+private const val SOURCE_FAN_SHARE = 0.46f
+
+/** A place's mark on its card. */
+private val SOURCE_MARK = 40.dp
 
 /** A shelf of games from any source, its chosen one named underneath, ending in See All. */
 @Composable
@@ -807,13 +837,17 @@ private fun EverywhereShelf(
     noun: String = "game",
     /** The chosen one is named under the shelf (no stage above to name it). */
     named: Boolean = true,
+    /** How many See all opens, when it holds more than the shelf shows. */
+    total: Int? = null,
 ) {
     val state = rememberLazyListState()
     io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(state, if (selected >= 0) maxOf(0, selected - 1) else -1)
     // A name more than one system has here: each of those tiles says its system.
     val shared = remember(games) { namesOnSeveralSystems(games.map { it.card }) }
     Column {
-        ShelfHeader(title, icon, if (games.size == 1) "1 $noun" else "${games.size} ${noun}s", onSeeAll)
+        val count = (total ?: games.size).coerceAtLeast(games.size)
+        val counted = if (count == 1) "1 $noun" else "${countText(count)} ${noun}s"
+        ShelfHeader(title, icon, counted, onSeeAll)
         MouseScrolledRow(state) {
             LazyRow(
                 state = state,
@@ -834,7 +868,7 @@ private fun EverywhereShelf(
                         }
                     }
                 }
-                item("seeall") { SeeAllTile(games.map { it.card }, if (games.size == 1) "1 $noun" else "${games.size} ${noun}s", selected == games.size, tile, Modifier.mouseHover { onPoint(games.size) }, onSeeAll) }
+                item("seeall") { SeeAllTile(games.map { it.card }, counted, selected == games.size, tile, Modifier.mouseHover { onPoint(games.size) }, onSeeAll) }
             }
         }
         if (!named) return@Column
@@ -1174,3 +1208,15 @@ private const val PAGE_SHARE = 0.8f
 
 /** How far the triggers jump along a shelf. */
 private const val PAGE_STEP = 6
+
+/** A count as people read it: "1,923", grouped by thousands. */
+internal fun countText(n: Int): String {
+    val digits = n.toString()
+    if (n < 1000) return digits
+    val out = StringBuilder()
+    for ((i, ch) in digits.withIndex()) {
+        if (i > 0 && (digits.length - i) % 3 == 0) out.append(',')
+        out.append(ch)
+    }
+    return out.toString()
+}

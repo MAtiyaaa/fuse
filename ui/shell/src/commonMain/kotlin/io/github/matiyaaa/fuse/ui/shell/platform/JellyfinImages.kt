@@ -26,11 +26,21 @@ object JellyfinImages {
     @Volatile
     var service: JellyfinService? = null
 
-    /** The legacy width is only a fallback for requests without a measured layout. */
+    /**
+     * The width asked of the server for [data]: the bucket of the size it is drawn at (the legacy
+     * width only for requests without a measured layout). A title's logo is one size wherever it
+     * shows (a card, the stage, the second screen), so the one fetched ahead for the second screen
+     * is the one every other place finds on disk: asked at each place's own size, the second
+     * screen fetched every logo again from the server as the selection moved.
+     */
     internal fun sized(data: JellyfinArt, options: Options): JellyfinArt {
+        if (data.kind == io.github.matiyaaa.fuse.jellyfin.ArtKind.LOGO) return data.sized(LOGO_PX)
         val width = (options.size.width as? Dimension.Pixels)?.px
         return data.sized(ArtworkSizing.bucket(width ?: data.width.takeIf { it > 0 } ?: 1024))
     }
+
+    /** The one width every logo is asked for: sharp across a second screen, light enough to fetch ahead. */
+    const val LOGO_PX = 1024
 
     class Key : Keyer<JellyfinArt> {
         override fun key(data: JellyfinArt, options: Options): String = sized(data, options).key

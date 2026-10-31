@@ -89,6 +89,7 @@ import kotlin.time.TimeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 import androidx.compose.foundation.gestures.Orientation
@@ -187,7 +188,10 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
         }
         val home by store.homeFeed.collectAsState()
         val status by platform.status.collectAsState()
-        val focus by Spotlight.focused.collectAsState()
+        val focus = rememberCalmFocus()
+        // One look at each game's details for this screen, shared by its room and its page.
+        val detailScope = rememberCoroutineScope()
+        val details = remember(store) { CompanionDetails(store, detailScope) }
         val systems = rememberShownSystems(store)
         val time = rememberClockText(prefs.clock24h)
         val playing = home.playtime.currentGame
@@ -219,18 +223,19 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
             val targetKey = (content.target as? GameCard)?.id ?: content.target
             LaunchedEffect(targetKey) { sheet = null }
             LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { if (it != 0) sheet = null } }
-            val hero = companionHero(store, systems, content.target)
+            val hero = companionHero(store, systems, content.target, details)
+            val cover = remember { io.github.matiyaaa.fuse.ui.designsystem.media.HeroCover() }
             // The main screen's own room (its scene, or the picture the theme uses) under everything,
             // so both screens read as one device; art for what is shown fades in over it.
             if (prefs.display.companionFollowsBackground) {
                 // Fusi's room here is the screen below's half of the room she shares with the main screen.
                 CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.background.LocalFusiScreen provides io.github.matiyaaa.fuse.ui.designsystem.background.FusiScreen.BOTTOM) {
-                    AmbientBackground(
+                    // Resting while the art covers it (a game's room, the whole time it is played).
+                    ThemeRoom(
                         if (spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.HERO) io.github.matiyaaa.fuse.model.BackgroundStyle.SOLID else spec.background,
                         hero?.accent ?: Fuse.colors.accent,
-                        Modifier.fillMaxSize(),
-                        ambient = spec.ambient,
-                    )
+                        spec.ambient,
+                    ) { cover.covered }
                 }
                 spec.wallpaper?.let { WallpaperLayer(it, Modifier.fillMaxSize()) }
             }
@@ -239,7 +244,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
             val cinema = content.target is io.github.matiyaaa.fuse.jellyfin.MediaItem
             val look = Fuse.look
             CompositionLocalProvider(LocalFuseLook provides if (cinema) look.copy(colors = look.colors.onArt()) else look) {
-                HeroBackdrop(hero, Modifier.fillMaxSize(), dim = if (cinema) 0.38f else 0.25f, gradient = if (cinema) 0.9f else 0.75f, settleMs = 30)
+                HeroBackdrop(hero, Modifier.fillMaxSize(), dim = if (cinema) 0.38f else 0.25f, gradient = if (cinema) 0.9f else 0.75f, settleMs = 30, cover = cover)
             }
             // Fusi, when she is down here, plays in front of the art.
             if (prefs.display.companionFollowsBackground && spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.FUSI && !cinema && !gameOn) {
@@ -267,7 +272,9 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
             // Something starting to play brings the first page round, so its remote is in view.
             val playingId = player?.item?.id
             LaunchedEffect(playingId) { if (playingId != null && pager.currentPage != 0) pager.animateScrollToPage(0) }
-            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize().dragScroll(pager, Orientation.Horizontal, enabled = sheet == null && !(pictureHere && pager.currentPage == 0), flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(pager)), beyondViewportPageCount = 1, userScrollEnabled = sheet == null && !(pictureHere && pager.currentPage == 0)) { page ->
+            // While a note is written on the session page, its pages hold still and its dots step aside.
+            val typing = CompanionTyping.active
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize().dragScroll(pager, Orientation.Horizontal, enabled = sheet == null && !typing && !(pictureHere && pager.currentPage == 0), flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(pager)), beyondViewportPageCount = 1, userScrollEnabled = sheet == null && !typing && !(pictureHere && pager.currentPage == 0)) { page ->
                 when (page) {
                     0 -> when {
                         pictureHere && player != null -> CompanionPicture(player) { placement.swap() }
@@ -279,7 +286,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                             topInset = CompanionTopBar,
                             bottomInset = CompanionDotsBar,
                         )
-                        else -> CompositionLocalProvider(LocalFuseLook provides if (cinema) look.copy(colors = look.colors.onArt()) else look) {
+                        else -> CompositionLocalProvider(LocalFuseLook provides if (cinema) look.copy(colors = look.colors.onArt()) else look, LocalCompanionDetails provides details) {
                             Box(Modifier.fillMaxSize().padding(top = numbersRoom)) { SpotlightPage(store, content, home.playtime.currentSince, systems, time) { sheet = it } }
                         }
                     }
@@ -316,14 +323,21 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 }
                 Box(Modifier.align(Alignment.CenterEnd)) { StatusCluster(status, time, showWifi = prefs.showWifi, showBluetooth = prefs.showBluetooth) }
             }
-            if (sheet == null) {
-                PageDots(
-                    count = companionPages.size,
-                    current = pager.currentPage,
-                    onSelect = { scope.launch { pager.animateScrollToPage(it) } },
-                    labels = companionPages,
+            if (sheet == null && !typing) {
+                // Reading the Journal below a game, the dots step aside until the page is back at its top.
+                io.github.matiyaaa.fuse.ui.fuseline.Appear(
+                    !(CompanionTyping.reading && pager.currentPage == 0),
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Space.s),
-                )
+                    enter = io.github.matiyaaa.fuse.ui.fuseline.fadeIn(Fuse.motion.enter(Durations.FAST)),
+                    exit = io.github.matiyaaa.fuse.ui.fuseline.fadeOut(Fuse.motion.exit(Durations.FAST)),
+                ) {
+                    PageDots(
+                        count = companionPages.size,
+                        current = pager.currentPage,
+                        onSelect = { scope.launch { pager.animateScrollToPage(it) } },
+                        labels = companionPages,
+                    )
+                }
             }
             // Achievements unlocked in the game being played, big as they come (not while this
             // screen is put away or off, when nothing would see them).
@@ -459,12 +473,58 @@ internal fun List<PlatformCard>.withRomm(romm: List<io.github.matiyaaa.fuse.ui.s
     return map { c -> notHere[c.platform.id]?.takeIf { it > 0 }?.let { c.copy(gameCount = c.gameCount + it) } ?: c }
 }
 
+/**
+ * What the main screen has in focus, as this screen follows it: at once after a rest, and while the
+ * selection runs (a held direction, quick presses) only once it rests. Following every step drew a
+ * new room, a new page and two looks at the game's details for each tile passed over, on the same
+ * thread as the main screen, which then dropped frames for work nobody saw.
+ */
+@Composable
+private fun rememberCalmFocus(): Spotlight.Focus {
+    val raw by Spotlight.focused.collectAsState()
+    var calm by remember { mutableStateOf(raw) }
+    val last = remember { arrayOf<TimeSource.Monotonic.ValueTimeMark?>(null) }
+    LaunchedEffect(raw) {
+        val rapid = last[0]?.let { it.elapsedNow().inWholeMilliseconds < CALM_FOCUS_MS } == true
+        last[0] = TimeSource.Monotonic.markNow()
+        if (rapid) delay(CALM_FOCUS_MS)
+        calm = raw
+    }
+    return calm
+}
+
+/** How long a run of moves must rest before this screen follows it. */
+private const val CALM_FOCUS_MS = 140L
+
+/**
+ * The details of the few games this screen shows now (the one arriving and the one leaving), each
+ * looked at once and shared by the room and the page. Kept briefly once unwatched, so moving back
+ * finds them ready.
+ */
+internal class CompanionDetails(private val store: FuseStore, private val scope: kotlinx.coroutines.CoroutineScope) {
+    private val kept = object : LinkedHashMap<GameId, StateFlow<io.github.matiyaaa.fuse.ui.shell.store.GameDetail?>>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<GameId, StateFlow<io.github.matiyaaa.fuse.ui.shell.store.GameDetail?>>?) = size > KEPT
+    }
+
+    fun of(id: GameId): StateFlow<io.github.matiyaaa.fuse.ui.shell.store.GameDetail?> = kept.getOrPut(id) {
+        store.library.game(id).stateIn(scope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(KEEP_MS), null)
+    }
+
+    private companion object {
+        const val KEPT = 4
+        const val KEEP_MS = 4_000L
+    }
+}
+
+/** The companion's shared details, for the pages inside it. */
+internal val LocalCompanionDetails = androidx.compose.runtime.staticCompositionLocalOf<CompanionDetails?> { null }
+
 /** The backdrop for what the companion shows: the game's background art, or the system's. */
 @Composable
-internal fun companionHero(store: FuseStore, systems: List<PlatformCard>, target: Any?): HeroSource? = when (target) {
+internal fun companionHero(store: FuseStore, systems: List<PlatformCard>, target: Any?, details: CompanionDetails? = null): HeroSource? = when (target) {
     is GameCard -> target.room(systems.firstOrNull { it.platform.id == target.shownPlatform })
     is GameId -> {
-        val flow = remember(target) { store.library.game(target) }
+        val flow = remember(target, details) { details?.of(target) ?: store.library.game(target) }
         val detail by flow.collectAsState(initial = null)
         detail?.let { d -> gameRoom(target, d.art, d.platform.accent, systems.firstOrNull { it.platform.id == d.platform.id }) }
     }
@@ -498,7 +558,8 @@ private fun Idle(time: String, room: Boolean) {
  */
 @Composable
 private fun FocusedGame(store: FuseStore, id: GameId, onAchievements: (GameId) -> Unit) {
-    val flow = remember(id) { store.library.game(id) }
+    val shared = LocalCompanionDetails.current
+    val flow = remember(id, shared) { shared?.of(id) ?: store.library.game(id) }
     val detail by flow.collectAsState(initial = null)
     // Where else the game is: the household's other devices and RomM, each with a dot when it is around.
     val browsingEverywhere by Spotlight.showsCopies.collectAsState()

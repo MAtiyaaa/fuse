@@ -754,7 +754,9 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
     val page = hudPage(app.navigator.stack)
     // A theme with its bar in a dock: the same line, in a pill in its own band along the bottom.
     val docked = io.github.matiyaaa.fuse.ui.designsystem.theme.LocalChrome.current.dock
-    if (!docked) HudScrim(art = prefs.showHero && app.hero != null)
+    // The room changes with every move: read in a scope of its own, so the whole top line (its tabs,
+    // status and activities) isn't built again each time the selection moves.
+    if (!docked) TopScrim(app, prefs.showHero)
     Hud(
         modifier = if (!docked) Modifier else Modifier.align(Alignment.BottomCenter).dockPill(),
         gutter = if (docked) Space.l else Space.gutter,
@@ -779,6 +781,13 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
         profile = hudProfile(app),
         downloads = rememberHudDownloads(app),
     )
+}
+
+/** The scrim under the top line, stronger while art fills the room. Reads the room on its own. */
+@Composable
+private fun TopScrim(app: AppState, showHero: Boolean) {
+    val art by remember(app) { androidx.compose.runtime.derivedStateOf { app.hero != null } }
+    HudScrim(art = showHero && art)
 }
 
 /**
@@ -813,6 +822,18 @@ private val MENU_HINTS = listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintBut
 private val LIFTED_TAB_HINTS = listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
 private val SURPRISE_HINTS = listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintButton.OPTIONS, "Spin Again"), Hint(HintButton.SEARCH, "Details"), Hint(HintButton.BACK, "Close"))
 
+/**
+ * The theme's drawn room, moving where motion allows, and resting while [hidden] (art covers it all):
+ * read here alone, so only the room follows it.
+ */
+@Composable
+internal fun ThemeRoom(style: BackgroundStyle, accent: androidx.compose.ui.graphics.Color, ambient: io.github.matiyaaa.fuse.model.AmbientSpec, hidden: () -> Boolean) {
+    AmbientBackground(style, accent, Modifier.fillMaxSize(), ambient = ambient, animate = Fuse.motion.ambient && Fuse.quality.animatedBackground && !hidden())
+}
+
+/** A background at least this opaque hides the room under it. */
+private const val OPAQUE_ART = 0.99f
+
 /** The background: theme renderer, then the selected item's art with video after it rests. */
 /** Not drawn while an opening covers the whole screen ([AppState.openingCovers]); read while drawing, so it never recomposes. */
 private fun Modifier.unseenUnderOpening(app: AppState): Modifier = drawWithContent { if (!app.openingCovers) drawContent() }
@@ -839,9 +860,14 @@ private fun Room(
         }
     }
     // The theme's own room is always underneath, so art fading in or out never shows a bare screen.
-    // Fusi's room is the main screen's half of the room she shares with a screen below.
+    // Fusi's room is the main screen's half of the room she shares with a screen below. While a
+    // game's art covers all of it (no glass to see through), it rests: unseen, it was a whole
+    // screen drawn again thirty times a second behind the art.
+    val cover = remember { io.github.matiyaaa.fuse.ui.designsystem.media.HeroCover() }
     androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.background.LocalFusiScreen provides io.github.matiyaaa.fuse.ui.designsystem.background.FusiScreen.TOP) {
-        AmbientBackground(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, Modifier.fillMaxSize(), ambient = ambient)
+        ThemeRoom(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, ambient) {
+            showHero && (!glass.enabled || glass.backgroundOpacity >= OPAQUE_ART) && cover.covered
+        }
     }
     // The theme's own picture, when it has one, over the drawn room and under any game's art.
     wallpaper?.let { WallpaperLayer(it, Modifier.fillMaxSize()) }
@@ -861,6 +887,7 @@ private fun Room(
             source = hero,
             // The selection has already rested (above); the room changes at once.
             settleMs = 0,
+            cover = cover,
             modifier = Modifier.fillMaxSize()
                 .then(if (blur > 0f) Modifier.blur(blur.dp) else Modifier)
                 .graphicsLayer { alpha = if (glass.enabled) glass.backgroundOpacity else 1f },
@@ -1073,6 +1100,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             is Route.GameContent -> io.github.matiyaaa.fuse.ui.shell.game.GameContentScreen(app, route.game)
             is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate, route.licence, route.patch)
             is Route.StoreApp -> io.github.matiyaaa.fuse.ui.shell.addons.StoreAppScreen(app, route.key)
+            is Route.AndroidPort -> io.github.matiyaaa.fuse.ui.shell.addons.AndroidPortScreen(app, route.id)
             Route.StoreUpdates -> io.github.matiyaaa.fuse.ui.shell.addons.StoreUpdatesScreen(app)
             is Route.MediaPage -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaItemScreen(app, route.id)
             is Route.MediaLibrary -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaLibraryScreen(app, route.id, route.name, route.kind)

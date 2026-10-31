@@ -153,6 +153,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.coverCornerFraction
 import io.github.matiyaaa.fuse.ui.shell.components.gamesText
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.components.stage
+import io.github.matiyaaa.fuse.ui.shell.components.StageInfo
 import io.github.matiyaaa.fuse.ui.shell.components.tileSize
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
@@ -381,7 +382,10 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         val idx = state.selectedId?.let { id -> list.indexOfFirst { it.id == id } } ?: -1
         if (idx >= 0) state.grid.index = idx else state.grid.clamp(list.size)
     }
-    val selectedCard = list?.getOrNull(state.grid.index)
+    // The game the selection is on, read where it is needed (input, the stage, the room) and never
+    // here: read in this function, every move of the D-pad built the whole Library again, its
+    // header, its tabs and every row's call, for the two tiles and the stage that change.
+    fun selected(): GameCard? = list?.getOrNull(state.grid.index)
     // The next tiles' art and the stage logos are ready before the selection reaches them.
     val posters = LocalGameArt.current == io.github.matiyaaa.fuse.model.GameArtStyle.POSTER
     val tileArt = remember(list, layout, posters) {
@@ -402,21 +406,18 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     // The size the tiles are laid out at (a selected tile only scales up as it draws): a square tile
     // crops its art, except box art shown whole over its own blur.
     val squareFill = remember(list) { list.orEmpty().map { a -> a.art.square != null || a.art.icon != null || a.art.boxart == null } }
-    PrefetchArt(
-        tileArt, state.grid.index, size = LocalTileMetrics.current.icon, span = span,
-        fillAt = { i -> layout != LibraryLayout.ICON || squareFill.getOrElse(i) { true } },
-        asTiles = true,
-    )
-    PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = LOGO_PREFETCH)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
     // A game with its own background image shows it; any other game shows its system's background,
     // so a system's page keeps one room while moving between its games.
     val systems = rememberSystems(app)
-    // The rooms of the games next to the selection, decoded as the background decodes them, so
-    // moving on shows them at once.
-    val heroDp = with(androidx.compose.ui.platform.LocalDensity.current) { Fuse.quality.heroDecodePx.toDp() }
-    PrefetchArt(remember(list, systems) { list.orEmpty().map { roomArt(it.art, systems[it.shownPlatform]) } }, state.grid.index, size = heroDp, limit = 2)
-    val gameSystem = selectedCard?.let { systems[it.shownPlatform] }
+    // The art around the selection, readied in a scope of its own that alone follows the selection.
+    LibraryPrefetch(
+        state, tileArt,
+        logos = remember(list) { list.orEmpty().map { it.art.logo } },
+        rooms = remember(list, systems) { list.orEmpty().map { roomArt(it.art, systems[it.shownPlatform]) } },
+        span = span,
+        fillAt = { i -> layout != LibraryLayout.ICON || squareFill.getOrElse(i) { true } },
+    )
 
     fun choose(s: LibrarySegment) {
         if (state.segment != s) {
@@ -460,23 +461,9 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     }
 
     val onSpotlight = spotlight != null && state.inHeader && app.focusZone == FocusZone.CONTENT && header.getOrNull(state.headerIndex) == HeaderItem.Button(LibraryButton.SPOTLIGHT)
-    PageEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art, emptyAction?.label, segment, onSpotlight) {
-        // All sets its own room and hints from its shelves.
-        if (scope == LibraryScope.All && segment == LibrarySegment.EVERYWHERE) return@PageEffect
-        app.hero = when {
-            selectedCard != null -> selectedCard.room(gameSystem)
-            systemCard != null -> HeroSource(systemCard.platform.id, systemCard.art.hero, systemCard.platform.accent.toColor())
-            else -> null
-        }
-        app.hints = when {
-            // The spotlight's button opens its game's page.
-            onSpotlight -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
-            selectedCard == null -> listOfNotNull(emptyAction?.let { Hint(HintButton.CONFIRM, it.label) })
-            special -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
-            // A system's or collection's page was opened on top of a tab: Back is named, as on every other page.
-            app.navigator.stack.size > 1 -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"), Hint(HintButton.BACK, "Back"))
-            else -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
-        }
+    // All sets its own room and hints from its shelves.
+    if (!(scope == LibraryScope.All && segment == LibrarySegment.EVERYWHERE)) {
+        LibraryRoom(app, state, list, systems, systemCard, special, emptyAction?.label, segment, onSpotlight)
     }
 
 
@@ -581,6 +568,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 } else r
             }
             NavAction.SELECT -> {
+                val selectedCard = selected()
                 when {
                     selectedCard == null -> emptyAction?.run?.invoke()
                     special -> options(selectedCard)
@@ -589,6 +577,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 if (selectedCard != null || emptyAction != null) NavResult.ACTIVATED else NavResult.BLOCKED
             }
             NavAction.CONTEXT -> {
+                val selectedCard = selected()
                 if (selectedCard != null) options(selectedCard)
                 else app.openContextMenu(ContextMenuSpec("Library", actions = viewActions(app, state, platformId, layout, sort, filters = openFilters, filtering = segment.smart)))
                 NavResult.ACTIVATED
@@ -640,15 +629,24 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         val spotlit = spotlight?.takeIf {
             state.inHeader && app.focusZone == FocusZone.CONTENT && header.getOrNull(state.headerIndex) == HeaderItem.Button(LibraryButton.SPOTLIGHT)
         }
-        val stageCard = spotlit?.card ?: selectedCard
+        // What the stage tells: the spotlit game while its button is focused, else the selection.
+        // Worked out inside the stage's own scope ([SelectedStage]), so only the stage follows a move.
         fun stageOf(card: GameCard?) = card?.stage()?.let { s ->
             val shown = if (inSystem) s.copy(eyebrow = null) else s
             if (spotlit != null && card.id == spotlit.card.id) shown.copy(eyebrow = "Spotlight", meta = listOf(spotlit.reason) + shown.meta) else shown
         }
+        val stageInfo: () -> StageInfo? = { stageOf(spotlit?.card ?: selected()) }
         // Read through derived state, so scrolling recomposes the screen only when this flips, not on
         // every frame of the scroll.
         val listScrolled by remember(listState) { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 24 } }
         val gridScrolled by remember(gridState) { derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 24 } }
+        // Whether the selection is past the first row (the stage folds), read so this screen hears
+        // only when that flips, never at each move along a row.
+        val pastFirstRow by remember(layout) {
+            derivedStateOf { if (layout == LibraryLayout.COMPACT_LIST) state.grid.index >= 3 else state.grid.index >= columns.coerceAtLeast(1) }
+        }
+        // Whether the chosen game has a background of its own (a system's page then drops its panel).
+        val ownRoom by remember(list) { derivedStateOf { list?.getOrNull(state.grid.index)?.art?.hero != null } }
         // Past the first row the stage folds away (a system's header with it), so more games fit: on
         // All, Favourites and Recently played the Grid's stage shrinks and its logo rises until at
         // least three rows show.
@@ -659,22 +657,20 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             showcaseElsewhere && (systemCard != null || layout == LibraryLayout.ICON) -> true
             systemCard == null && layout != LibraryLayout.ICON -> false
             touchScroll -> if (layout == LibraryLayout.COMPACT_LIST) listScrolled else gridScrolled
-            layout == LibraryLayout.COMPACT_LIST -> state.grid.index >= 3
-            else -> state.grid.index >= columns
+            else -> pastFirstRow
         }
         val collapse by fuselineFloat(if (folded) 1f else 0f, Fuse.motion.followSpring(), label = "system fold")
         // The tabs and toolbar fold on a short screen once you are past the first row, and come back
         // as you move up to them (the stage alone stays folded where the other screen shows the game).
         val headerFolded = compactHeader && !list.isNullOrEmpty() && !state.inHeader && when {
             touchScroll -> if (layout == LibraryLayout.COMPACT_LIST) listScrolled else gridScrolled
-            layout == LibraryLayout.COMPACT_LIST -> state.grid.index >= 3
-            else -> state.grid.index >= columns.coerceAtLeast(1)
+            else -> pastFirstRow
         }
         val headerFold by fuselineFloat(if (headerFolded) 1f else 0f, Fuse.motion.followSpring(), label = "header fold")
         // Like the Systems screen: the art pack's panel on the right unless there is a background image.
         if (systemCard != null) {
             Appear(
-                visible = systemCard.art.hero == null && selectedCard?.art?.hero == null,
+                visible = systemCard.art.hero == null && !ownRoom,
                 modifier = Modifier.align(Alignment.CenterEnd),
                 enter = fadeIn(Fuse.motion.fade(Durations.SLOW)),
                 exit = fadeOut(Fuse.motion.fade(Durations.BASE)),
@@ -769,13 +765,15 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                                 .reveal(reveal, 1),
                             contentAlignment = Alignment.BottomStart,
                         ) {
-                            Stage(
-                                stageOf(stageCard), showLogo = prefs.showLogo, logoHeight = logo,
-                                titleStyle = if (inSystem) androidx.compose.ui.text.lerp(Fuse.type.display, Fuse.type.title, collapse) else androidx.compose.ui.text.lerp(stageTitle, Fuse.type.title, collapse),
-                                fold = collapse,
-                                // A short screen keeps the stage to two lines, clear of the tabs.
-                                inlineEyebrow = compactHeader,
-                            )
+                            SelectedStage(stageInfo) { info ->
+                                Stage(
+                                    info, showLogo = prefs.showLogo, logoHeight = logo,
+                                    titleStyle = if (inSystem) androidx.compose.ui.text.lerp(Fuse.type.display, Fuse.type.title, collapse) else androidx.compose.ui.text.lerp(stageTitle, Fuse.type.title, collapse),
+                                    fold = collapse,
+                                    // A short screen keeps the stage to two lines, clear of the tabs.
+                                    inlineEyebrow = compactHeader,
+                                )
+                            }
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
                         columns = cols
@@ -788,15 +786,17 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                             // Too little room above the covers (a small 4:3 handheld): the stage keeps
                             // to its one-line form rather than running up under the toolbar.
                             val tight = maxHeight < CAPSULE_STAGE_ROOM
-                            Stage(
-                                stageOf(stageCard), showLogo = prefs.showLogo && !tight, logoHeight = if (compactHeader) CAPSULE_LOGO / 2 else CAPSULE_LOGO,
-                                titleStyle = if (tight) Fuse.type.title else stageTitle, fold = if (tight) 1f else 0f, inlineEyebrow = compactHeader,
-                            )
+                            SelectedStage(stageInfo) { info ->
+                                Stage(
+                                    info, showLogo = prefs.showLogo && !tight, logoHeight = if (compactHeader) CAPSULE_LOGO / 2 else CAPSULE_LOGO,
+                                    titleStyle = if (tight) Fuse.type.title else stageTitle, fold = if (tight) 1f else 0f, inlineEyebrow = compactHeader,
+                                )
+                            }
                         }
                         Spacer(Modifier.height(Space.xl))
-                        CoverCarousel(
+                        SelectedIndex(state) { at -> CoverCarousel(
                             items = list,
-                            selected = state.grid.index,
+                            selected = at,
                             itemWidth = metrics.capsuleWidth * CAPSULE_SCALE,
                             onTap = { i -> tapAt(i, list) },
                             onLongPress = { i -> state.pick(i, list); options(list[i]) },
@@ -808,7 +808,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                             modifier = Modifier.reveal(reveal, 2),
                             focused = gridFocused,
                             start = Space.gutter,
-                        )
+                        ) }
                         Spacer(Modifier.height(Size.hintHeight + Space.l))
                     }
                     LibraryLayout.COVER_GRID -> {
@@ -1757,4 +1757,74 @@ private fun resumeFromView(state: LibraryViewState, list: List<GameCard>, layout
     if (visible.isEmpty() || visible.any { it.first == index && it.second }) return
     val first = visible.firstOrNull { it.second }?.first ?: visible.first().first
     state.pick(first, list)
+}
+
+/**
+ * The art around the selection, readied before the selection reaches it: tiles by rows, the stage's
+ * logos, and the rooms of the games beside it (decoded as the background decodes them). Its own
+ * scope, the only one besides the stage and the two tiles that hears each move.
+ */
+@Composable
+private fun LibraryPrefetch(
+    state: LibraryViewState,
+    tiles: List<Any?>,
+    logos: List<Any?>,
+    rooms: List<Any?>,
+    span: Int,
+    fillAt: (Int) -> Boolean,
+) {
+    val at = state.grid.index
+    PrefetchArt(tiles, at, size = LocalTileMetrics.current.icon, span = span, fillAt = fillAt, asTiles = true)
+    PrefetchArt(logos, at, size = LOGO_PREFETCH)
+    val heroDp = with(androidx.compose.ui.platform.LocalDensity.current) { Fuse.quality.heroDecodePx.toDp() }
+    PrefetchArt(rooms, at, size = heroDp, limit = 2)
+}
+
+/**
+ * The room behind the Library and its hints, for the game the selection is on (or the system's own
+ * room, or the empty view's one thing to do). Its own scope, so a move sets them without building the
+ * screen around it again.
+ */
+@Composable
+private fun LibraryRoom(
+    app: AppState,
+    state: LibraryViewState,
+    list: List<GameCard>?,
+    systems: Map<PlatformId, io.github.matiyaaa.fuse.ui.shell.store.PlatformCard>,
+    systemCard: io.github.matiyaaa.fuse.ui.shell.store.PlatformCard?,
+    special: Boolean,
+    emptyLabel: String?,
+    segment: LibrarySegment,
+    onSpotlight: Boolean,
+) {
+    val selectedCard = list?.getOrNull(state.grid.index)
+    val gameSystem = selectedCard?.let { systems[it.shownPlatform] }
+    PageEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art, emptyLabel, segment, onSpotlight) {
+        app.hero = when {
+            selectedCard != null -> selectedCard.room(gameSystem)
+            systemCard != null -> HeroSource(systemCard.platform.id, systemCard.art.hero, systemCard.platform.accent.toColor())
+            else -> null
+        }
+        app.hints = when {
+            // The spotlight's button opens its game's page.
+            onSpotlight -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
+            selectedCard == null -> listOfNotNull(emptyLabel?.let { Hint(HintButton.CONFIRM, it) })
+            special -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
+            // A system's or collection's page was opened on top of a tab: Back is named, as on every other page.
+            app.navigator.stack.size > 1 -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"), Hint(HintButton.BACK, "Back"))
+            else -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
+        }
+    }
+}
+
+/** Draws [content] with the stage's words for the selection, in a scope that alone follows it. */
+@Composable
+private fun SelectedStage(info: () -> io.github.matiyaaa.fuse.ui.shell.components.StageInfo?, content: @Composable (io.github.matiyaaa.fuse.ui.shell.components.StageInfo?) -> Unit) {
+    content(info())
+}
+
+/** Draws [content] with the selection's place, in a scope that alone follows it. */
+@Composable
+private fun SelectedIndex(state: LibraryViewState, content: @Composable (Int) -> Unit) {
+    content(state.grid.index)
 }
