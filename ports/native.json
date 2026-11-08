@@ -43,8 +43,7 @@
       "id": "hookshot",
       "repo": "NotRexed/Hookshot",
       "builds": [
-        { "os": "windows", "asset": "^HookshotBuilder\\.(exe|zip)$" },
-        { "os": "linux", "asset": "\\.AppImage$" }
+        { "os": "windows", "asset": "^HookshotBuilder\\.(exe|zip)$" }
       ]
     }
   ]
