@@ -600,16 +600,17 @@ internal object EdenUser {
     private const val ENTRY = 0xC8
 }
 
-/** A Switch game's title id: from its serial (a `[0100…]` tag), else from the ticket in its NSP. */
+/** A Switch or Switch 2 game's title id: from its serial (a `[0100…]` or `[0400…]` tag), else from the ticket in its NSP. */
 internal object SwitchIds {
     fun of(q: SaveQuery, env: SaveEnvironment): String? {
-        val id = q.serial?.uppercase()?.takeIf { HEX16.matches(it) && it.startsWith("01") }
+        val id = q.serial?.uppercase()?.takeIf { HEX16.matches(it) && (it.startsWith("01") || it.startsWith("04")) }
             ?: TAG.findAll(q.romPath.substringAfterLast('/')).map { it.groupValues[1].uppercase() }.firstOrNull()
             ?: fromNsp(env, q.romPath)
         return id?.let(::program)
     }
 
-    private val TAG = Regex("\\[(01[0-9A-Fa-f]{14})]")
+    // Switch title ids start 01, Switch 2's 04.
+    private val TAG = Regex("\\[(0[14][0-9A-Fa-f]{14})]")
 
     /** The game's own id for an update's (which ends in 800): saves are kept under the game's. */
     internal fun program(id: String): String = if (id.endsWith("800")) id.dropLast(3) + "000" else id

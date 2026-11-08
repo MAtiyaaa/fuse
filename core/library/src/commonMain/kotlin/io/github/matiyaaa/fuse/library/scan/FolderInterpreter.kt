@@ -476,6 +476,8 @@ class FolderInterpreter(
         s -= 30 * flags.count { it in DISFAVOURED_FLAGS }
         if (platform.id.value in SwitchContent.platforms) {
             s += when (group.primary.extension) {
+                // A .nup carries the game with its updates.
+                "nup" -> 6
                 "xci", "xcz" -> 5
                 "nsp", "nsz" -> 4
                 else -> 0

@@ -34,7 +34,8 @@ internal object AndroidConsoleDefs {
     private val SWITCH = platforms("switch")
     private val SWITCH_2 = platforms("switch-2", "switch")
     private const val LICHII_ANDROID = "pavelgajdo/Lichii-Android android-0.3.0: src/android/app/build.gradle.kts (applicationId dev.lichii.android) " +
-        "and AndroidManifest.xml (Eden's org.yuzu.yuzu_emu.activities.EmulationActivity: TECH_DISCOVERED, VIEW and LAUNCH_WITH_CUSTOM_CONFIG)"
+        "and AndroidManifest.xml (Eden's org.yuzu.yuzu_emu.activities.EmulationActivity: TECH_DISCOVERED, VIEW and LAUNCH_WITH_CUSTOM_CONFIG); " +
+        "model/Game.kt extensions (xci, nsp, nca, nro, nsz, xcz, nup)"
     private val GB = platforms("gb", "gbc")
     private val NES = platforms("nes", "famicom", "fds")
 
@@ -45,8 +46,11 @@ internal object AndroidConsoleDefs {
     private val provider = intent(data = PROVIDER)
     private val viewProvider = intent(action = VIEW, data = PROVIDER)
 
-    private fun yuzuStyle(title: Boolean) = buildList {
-        add(fileExt(intent(action = "android.nfc.action.TECH_DISCOVERED", data = PROVIDER), *SWITCH_FILES))
+    /** Lichii for Android's Game.extensions: Eden's, the compressed .nsz and .xcz, and Switch 2's .nup. */
+    private val LICHII_FILES = arrayOf("xci", "nsp", "nca", "nro", "nsz", "xcz", "nup")
+
+    private fun yuzuStyle(title: Boolean, files: Array<String> = SWITCH_FILES) = buildList {
+        add(fileExt(intent(action = "android.nfc.action.TECH_DISCOVERED", data = PROVIDER), *files))
         if (title) {
             add(
                 titleId(
@@ -493,7 +497,7 @@ internal object AndroidConsoleDefs {
         AndroidEmulatorDef(
             id = "lichii", name = "Lichii",
             apps = apps(YUZU_ACTIVITY, "dev.lichii.android"),
-            platforms = SWITCH_2, modes = yuzuStyle(title = true),
+            platforms = SWITCH_2, modes = yuzuStyle(title = true, files = LICHII_FILES),
             source = LICHII_ANDROID,
             confidence = VERIFIED_SOURCE, homepage = "https://github.com/pavelgajdo/Lichii-Android",
             capabilities = installedContent(),
@@ -507,7 +511,7 @@ internal object AndroidConsoleDefs {
         AndroidEmulatorDef(
             id = "lichii-nightly", name = "Lichii Nightly",
             apps = apps(YUZU_ACTIVITY, "dev.lichii.android.nightly"),
-            platforms = SWITCH_2, modes = yuzuStyle(title = true),
+            platforms = SWITCH_2, modes = yuzuStyle(title = true, files = LICHII_FILES),
             source = LICHII_ANDROID + " (the nightly build type's .nightly applicationIdSuffix)",
             confidence = VERIFIED_SOURCE, homepage = "https://github.com/pavelgajdo/Lichii-Android",
             capabilities = installedContent(),

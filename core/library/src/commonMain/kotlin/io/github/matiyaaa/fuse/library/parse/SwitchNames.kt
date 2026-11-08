@@ -38,9 +38,10 @@ object SwitchNames {
         val extra: Boolean,
     )
 
-    private val extensions = setOf("nsp", "nsz", "xci", "xcz", "nca", "nro", "nso")
+    private val extensions = setOf("nup", "nsp", "nsz", "xci", "xcz", "nca", "nro", "nso")
 
-    private val idRegex = Regex("(?<![0-9A-Za-z])(01[0-9A-Fa-f]{14})(?![0-9A-Za-z])")
+    // Switch title ids start 01; Switch 2's 04 (Ocarina of Time, 04004860224DEC00).
+    private val idRegex = Regex("(?<![0-9A-Za-z])(0[14][0-9A-Fa-f]{14})(?![0-9A-Za-z])")
 
     // A Switch version: a multiple of 65536 (or 0), with or without a "v", in brackets or not.
     private val numericVersion = Regex("(?<![0-9A-Za-z.])v?(\\d{1,8})(?![0-9.]*\\.\\d)(?![0-9A-Za-z])", RegexOption.IGNORE_CASE)

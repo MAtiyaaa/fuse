@@ -197,7 +197,8 @@ internal val catalogPlatforms: List<Platform> = listOf(
     ),
     platform(
         "switch-2", "Nintendo Switch 2", "Switch 2", CONSOLE, NINTENDO, "Nintendo", 2025,
-        "nsp xci", "switch2 nintendoswitch2", 0xFF5C7EC4, aspect = SWITCH_CASE,
+        // .nup: Switch 2's own package, a game with its updates in one file (Lichii's core/loader/nup.h).
+        "nup nsp xci nsz xcz", "switch2 nintendoswitch2", 0xFF5C7EC4, aspect = SWITCH_CASE,
     ),
     platform(
         "virtualboy", "Virtual Boy", "VB", HANDHELD, NINTENDO, "Nintendo", 1995,

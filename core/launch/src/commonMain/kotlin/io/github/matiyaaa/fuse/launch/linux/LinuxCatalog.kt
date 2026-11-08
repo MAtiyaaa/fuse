@@ -240,7 +240,8 @@ object LinuxCatalog {
             // Lichii: an Eden fork for Switch 2 (and Switch) games, which keeps Eden's command line and data folders.
             id = "linux.lichii", name = "Lichii", platforms = platforms("switch-2", "switch"),
             detection = detect(bin = listOf("lichii"), appImage = listOf("*lichii*.appimage"), dirBin = listOf("Lichii/lichii", "lichii/lichii")),
-            modes = listOf(file("-f", "-g", "{ROM}", ext = setOf("nca", "nro", "nso", "nsp", "xci"))),
+            // Its loader also reads Switch 2's .nup and the compressed .nsz and .xcz (src/core/loader/loader.cpp).
+            modes = listOf(file("-f", "-g", "{ROM}", ext = setOf("nup", "nca", "nro", "nso", "nsp", "nsz", "xci", "xcz"))),
             source = LICHII_SOURCE, confidence = Confidence.COMMUNITY, homepage = "https://lichii.zortos.me/",
             capabilities = caps(installed = true), installHint = "Install to NAND",
             limitations = listOf(
