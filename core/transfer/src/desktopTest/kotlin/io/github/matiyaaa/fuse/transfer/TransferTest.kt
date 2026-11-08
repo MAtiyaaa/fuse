@@ -627,7 +627,8 @@ class TransferTest {
         m.register(FileHandler(Server()))
         val id = m.enqueue(download("Aside.bin"))
         m.awaitStatus(id, TransferStatus.ACTIVE)
-        delay(400)
+        // Some of it has arrived (not a fixed wait, which a busy machine can outlast with nothing come).
+        withTimeout(10_000) { m.live(id).first { it.doneBytes > 0 } }
         m.setLater(id, true).join()
         val waiting = m.awaitStatus(id, TransferStatus.WAITING)
         assertEquals(WaitReason.LATER, waiting.waiting)
@@ -654,6 +655,8 @@ class TransferTest {
         val sd = VolumeRef("sd", "SD card", VolumeKind.SD_CARD, true, "", 0)
         fun on(name: String, volume: VolumeRef?, size: Long) = download(name, TransferPlace(File(root, name).path, volume)).copy(totalBytes = size)
         m.enqueue(on("First", sd, 1_000))
+        // The first has said how far it is before the others look, or the second could count all of it.
+        withTimeout(5_000) { while (!seen.containsKey("First")) delay(10) }
         m.enqueue(on("Elsewhere", null, 5_000))
         m.enqueue(on("Second", sd, 2_000))
         withTimeout(5_000) { while (seen.size < 3) delay(10) }
