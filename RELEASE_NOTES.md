@@ -1,31 +1,21 @@
-# Fuse 0.4.7.1 - The Cool Running Update
+# Fuse 0.4.7.2 - The Cool Running Update
 
-Nintendo Switch 2 on every system Fuse runs on: an emulator for it on Android, Linux, Windows and
-macOS, the two native recompilations of the new Ocarina of Time, and a logo of its own.
+Switch 2 games in their own package, the .nup, are found and played.
 
 ## New
 
-- **Switch 2 games start.** Lichii, the experimental emulator where the first Switch 2 games boot,
-  is known on every system: on Linux (its AppImage or program), Windows (lichii.exe), macOS (its app,
-  on Apple silicon with macOS 15 or newer) and Android (Lichii for Android and its nightly). It is
-  the emulator Switch 2 games start in, and it plays Switch games too, after Eden and the others.
-  It is very young: few games start, most with missing effects or a low frame rate.
-- **Lichii in the Store.** On a computer, the Store offers Lichii's newest build from its own
-  releases, beside Eden, Ryujinx and Citron.
-- **Ocarina of Time, rebuilt natively.** The two recompilations of the Switch 2 Ocarina of Time,
-  Ocarina Recomp (Windows and Linux) and Hookshot (Windows and Linux), are found where you built
-  them and offered on the game's page as a way to play it, beside its emulators. Each is built on
-  your own computer from your own copy of the game; Fuse starts it the way its project does and
-  knows where it keeps its saves.
-- **A logo for Switch 2.** The art pack has none, so Fuse draws its own, in the same thin line as
-  the PlayStation 5's.
+- **Switch 2's .nup.** A .nup, Switch 2's package holding a game with its updates, is a Switch 2
+  game wherever it is, in a Switch 2 folder or not, and starts in Lichii on Linux, Windows, macOS
+  and Android. Where a game is in several files, the .nup is the one Fuse plays.
+- **Compressed Switch 2 games.** A Switch 2 game in .nsz or .xcz, the compressed .nsp and .xci,
+  starts in Lichii too.
 
 ## Changed
 
-- Lichii keeps its saves in Eden's folders, so Fuse reads and syncs them there, and a Switch save
-  made in Eden is the same one Lichii sees.
+- Switch 2 title ids (they start 04, as 04004860224DEC00) are read from file names as Switch ones
+  are, so a Switch 2 game's updates and DLC are told from the game and its saves are found by its id.
 
 ## Fixed
 
-- Switch 2 games were found and shown, but no emulator could be chosen for them, so Play had nothing
-  to start them in. They start in Lichii now.
+- A Switch 2 file named with its title id was read as having none: its updates and DLC were only
+  told apart by the words in their names, and its saves weren't found by the id.

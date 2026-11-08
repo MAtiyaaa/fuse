@@ -142,4 +142,13 @@ class PlatformCatalogTest {
         assertEquals(2, PlatformCatalog.byId("xbox")?.bios?.requiredCount)
         assertNull(PlatformCatalog.byId("snes")?.bios)
     }
+
+    @Test
+    fun aNupIsASwitch2GameWhereverItIs() {
+        assertEquals(listOf("switch-2"), PlatformCatalog.forExtension("nup").map { it.id.value })
+        assertEquals(listOf("switch-2"), PlatformCatalog.forExtension(".NUP").map { it.id.value })
+        for (folder in listOf("switch-2", "Switch 2", "switch2", "Nintendo Switch 2", "SWITCH_2")) {
+            assertEquals("switch-2", PlatformCatalog.resolveFolder(folder)?.id?.value, folder)
+        }
+    }
 }

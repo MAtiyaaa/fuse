@@ -26,6 +26,16 @@ class SwitchNamesTest {
     }
 
     @Test
+    fun aSwitch2PackageIsReadLikeASwitchFile() {
+        // Switch 2 ids start 04, and its .nup holds the game with its updates.
+        val nup = SwitchNames.read("Ocarina of Time [04004860224DEC00][v0].nup")
+        assertEquals("04004860224DEC00", nup.titleId)
+        assertEquals("04004860224DEC00", nup.baseId)
+        assertEquals(BASE, nup.kind)
+        assertEquals(key("Ocarina of Time [04004860224DEC00][v0].xci"), nup.key)
+    }
+
+    @Test
     fun anUpdateNamedWithItsGamesIdIsStillAnUpdate() {
         // The version (or the word) tells, whatever the id says.
         assertEquals(UPDATE, kind("Paper Kites [0100BBBB22224000][USA][v131072].nsp"))

@@ -20,7 +20,8 @@ object Serials {
         RegexOption.IGNORE_CASE,
     )
 
-    private val switchId = Regex("^01[0-9A-Fa-f]{14}$")
+    // Switch title ids start 01, Switch 2's 04.
+    private val switchId = Regex("^0[14][0-9A-Fa-f]{14}$")
 
     /** Normalised serial for a whole token (a tag's content or a word), or null when it isn't one. */
     fun normalize(token: String, allowSwitchId: Boolean = true): String? {

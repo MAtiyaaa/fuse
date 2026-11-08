@@ -35,6 +35,16 @@ class LichiiTest {
     }
 
     @Test
+    fun aNupStartsInLichiiOnEverySystem() {
+        for ((host, program) in listOf(Host.LINUX to "/opt/lichii/lichii", Host.WINDOWS to "C:/Lichii/lichii.exe", Host.MACOS to "/Applications/lichii.app/Contents/MacOS/lichii")) {
+            val id = "${if (host == Host.MACOS) "macos" else host.name.lowercase()}.lichii"
+            val lichii = linuxEmu(id, program).copy(host = host)
+            val r = resolver.resolve(game("switch-2", "/games/switch-2/Ocarina of Time.nup"), EmulatorId(id), listOf(lichii), host)
+            assertEquals(listOf(program, "-f", "-g", "/games/switch-2/Ocarina of Time.nup"), assertIs<LaunchPlan.Command>(r.plan, "$host").argv, "$host")
+        }
+    }
+
+    @Test
     fun itIsTheSwitch2EmulatorOnEverySystemAndPlaysSwitchGamesAfterTheOthers() {
         for (host in listOf(Host.LINUX, Host.WINDOWS, Host.MACOS, Host.ANDROID)) {
             val two = AdapterRegistry.Default.forPlatform(PlatformId("switch-2"), host).map { it.id.value.substringAfter('.') }
