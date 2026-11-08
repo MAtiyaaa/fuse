@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.nio.file.Files
 import java.security.MessageDigest
@@ -632,7 +633,10 @@ class TransferTest {
         m.setLater(id, true).join()
         val waiting = m.awaitStatus(id, TransferStatus.WAITING)
         assertEquals(WaitReason.LATER, waiting.waiting)
-        assertTrue(File(root, "games/.Aside.bin.fuse-part").length() > 0, "what arrived is kept")
+        // The stopped download closes its file (writing out what arrived) as the status changes, so give it a moment.
+        val part = File(root, "games/.Aside.bin.fuse-part")
+        withTimeoutOrNull(5_000) { while (part.length() == 0L) delay(20) }
+        assertTrue(part.length() > 0, "what arrived is kept")
         m.configure(TransferSettings())
         m.conditions(TransferConditions(powerKnown = true, battery = 70, charging = true))
         m.awaitStatus(id, TransferStatus.DONE)
