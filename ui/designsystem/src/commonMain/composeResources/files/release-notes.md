@@ -24,3 +24,8 @@ macOS, the two native recompilations of the new Ocarina of Time, and a logo of i
 
 - Lichii keeps its saves in Eden's folders, so Fuse reads and syncs them there, and a Switch save
   made in Eden is the same one Lichii sees.
+
+## Fixed
+
+- Switch 2 games were found and shown, but no emulator could be chosen for them, so Play had nothing
+  to start them in. They start in Lichii now.

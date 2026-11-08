@@ -83,7 +83,7 @@ class NativeCheckTest(unittest.TestCase):
             data = json.load(f)
         self.assertEqual(1, data["format"])
         ids = [p["id"] for p in data["ports"]]
-        self.assertEqual(["bloodborne-pc", "spartanport", "uncharted-ndc-pc", "pt-pc"], ids)
+        self.assertEqual(["bloodborne-pc", "spartanport", "uncharted-ndc-pc", "pt-pc", "ocarina-recomp", "hookshot"], ids)
         for p in data["ports"]:
             self.assertRegex(p["repo"], r"^[\w.-]+/[\w.-]+$")
             for b in p["builds"]:
