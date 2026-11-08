@@ -43,7 +43,7 @@ object EmulatorContracts {
     private val cheatFamilies = setOf("retroarch", "pcsx2", "duckstation", "ppsspp")
 
     /** Families whose firmware installed inside them Fuse checks on a computer (InEmulatorFirmware, DesktopEmulators). */
-    private val insideFirmware = setOf("eden", "citron", "ryujinx", "rpcs3", "vita3k")
+    private val insideFirmware = setOf("eden", "lichii", "citron", "ryujinx", "rpcs3", "vita3k")
 
     fun family(id: String): String = SaveAdapters.baseId(id)
 
