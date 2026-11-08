@@ -204,7 +204,7 @@ class DesktopStoreTest {
         assertEquals(Availability.INSTALLABLE, catalogue.apps.single { it.key == "eden" }.availability)
         assertEquals(Availability.INSTALLABLE, catalogue.apps.single { it.key == "mame" }.availability)
         // Builds carrying one emulator on offer each other: yuzu's, Citra's.
-        assertEquals(listOf("citron"), catalogue.apps.single { it.key == "eden" }.otherBuilds)
+        assertEquals(listOf("citron", "lichii"), catalogue.apps.single { it.key == "eden" }.otherBuilds)
         assertEquals(listOf("azaharplus", "mandarine"), catalogue.apps.single { it.key == "azahar" }.otherBuilds)
         assertEquals(emptyList(), catalogue.apps.single { it.key == "cemu" }.otherBuilds)
 
