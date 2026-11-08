@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "revision": 9,
+  "revision": 10,
   "generated": "2026-10-22",
   "ports": [
     {
@@ -6633,8 +6633,8 @@
       "repo": "https://github.com/Masterllgod/naruto-storm-revolution-port-nativo",
       "about": "Naruto Shippuden: Ultimate Ninja Storm Revolution's Xbox 360 executable statically recompiled to native ARM64 code, with the Storm 4 modpack it is made for.",
       "needs": "The folder of your own North American (NTSC-U) Xbox 360 disc of Revolution, whose default.xex must match the hash its README gives, with the modpack's patchdata/adddata.cpk beside it.",
-      "package": "com.naruto.storm4mod",
-      "source": "naruto-storm-revolution-port-nativo storm4mod-v0.13: README.md (not an Xbox 360 emulator: default.xex statically recompiled from PowerPC to ARM64; made for one version of the executable, its hash given; the disc it takes; choosing the folder with default.xex); the modpack, patchdata/adddata.cpk, in the original Revolution's folder; release storm4mod-v0.13 (NarutoStorm4MOD-PortNativo-v0.13-arm64.apk, its package read by Android's aapt2)"
+      "package": "com.naruto.storm4",
+      "source": "naruto-storm-revolution-port-nativo storm4mod-v0.13: README.md (not an Xbox 360 emulator: default.xex statically recompiled from PowerPC to ARM64; made for one version of the executable, its hash given; the disc it takes; choosing the folder with default.xex); the modpack, patchdata/adddata.cpk, in the original Revolution's folder; release v1.1.6 (its APK's package, com.naruto.storm4 since v1.1, read by Android's aapt2)"
     },
     {
       "id": "naruto-rise-of-a-ninja-android",
@@ -7139,22 +7139,6 @@
       "needs": "The files of your own New Super Mario Bros. Wii (USA, SMNE01, revision 1), extracted with Dolphin on a computer; nothing of the game is in the app.",
       "package": "com.wither.nsmbw",
       "source": "NSMB-Wii-Multiplayer-Recompilation v0.2.2: README.md (There are no game files in this project or its releases; your own copy of New Super Mario Bros. Wii, USA, SMNE01, revision 1, and Dolphin on a computer to extract it); release v0.2.2 (NSMBW-0.2.2-android-arm64.apk, its package read by Android's aapt2)"
-    },
-    {
-      "id": "galaxy-android",
-      "name": "Galaxy Android",
-      "game": "Super Mario Galaxy",
-      "cover": "https://thumbnails.libretro.com/Nintendo%20-%20Wii/Named_Boxarts/Super%20Mario%20Galaxy%20(Europe).png",
-      "coverCredit": "Box art",
-      "systems": ["wii"],
-      "kind": "decompilation",
-      "status": "alpha",
-      "repo": "https://github.com/OpenPort-Labs/Galaxy-Android",
-      "licence": "GPL-3.0",
-      "about": "Super Mario Galaxy compiled natively for ARM64 from reconstructed C++ source, drawn with Vulkan 1.0, not an emulator.",
-      "needs": "The files of your own copy of Super Mario Galaxy for Wii; a Vulkan 1.0 GPU is required.",
-      "package": "com.openport.galaxyandroid",
-      "source": "Galaxy-Android v0.0.4-gamma: README.md (a 100% native Android ARM64 port compiled from reconstructed C++ source; not an emulator; Vulkan 1.0 is a hard requirement); release v0.0.4-gamma (GalaxyAndroid-v0.0.4-gamma.apk, its package read by Android's aapt2)"
     },
     {
       "id": "strikers-android",
