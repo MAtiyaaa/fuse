@@ -56,6 +56,7 @@ object WindowsCatalog {
         port("rpcs3", "rpcs3.exe"),
         port("eden", "eden.exe"),
         port("ryujinx", "Ryujinx.exe", "Ryujinx.Ava.exe"),
+        port("lichii", "lichii.exe", folders = listOf("lichii*")) { it.copy(source = LinuxCatalog.LICHII_SOURCE) },
         port("citron", "citron.exe") { it.copy(source = "Not in ES-DE; command line not verified") },
         port("azahar", "azahar.exe", excludes = listOf("azaharplus*")),
         port("azaharplus", "azaharplus.exe"),

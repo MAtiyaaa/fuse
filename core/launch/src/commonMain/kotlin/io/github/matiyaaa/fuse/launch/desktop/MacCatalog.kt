@@ -53,6 +53,10 @@ object MacCatalog {
         port("rpcs3", listOf("RPCS3.app")),
         port("eden", listOf("eden.app")),
         port("ryujinx", listOf("Ryujinx*.app")),
+        // An Apple silicon build for macOS 15 or newer (lichii.org).
+        port("lichii", listOf("lichii*.app", "Lichii*.app")) { d ->
+            d.copy(source = LinuxCatalog.LICHII_SOURCE, limitations = d.limitations + "On a Mac it needs Apple silicon and macOS 15 or newer.")
+        },
         port("azahar", listOf("azahar*.app"), excludes = listOf("azaharplus*")),
         port("lime3ds", listOf("lime3ds*.app", "lime-qt.app")),
         port("citra", listOf("citra-qt.app")),

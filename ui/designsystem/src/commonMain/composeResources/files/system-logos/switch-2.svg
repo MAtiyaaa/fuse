@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Switch 2 wordmark drawn for Fuse, in the thin-line style of its other system logos. GPL-3.0-or-later, as Fuse. -->
+<svg version="1.1" viewBox="0 0 1090 200" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" stroke="rgb(255, 255, 255)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M130,20H52A40,40 0 0 0 52,100H90A40,40 0 0 1 90,180H12"/>
+    <path d="M170,20L208,180L249,64L290,180L328,20"/>
+    <path d="M370,20V180"/>
+    <path d="M412,20H532M472,20V180"/>
+    <path d="M692,20H652A80,80 0 0 0 652,180H692"/>
+    <path d="M734,20V180M854,20V180M734,100H854"/>
+    <path d="M960,58A38,38 0 0 1 998,20H1040A38,38 0 0 1 1078,58V66A38,38 0 0 1 1060,98L960,180H1078"/>
+  </g>
+</svg>

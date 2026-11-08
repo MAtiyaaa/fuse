@@ -81,7 +81,7 @@ internal class RecompKeeper(
         val rom = romOf(g)
         val name = TitleText.normalize(g.displayTitle)
         // A PlayStation dump is known by its title id, from its own files or its folder's name.
-        val titleId = if (PsPorts.all.any { it.system == g.platformId.value }) {
+        val titleId = if (PsPorts.all.any { it.system == g.platformId.value && it.system.startsWith("ps") }) {
             Ids.psId(g.tags.serial.orEmpty()) ?: Ids.psId(g.location.path)
         } else {
             null

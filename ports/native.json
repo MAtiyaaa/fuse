@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "about": "PlayStation games rebuilt to run natively by their own projects, which the person installs and Fuse finds and plays beside their emulators (core:launch PsPorts). Each night tools/ports/native_check.py reads each project's newest release and checks it still ships the files Fuse finds it by.",
+  "about": "PlayStation and Switch 2 games rebuilt to run natively by their own projects, which the person installs and Fuse finds and plays beside their emulators (core:launch PsPorts). Each night tools/ports/native_check.py reads each project's newest release and checks it still ships the files Fuse finds it by.",
   "ports": [
     {
       "id": "bloodborne-pc",
@@ -30,6 +30,21 @@
       "builds": [
         { "os": "windows", "asset": "^P\\.T\\.PC\\.Port-portable-windows\\.zip$", "has": ["pt.exe"] },
         { "os": "linux", "asset": "^P\\.T\\.PC\\.Port-portable-linux\\.zip$", "has": ["pt"] }
+      ]
+    },
+    {
+      "id": "ocarina-recomp",
+      "repo": "sostenesfreitas/ocarina-recomp",
+      "builds": [
+        { "os": "windows", "asset": "^Ocarina-Setup-.*-windows\\.zip$" }
+      ]
+    },
+    {
+      "id": "hookshot",
+      "repo": "NotRexed/Hookshot",
+      "builds": [
+        { "os": "windows", "asset": "^HookshotBuilder\\.(exe|zip)$" },
+        { "os": "linux", "asset": "\\.AppImage$" }
       ]
     }
   ]

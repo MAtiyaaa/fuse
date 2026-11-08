@@ -42,6 +42,21 @@ class PsPortsTest {
     }
 
     @Test
+    fun theSwitch2OcarinaOfTimeRecompsStartFromTheFolderTheyWereBuiltIn() {
+        val miojo = PsPorts.byId("ocarina-recomp")!!
+        val hookshot = PsPorts.byId("hookshot")!!
+        assertEquals("switch-2", miojo.system)
+        assertEquals("switch-2", hookshot.system)
+        assertEquals(listOf("/home/ana/ocarina-recomp/jogar/jogar-ocarina.sh"), PsPorts.argv(miojo, "linux", "/home/ana/ocarina-recomp", "/x"))
+        assertEquals("C:/OcarinaRecomp/jogar/jogar-ocarina.ps1", PsPorts.argv(miojo, "windows", "C:/OcarinaRecomp", "/x")!!.last(), "as its desktop shortcut starts it")
+        assertEquals("C:/OcarinaRecomp/perfil/save", PsPorts.saves(miojo, "windows", "C:/OcarinaRecomp", "unused"))
+        assertEquals(listOf("D:/Hookshot/hookshot.exe"), PsPorts.argv(hookshot, "windows", "D:/Hookshot", "/x"))
+        assertEquals("D:/Hookshot/user/save", PsPorts.saves(hookshot, "windows", "D:/Hookshot", "unused"))
+        assertEquals("/home/ana/.local/share/hookshot/save", PsPorts.saves(hookshot, "linux", "/home/ana/oot", PsPorts.dataHome("/home/ana", emptyMap())))
+        assertEquals(listOf("ocarina-recomp", "hookshot"), PsPorts.forTitle(PsPorts.OCARINA_SWITCH_2.lowercase()).map { it.id })
+    }
+
+    @Test
     fun gamesAreKnownByTheirTitleIds() {
         assertEquals(listOf("spartanport"), PsPorts.forTitle("cusa01715").map { it.id })
         assertEquals(listOf("pt-pc"), PsPorts.forTitle("CUSA01127").map { it.id })
