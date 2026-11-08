@@ -30,8 +30,10 @@ class SwitchNamesTest {
         // Switch 2 ids start 04, and its .nup holds the game with its updates.
         val nup = SwitchNames.read("Ocarina of Time [04004860224DEC00][v0].nup")
         assertEquals("04004860224DEC00", nup.titleId)
-        assertEquals("04004860224DEC00", nup.baseId)
+        // Switch 2 ids don't follow the Switch's numbering, so the name tells what it is, not the id.
+        assertNull(nup.baseId)
         assertEquals(BASE, nup.kind)
+        assertEquals(UPDATE, kind("Ocarina of Time [04004860224DEC00][Update][v65536].nup"))
         assertEquals(key("Ocarina of Time [04004860224DEC00][v0].xci"), nup.key)
     }
 

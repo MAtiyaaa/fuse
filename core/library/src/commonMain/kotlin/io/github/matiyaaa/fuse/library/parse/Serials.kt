@@ -46,7 +46,14 @@ object Serials {
         return null
     }
 
-    /** True for a Switch title id (16 hex digits starting with 01). */
+    /**
+     * True for an id whose low bits follow the Switch's numbering (game, update, DLC). Switch 2's
+     * (04...) may not: Ocarina of Time's is 04004860224DEC00, which that numbering reads as DLC.
+     * Its updates and DLC are told by their names instead.
+     */
+    private fun numbered(titleId: String): Boolean = titleId.trim().startsWith("01")
+
+    /** True for a Switch or Switch 2 title id (16 hex digits starting with 01 or 04). */
     fun isSwitchTitleId(value: String): Boolean = switchId.matches(value.trim())
 
     /**
@@ -55,7 +62,7 @@ object Serials {
      * is not a Switch title id.
      */
     fun switchBaseTitleId(titleId: String): String? {
-        if (!isSwitchTitleId(titleId)) return null
+        if (!isSwitchTitleId(titleId) || !numbered(titleId)) return null
         val value = titleId.trim().toLong(16)
         val base = when (switchTitleKind(titleId)) {
             SwitchTitleKind.BASE -> value
@@ -70,7 +77,7 @@ object Serials {
      * and anything else DLC (DLC ids are the game's id + 0x1000 + n, n from 1, so never end in `000`).
      */
     fun switchTitleKind(titleId: String): SwitchTitleKind? {
-        if (!isSwitchTitleId(titleId)) return null
+        if (!isSwitchTitleId(titleId) || !numbered(titleId)) return null
         return when (titleId.trim().toLong(16) and 0xFFF) {
             0L -> SwitchTitleKind.BASE
             0x800L -> SwitchTitleKind.UPDATE
