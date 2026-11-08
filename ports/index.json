@@ -2321,16 +2321,16 @@
         {
           "os": "linux",
           "url": "https://github.com/ec-/Quake3e/releases/download/latest/quake3e-linux-x86_64.zip",
-          "size": 2176872,
-          "sha256": "a1afd7c1dbcc4eef717470b6934b512efc5ebe316871e737114e4239636cbafa",
+          "size": 2177033,
+          "sha256": "ca91f59ef2030f245a8a4700f39ebbc4dd8cb1d68c800ea938fc62a1c7794823",
           "kind": "ZIP",
           "run": "quake3e.x64"
         },
         {
           "os": "windows",
           "url": "https://github.com/ec-/Quake3e/releases/download/latest/quake3e-windows-mingw-x86_64.zip",
-          "size": 2378609,
-          "sha256": "1c9b35dbdeab558ce25e930069f956f90332137508e0057206c15fdd68f41146",
+          "size": 2378605,
+          "sha256": "a50c284b470705fcfd1171635a2e8757bfe4190ef40d197c3833a3e2f8834c03",
           "kind": "ZIP",
           "run": "quake3e.x64.exe"
         }
