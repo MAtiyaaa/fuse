@@ -507,7 +507,8 @@ class LibraryScanner(
 
     private companion object {
         // Increase only for semantic changes that must reinterpret existing unchanged libraries.
-        const val SCANNER_RULES_VERSION = 1L
+        // 2: Switch 2's .nup, .nsz and .xcz (0.4.7.2), which an unchanged folder read before kept unseen.
+        const val SCANNER_RULES_VERSION = 2L
         const val SHORTCUT_READ_LIMIT = 16 * 1024
         val SHORTCUT_PLATFORMS = listOf(PlatformId("steam"), PlatformId("win"))
         val WINDOWS_SHORTCUTS = setOf("gog", "epic", "amazon", "pcgame", "lnk", "exe", "bat")

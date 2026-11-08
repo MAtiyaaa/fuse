@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.7.3 is the <b>Cool Running Update</b>: a notebook for every game on the second screen, a page for every Android port, each person's own emulators, filters for your other devices' games, and the same motion for far less work: cooler, and longer on a battery; 0.4.7.1 brings Switch 2 to every system, with Lichii and the native Ocarina of Time recomps, and 0.4.7.2 and 0.4.7.3 play its .nup packages</sub><br>
+<sub>0.4.7.4 is the <b>Cool Running Update</b>: a notebook for every game on the second screen, a page for every Android port, each person's own emulators, filters for your other devices' games, and the same motion for far less work: cooler, and longer on a battery; 0.4.7.1 brings Switch 2 to every system, with Lichii and the native Ocarina of Time recomps, and 0.4.7.2 to 0.4.7.4 find and play its .nup packages</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -166,7 +166,7 @@ second-screen companion, Storage, backups and System health: everything is in
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.7.3 "The Cool Running Update"**: the same motion for far less work. Moving through the
+> **Fuse 0.4.7.4 "The Cool Running Update"**: the same motion for far less work. Moving through the
 > Library, Home, Systems and the second screen builds only what changes, the theme's room rests
 > while art covers it, and art is asked for once, so a handheld stays cooler and lasts longer. On the
 > second screen each game has a notebook of your own, as many pages as you like; each Android port
@@ -174,7 +174,7 @@ second-screen companion, Storage, backups and System health: everything is in
 > games on your other devices can be sorted and narrowed by system and device. 0.4.7.1 brings
 > Nintendo Switch 2 to Android, Linux, Windows and macOS with the Lichii emulator, finds the two
 > native recompilations of the Switch 2 Ocarina of Time, and gives Switch 2 a logo of its own;
-> 0.4.7.2 and 0.4.7.3 play Switch 2's .nup packages. See [the release notes](docs/releases/0.4.7.3.md),
+> 0.4.7.2 to 0.4.7.4 find and play Switch 2's .nup packages. See [the release notes](docs/releases/0.4.7.4.md),
 > [0.4.7.1's](docs/releases/0.4.7.1.md), [0.4.7's](docs/releases/0.4.7.md) and every earlier release in
 > [CHANGELOG.md](CHANGELOG.md).
 
