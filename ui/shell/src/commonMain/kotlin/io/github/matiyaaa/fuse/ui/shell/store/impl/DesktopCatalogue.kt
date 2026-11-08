@@ -185,6 +185,12 @@ internal object DesktopCatalogue {
             family = "yuzu",
         ),
         DesktopEntry(
+            // Near-daily builds for Windows, Linux and Apple silicon Macs (macOS 15 or newer).
+            "lichii", "Lichii", "zortos293", "Nintendo Switch 2 and Switch, very experimental: an Eden fork where the first Switch 2 games start.",
+            EMULATORS, listOf("switch-2", "switch"), repo = "https://github.com/zortos293/Lichii", emulator = "lichii", prereleases = true,
+            family = "yuzu",
+        ),
+        DesktopEntry(
             "azaharplus", "AzaharPlus", "AzaharPlus team", "Nintendo 3DS, Azahar with extra features.",
             EMULATORS, listOf("3ds"), repo = "https://github.com/AzaharPlus/AzaharPlus", emulator = "azaharplus", hosts = setOf(Host.LINUX),
             family = "Citra",

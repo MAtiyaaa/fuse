@@ -328,4 +328,4 @@ internal const val GAMES_STYLE = "GAMES"
 private const val GAME_ART_SETTLE_MS = 2_000L
 
 /** Logos Fuse drew for systems the art pack has none for, by platform id, to the bundled file. */
-private val OWN_LOGOS = mapOf("ps5" to "files/system-logos/ps5.svg")
+private val OWN_LOGOS = mapOf("ps5" to "files/system-logos/ps5.svg", "switch-2" to "files/system-logos/switch-2.svg")

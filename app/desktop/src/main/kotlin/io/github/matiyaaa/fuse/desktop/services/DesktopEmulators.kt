@@ -80,6 +80,11 @@ internal class DesktopEmulatorDetector(
                     when (os) { DesktopOs.LINUX -> "$data/$name"; DesktopOs.WINDOWS -> appData?.let { "$it/$name" }; DesktopOs.MACOS -> "$mac/$name" },
                     if (os == DesktopOs.LINUX && name == "eden") "$home/.var/app/dev.eden_emu.eden/data/eden" else null,
                 )
+                // Lichii keeps Eden's folders (its README, "Existing saves and settings").
+                "lichii" -> add(
+                    "switch", "yuzu", dir?.let { "$it/user" },
+                    when (os) { DesktopOs.LINUX -> "$data/eden"; DesktopOs.WINDOWS -> appData?.let { "$it/eden" }; DesktopOs.MACOS -> "$mac/eden" },
+                )
                 "ryujinx" -> add(
                     "switch", "ryujinx", dir?.let { "$it/portable" },
                     when (os) { DesktopOs.LINUX -> "$config/Ryujinx"; DesktopOs.WINDOWS -> appData?.let { "$it/Ryujinx" }; DesktopOs.MACOS -> "$mac/Ryujinx" },

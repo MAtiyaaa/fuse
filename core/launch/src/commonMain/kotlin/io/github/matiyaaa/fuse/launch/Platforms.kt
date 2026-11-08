@@ -10,7 +10,7 @@ object Platforms {
     val all: List<PlatformId> = listOf(
         "psx", "ps2", "ps3", "ps4", "psp", "psvita",
         "n64", "nds", "nintendo-dsi", "3ds", "new-nintendo-3ds", "gb", "gbc", "gba", "nes", "famicom", "fds",
-        "snes", "sfam", "ngc", "wii", "wiiu", "switch", "virtualboy", "pokemon-mini",
+        "snes", "sfam", "ngc", "wii", "wiiu", "switch", "switch-2", "virtualboy", "pokemon-mini",
         "dc", "saturn", "genesis", "segacd", "sega32", "sms", "gamegear", "sg1000",
         "arcade", "neogeoaes", "neo-geo-cd", "neo-geo-pocket", "neo-geo-pocket-color",
         "tg16", "turbografx-cd", "atari2600", "atari5200", "atari7800", "lynx", "jaguar",

@@ -52,6 +52,8 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | IrataJaguar | `iratajaguar` | jaguar | No: This emulator keeps its saves in its own private Android folder, which no other app can open. RetroArch plays the same systems with saves Fuse keeps in step. | No: changed in the emulator on Android | No: changed in the emulator on Android | Not needed |
 | Kenji-NX | `kenji-nx` | switch | Yes | No: changed in the emulator on Android | No: changed in the emulator on Android | No: installed inside it, where Fuse can't look |
 | Lemuroid | `lemuroid` | arcade, atari2600, atari7800, gamegear, gb, gba, gbc, genesis, lynx, n64, nds, neo-geo-pocket, neo-geo-pocket-color, nes, psp, psx, segacd, sms, snes, tg16, wonderswan, wonderswan-color | Yes | No: changed in the emulator on Android | No: changed in the emulator on Android | Yes: BIOS folders, by name and checksum |
+| Lichii | `lichii` | switch, switch-2 | Yes | No: changed in the emulator on Android | No: changed in the emulator on Android | No: installed inside it, where Fuse can't look |
+| Lichii Nightly | `lichii-nightly` | switch, switch-2 | Yes | No: changed in the emulator on Android | No: changed in the emulator on Android | No: installed inside it, where Fuse can't look |
 | Lime3DS | `lime3ds` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator on Android | No: changed in the emulator on Android | Not needed |
 | Linkboy | `linkboy` | gb, gba, gbc | Yes | No: changed in the emulator on Android | No: changed in the emulator on Android | Yes: optional; BIOS folders, by name and checksum |
 | Lynx.emu | `lynx-emu` | lynx | No: This EX+Alpha app keeps saves in a form Fuse doesn't read yet; RetroArch plays the same systems with saves Fuse keeps in step. | No: changed in the emulator on Android | No: changed in the emulator on Android | Yes: optional; BIOS folders, by name and checksum |
@@ -131,6 +133,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | Eden | `linux.eden` | switch | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | Flycast | `linux.flycast` | arcade, dc | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
 | KytyPS5 | `linux.kytyps5` | ps5 | No: This emulator is early, and where it keeps saves still changes between versions. | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Lichii | `linux.lichii` | switch, switch-2 | Yes | No: changed in the emulator | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | Lime3DS | `linux.lime3ds` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | MAME | `linux.mame` | arcade, neogeoaes | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 | Mandarine | `linux.mandarine` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
@@ -174,6 +177,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | Eden | `windows.eden` | switch | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | Flycast | `windows.flycast` | arcade, dc | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
 | KytyPS5 | `windows.kytyps5` | ps5 | No: This emulator is early, and where it keeps saves still changes between versions. | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Lichii | `windows.lichii` | switch, switch-2 | Yes | No: changed in the emulator | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | Lime3DS | `windows.lime3ds` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | MAME | `windows.mame` | arcade, neogeoaes | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 | Mandarine | `windows.mandarine` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
@@ -214,6 +218,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | Eden | `macos.eden` | switch | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | Flycast | `macos.flycast` | arcade, dc | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
 | KytyPS5 | `macos.kytyps5` | ps5 | No: This emulator is early, and where it keeps saves still changes between versions. | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Lichii | `macos.lichii` | switch, switch-2 | Yes | No: changed in the emulator | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | Lime3DS | `macos.lime3ds` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | MAME | `macos.mame` | arcade, neogeoaes | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 | Mandarine | `macos.mandarine` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |

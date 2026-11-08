@@ -32,6 +32,9 @@ internal object AndroidConsoleDefs {
     private val N3DS = platforms("3ds", "new-nintendo-3ds")
     private val NDS = platforms("nds", "nintendo-dsi")
     private val SWITCH = platforms("switch")
+    private val SWITCH_2 = platforms("switch-2", "switch")
+    private const val LICHII_ANDROID = "pavelgajdo/Lichii-Android android-0.3.0: src/android/app/build.gradle.kts (applicationId dev.lichii.android) " +
+        "and AndroidManifest.xml (Eden's org.yuzu.yuzu_emu.activities.EmulationActivity: TECH_DISCOVERED, VIEW and LAUNCH_WITH_CUSTOM_CONFIG)"
     private val GB = platforms("gb", "gbc")
     private val NES = platforms("nes", "famicom", "fds")
 
@@ -482,6 +485,31 @@ internal object AndroidConsoleDefs {
             platforms = SWITCH, modes = yuzuStyle(title = true),
             source = esde("EDEN-NIGHTLY") + "; Eden source (same activity and intent filters)",
             confidence = VERIFIED_ESDE, homepage = "https://eden-emu.dev/",
+            capabilities = installedContent(),
+            titleIdMode = TitleIdMode.OPTIONAL,
+            installHint = "Install to NAND",
+        ),
+        // Nintendo Switch 2: Lichii's Android port (pavelgajdo/Lichii-Android), an Eden fork with Eden's activity and intents.
+        AndroidEmulatorDef(
+            id = "lichii", name = "Lichii",
+            apps = apps(YUZU_ACTIVITY, "dev.lichii.android"),
+            platforms = SWITCH_2, modes = yuzuStyle(title = true),
+            source = LICHII_ANDROID,
+            confidence = VERIFIED_SOURCE, homepage = "https://github.com/pavelgajdo/Lichii-Android",
+            capabilities = installedContent(),
+            titleIdMode = TitleIdMode.OPTIONAL,
+            installHint = "Install to NAND",
+            limitations = listOf(
+                "Very experimental: it needs an arm64 phone with Android 13 or newer and Vulkan 1.3, and few Switch 2 games start.",
+                "Updates and DLC must be installed inside Lichii; they can't be passed at launch.",
+            ),
+        ),
+        AndroidEmulatorDef(
+            id = "lichii-nightly", name = "Lichii Nightly",
+            apps = apps(YUZU_ACTIVITY, "dev.lichii.android.nightly"),
+            platforms = SWITCH_2, modes = yuzuStyle(title = true),
+            source = LICHII_ANDROID + " (the nightly build type's .nightly applicationIdSuffix)",
+            confidence = VERIFIED_SOURCE, homepage = "https://github.com/pavelgajdo/Lichii-Android",
             capabilities = installedContent(),
             titleIdMode = TitleIdMode.OPTIONAL,
             installHint = "Install to NAND",

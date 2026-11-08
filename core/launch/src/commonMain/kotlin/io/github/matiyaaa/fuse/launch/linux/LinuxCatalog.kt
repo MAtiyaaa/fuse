@@ -38,6 +38,9 @@ object LinuxCatalog {
      * ZArchive dump>`, the same on Windows, Linux and macOS; its release workflow
      * (.github/workflows/build.yml) packs `kyty_emulator` at the top of each system's build.
      */
+    internal const val LICHII_SOURCE = "zortos293/Lichii README.md and src/yuzu/CMakeLists.txt (an Eden fork: the program is lichii, lichii.exe and " +
+        "lichii.app, Eden's data folders kept); the command line is Eden's (ES-DE EDEN: -f -g <game>), not confirmed in Lichii's own docs"
+
     internal const val KYTYPS5_SOURCE = "KytyPS5's README (e5f0ee7): kyty_emulator --game <game directory, ELF file or ZArchive dump>"
 
     private fun spec(args: Array<out String>, workingDir: String?) = LinuxCommandSpec(args.toList(), workingDir)
@@ -232,6 +235,18 @@ object LinuxCatalog {
             modes = listOf(file("{ROM}", ext = setOf("nca", "nro", "nso", "nsp", "xci"))),
             source = esde("RYUJINX"), confidence = VERIFIED_ESDE, homepage = "https://ryujinx.app/",
             capabilities = caps(installed = true),
+        ),
+        LinuxEmulatorDef(
+            // Lichii: an Eden fork for Switch 2 (and Switch) games, which keeps Eden's command line and data folders.
+            id = "linux.lichii", name = "Lichii", platforms = platforms("switch-2", "switch"),
+            detection = detect(bin = listOf("lichii"), appImage = listOf("*lichii*.appimage"), dirBin = listOf("Lichii/lichii", "lichii/lichii")),
+            modes = listOf(file("-f", "-g", "{ROM}", ext = setOf("nca", "nro", "nso", "nsp", "xci"))),
+            source = LICHII_SOURCE, confidence = Confidence.COMMUNITY, homepage = "https://lichii.zortos.me/",
+            capabilities = caps(installed = true), installHint = "Install to NAND",
+            limitations = listOf(
+                "Switch 2 emulation is very young: a few games start, most with missing effects or low frame rates.",
+                "Lichii keeps its saves and settings in Eden's folders, so the two share them.",
+            ),
         ),
         LinuxEmulatorDef(
             id = "linux.citron", name = "Citron", platforms = platforms("switch"),

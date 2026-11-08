@@ -23,11 +23,14 @@ data class PsPort(
     val source: String,
 )
 
-/** The PlayStation games rebuilt to run natively that Fuse finds and plays beside their emulators. */
+/** The PlayStation and Switch 2 games rebuilt to run natively that Fuse finds and plays beside their emulators. */
 object PsPorts {
     const val GAME = "{game}"
     const val INSTALL = "{install}"
     const val DATA = "{data}"
+
+    /** The Switch 2 Ocarina of Time's title id (jaigner-hub/ocarina-of-time-recomp README.md). */
+    const val OCARINA_SWITCH_2 = "04004860224DEC00"
 
     val all: List<PsPort> = listOf(
         PsPort(
@@ -87,6 +90,46 @@ object PsPorts {
             saveFiles = listOf("PT_Save_Data0", "PT_Save_Data1"),
             source = "LoreanXavier/pt-pc v1.0.7: README.md (CUSA01127, the installer copies chunk1.psarc beside the port, data/ beside the program); CMakeLists.txt (the pt program); installer/Native/setup.cpp (pt.exe); src/main.cpp UserDataDir and the save path; src/game/save_data.h and save_data.cpp (two slots, PT_Save_Data0 and PT_Save_Data1)",
         ),
+        // The Legend of Zelda: Ocarina of Time (Switch 2, 2026): static recompilations built on the person's computer
+        // from their own copy, so a release holds a builder and the game appears in its folder once built.
+        PsPort(
+            id = "ocarina-recomp",
+            name = "Ocarina Recomp",
+            game = "The Legend of Zelda: Ocarina of Time",
+            system = "switch-2",
+            titleIds = setOf(OCARINA_SWITCH_2),
+            repo = "sostenesfreitas/ocarina-recomp",
+            marks = mapOf(
+                "windows" to listOf("jogar/jogar-ocarina.ps1", "build/oot111/ocarina.exe"),
+                "linux" to listOf("jogar/jogar-ocarina.sh", "build/oot111/ocarina"),
+            ),
+            start = mapOf(
+                // As its desktop shortcut starts it (instalador/Instalar-Ocarina.ps1).
+                "windows" to listOf("powershell.exe", "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", "$INSTALL/jogar/jogar-ocarina.ps1"),
+                "linux" to listOf("$INSTALL/jogar/jogar-ocarina.sh"),
+            ),
+            saves = mapOf("windows" to "$INSTALL/perfil/save", "linux" to "$INSTALL/perfil/save"),
+            source = "sostenesfreitas/ocarina-recomp v0.2.7: README.en.md (your own copy at version 1.1.1, the Ocarina-Setup-...-windows.zip installer, " +
+                "compilar.sh and jogar/jogar-ocarina.sh on Linux); jogar/jogar-ocarina.ps1 and jogar-ocarina.sh (TOTK_PROFILE_DIR <install>/perfil, " +
+                "build/oot111/ocarina started from its folder); instalador/Instalar-Ocarina.ps1 (the shortcut: powershell.exe -NoProfile -WindowStyle Hidden " +
+                "-ExecutionPolicy Bypass -File jogar\\jogar-ocarina.ps1); runtime/fs_host.c (saves in <profile>/save/<uid>)",
+        ),
+        PsPort(
+            id = "hookshot",
+            name = "Hookshot",
+            game = "The Legend of Zelda: Ocarina of Time",
+            system = "switch-2",
+            titleIds = setOf(OCARINA_SWITCH_2),
+            repo = "NotRexed/Hookshot",
+            // The game folder Hookshot Builder writes: the program and the lifted image beside it.
+            marks = mapOf("windows" to listOf("hookshot.exe", "image.bin"), "linux" to listOf("hookshot", "image.bin")),
+            start = mapOf("windows" to listOf("$INSTALL/hookshot.exe"), "linux" to listOf("$INSTALL/hookshot")),
+            saves = mapOf("windows" to "$INSTALL/user/save", "linux" to "$DATA/hookshot/save"),
+            source = "NotRexed/Hookshot 0.1.0: changelog.txt (built on the player's PC from their own copy; Hookshot Builder on Windows, the Linux AppImage); " +
+                "builder/linux/hookshot-launch (a built game is a folder with hookshot and image.bin); host/hos_main.c (started with nothing it reads " +
+                "image.bin and romfs beside itself; user beside it on Windows, saves_dir: XDG_DATA_HOME or ~/.local/share, then hookshot, on Linux); " +
+                "host/nn_fs.c (saves in <user>/save/<uid>)",
+        ),
     )
 
     fun byId(id: String): PsPort? = all.firstOrNull { it.id == id }
@@ -110,7 +153,7 @@ object PsPorts {
         env["XDG_DATA_HOME"]?.takeIf { it.isNotBlank() } ?: "${home.trimEnd('/')}/.local/share"
 }
 
-/** What the person can install themselves and Fuse plays: recomps ([Recomps]) and PlayStation ports ([PsPorts]), by id. */
+/** What the person can install themselves and Fuse plays: recomps ([Recomps]) and PlayStation and Switch 2 ports ([PsPorts]), by id. */
 object NativePorts {
     fun name(id: String): String? = Recomps.byId(id)?.name ?: PsPorts.byId(id)?.name
 

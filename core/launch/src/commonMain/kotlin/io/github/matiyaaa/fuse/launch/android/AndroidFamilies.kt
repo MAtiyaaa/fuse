@@ -28,6 +28,7 @@ object AndroidFamilies {
         rule("melonds", "melonds"),
         rule("duckstation", "duckstation"),
         rule("nethersx2", "aethersx2", "nethersx2"),
+        rule("lichii", "lichii"),
         rule("eden", "eden"),
         rule("citron", "citron"),
         rule("sudachi", "sudachi"),

@@ -161,6 +161,8 @@
         <package android:name="dev.eden.eden_emulator.nightly" />
         <package android:name="dev.legacy.eden_emulator" />
         <package android:name="dev.legacy.eden_emulator.nightly" />
+        <package android:name="dev.lichii.android" />
+        <package android:name="dev.lichii.android.nightly" />
         <package android:name="emu.x360mobile.com" />
         <package android:name="emuready.gamehub.lite" />
         <package android:name="gamehub.lite" />

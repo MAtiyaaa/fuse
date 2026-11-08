@@ -399,10 +399,11 @@ internal object ThreeDs : SaveAdapter {
  * folder the person picks in Fuse (Eden's own, its NAND or its save data folder) is read the same way.
  */
 internal object SwitchNand : SaveAdapter {
-    override val emulators = setOf("eden", "eden-nightly", "citron", "sudachi", "yuzu", "suyu", "torzu")
+    override val emulators = setOf("eden", "eden-nightly", "lichii", "lichii-nightly", "citron", "sudachi", "yuzu", "suyu", "torzu")
 
     private fun folderName(id: String) = when (id) {
-        "eden-nightly" -> "eden"
+        // Lichii keeps Eden's data folders (its README, "Existing saves and settings").
+        "eden-nightly", "lichii", "lichii-nightly" -> "eden"
         else -> id
     }
 

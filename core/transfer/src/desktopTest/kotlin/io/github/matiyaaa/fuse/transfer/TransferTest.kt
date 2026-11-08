@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.nio.file.Files
 import java.security.MessageDigest
@@ -627,11 +628,15 @@ class TransferTest {
         m.register(FileHandler(Server()))
         val id = m.enqueue(download("Aside.bin"))
         m.awaitStatus(id, TransferStatus.ACTIVE)
-        delay(400)
+        // Some of it has arrived (not a fixed wait, which a busy machine can outlast with nothing come).
+        withTimeout(10_000) { m.live(id).first { it.doneBytes > 0 } }
         m.setLater(id, true).join()
         val waiting = m.awaitStatus(id, TransferStatus.WAITING)
         assertEquals(WaitReason.LATER, waiting.waiting)
-        assertTrue(File(root, "games/.Aside.bin.fuse-part").length() > 0, "what arrived is kept")
+        // The stopped download closes its file (writing out what arrived) as the status changes, so give it a moment.
+        val part = File(root, "games/.Aside.bin.fuse-part")
+        withTimeoutOrNull(5_000) { while (part.length() == 0L) delay(20) }
+        assertTrue(part.length() > 0, "what arrived is kept")
         m.configure(TransferSettings())
         m.conditions(TransferConditions(powerKnown = true, battery = 70, charging = true))
         m.awaitStatus(id, TransferStatus.DONE)
@@ -654,6 +659,8 @@ class TransferTest {
         val sd = VolumeRef("sd", "SD card", VolumeKind.SD_CARD, true, "", 0)
         fun on(name: String, volume: VolumeRef?, size: Long) = download(name, TransferPlace(File(root, name).path, volume)).copy(totalBytes = size)
         m.enqueue(on("First", sd, 1_000))
+        // The first has said how far it is before the others look, or the second could count all of it.
+        withTimeout(5_000) { while (!seen.containsKey("First")) delay(10) }
         m.enqueue(on("Elsewhere", null, 5_000))
         m.enqueue(on("Second", sd, 2_000))
         withTimeout(5_000) { while (seen.size < 3) delay(10) }
