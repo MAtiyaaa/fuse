@@ -1,17 +1,20 @@
-# Fuse 0.4.7.3 - The Cool Running Update
+# Fuse 0.4.7.4 - The Cool Running Update
 
-Switch 2 games named with their title id are games again.
+Everyone's saves can move to Fuse V2.
 
 ## New
 
-- Nothing new in this release; it fixes 0.4.7.2.
+- Settings, Save Folders, **Move to Fuse V2**: everyone's saves kept on this device (each person's
+  own, set aside while someone else played, and the ones not yet on a host), with who each person
+  is, whose save is in each emulator's folder now and the save folders you chose, written out for
+  Fuse V2 to import. On Android they go to `Fuse V1 Saves` in your storage, on a computer to your
+  home folder. Fuse V2's Developer page, Import from Fuse V1, reads them and asks which of its
+  profiles each person is. Nothing here changes.
 
 ## Changed
 
-- A Switch 2 file's update or DLC is told by its name (Update, DLC, a version), not by its title id,
-  since Switch 2 ids don't follow the Switch's numbering.
+- Nothing else changed in this release.
 
 ## Fixed
 
-- A Switch 2 game named with its title id could be taken for DLC and kept out of the Library:
-  Ocarina of Time's id, 04004860224DEC00, reads as DLC by the Switch's numbering.
+- Nothing to fix in this release; it adds the move to Fuse V2 to 0.4.7.3.

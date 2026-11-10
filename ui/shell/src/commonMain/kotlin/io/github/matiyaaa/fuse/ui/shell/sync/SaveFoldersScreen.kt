@@ -134,6 +134,7 @@ internal fun SaveFoldersScreen(app: AppState) {
 
 private fun saveFolderRows(app: AppState, list: List<EmulatorSaves>?, installed: List<InstalledEmulator>, page: SaveFoldersState): List<MenuAction> = buildList {
     add(MenuAction("import", "Import Saves", FuseIcons.FileUp, detail = "A save file, folder or ZIP from another device. Preview matches before replacing anything", onSelect = { openSaveImporter(app) }))
+    add(MenuAction("export.v2", "Move to Fuse V2", FuseIcons.Share, detail = "Everyone's saves kept here, with who each one is, written out for Fuse V2 to import. Nothing here changes", onSelect = { exportForFuseV2(app) }))
     if (list == null) {
         add(infoRow("looking", "Looking at your emulators", icon = FuseIcons.Search))
         return@buildList
@@ -173,6 +174,27 @@ private fun saveFolderRows(app: AppState, list: List<EmulatorSaves>?, installed:
             section = section,
             onSelect = { chooseFolder(app, e, name, page) },
         ))
+    }
+}
+
+/**
+ * Everyone's saves kept on this device, written out for Fuse V2 (Fuse V2, Developer, Import from
+ * Fuse V1): where they went, or why they couldn't be.
+ */
+private fun exportForFuseV2(app: AppState) {
+    val service = app.store.sync.service
+    if (service == null) {
+        app.toasts.show("Saves can't be written out from this build")
+        return
+    }
+    app.toasts.show("Writing everyone's saves for Fuse V2", icon = FuseIcons.Share)
+    app.scope.launch {
+        service.exportForFuseV2()
+            .onSuccess { done ->
+                val missing = if (done.missing > 0) " (${count(done.missing, "file")} couldn't be found)" else ""
+                app.toasts.show("${count(done.saves, "save")} of ${count(done.people, "person", "people")} are ready for Fuse V2 in ${done.folder}$missing", ToastKind.SUCCESS, icon = FuseIcons.FolderSync)
+            }
+            .onFailure { app.toasts.show("The saves couldn't be written for Fuse V2: ${it.message ?: "something went wrong"}") }
     }
 }
 

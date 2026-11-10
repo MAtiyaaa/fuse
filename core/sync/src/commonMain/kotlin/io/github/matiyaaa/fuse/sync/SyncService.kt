@@ -606,6 +606,13 @@ interface SyncService {
      */
     suspend fun saveFolders(samples: List<SaveQuery>): List<EmulatorSaves> = emptyList()
 
+    /**
+     * Everyone's saves kept on this device, with who each person is, written out for Fuse V2 to
+     * import (its Developer page, Import from Fuse V1): a folder in shared storage on Android, in
+     * the home folder on a computer. Nothing here changes. Works with Fuse Sync on or off.
+     */
+    suspend fun exportForFuseV2(): Result<FuseV2Exported> = Result.failure(UnsupportedOperationException("Moving to Fuse V2 isn't available here"))
+
     /** Analyze a source without changing emulator saves; every destination is shown before importing. */
     suspend fun previewSaveImport(source: String, games: List<SaveQuery>): Result<SaveImportPlan> = Result.failure(UnsupportedOperationException("Save importing isn't available here"))
 
@@ -754,3 +761,6 @@ sealed interface SaveProbeResult {
         override val keptAt: String? get() = null
     }
 }
+
+/** What [SyncService.exportForFuseV2] wrote: where, and how many people and saves it holds. */
+data class FuseV2Exported(val folder: String, val people: Int, val saves: Int, val missing: Int = 0)
