@@ -630,6 +630,22 @@ class SyncDevice(
     /** Test hook: runs before each file moves in a handover, to interrupt it at that step. */
     internal var handoverFault: (Int) -> Unit = {}
 
+    /**
+     * Everyone's saves this device keeps, for an export ([FuseV2Export]): each person's own kept
+     * aside while someone else played, the saves still to go to a host, the ones from before an
+     * import, and whose save is in each emulator's folder now. Read as one, under the lock.
+     */
+    data class KeptSaves(
+        val parked: Map<String, SaveManifest>,
+        val holders: Map<String, String>,
+        val unsent: List<SaveRevision>,
+        val beforeImports: Map<String, List<ImportBackup>>,
+    )
+
+    suspend fun keptSaves(): KeptSaves = mutex.withLock {
+        KeptSaves(state.parked, state.holders, state.outbox.mapNotNull { it.revision }, state.importBackups)
+    }
+
     /** A save of [slot]'s game that no profile owned, parked aside on a shared device, when there is one. */
     fun unclaimed(slot: LocalSlot): SaveManifest? = state.parked[keyOf(UNCLAIMED, slot)]
 

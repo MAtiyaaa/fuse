@@ -2333,6 +2333,36 @@ class JvmSyncService(
     private fun ownerOf(query: SaveQuery, slot: LocalSlot, profile: String): String =
         if (slot.kind != SaveKind.MEMORY_CARD && query.game.id in cached.sharedGames) SHARED_SAVES else profile
 
+    override suspend fun exportForFuseV2(): Result<FuseV2Exported> = withContext(Dispatchers.IO) {
+        runCatching {
+            // The device's own record of everyone's saves, read even while Fuse Sync is off.
+            val d = device ?: File(dir, "device").takeIf { File(it, "device-state.json").isFile }?.let { SyncDevice(it, deviceId(), cached.deviceName.ifBlank { defaultDeviceName }) }
+            val kept = d?.keptSaves() ?: SyncDevice.KeptSaves(emptyMap(), emptyMap(), emptyList(), emptyMap())
+            val known = LinkedHashMap<String, FuseV2Export.Person>()
+            for (p in _profiles.value) known[p.id] = FuseV2Export.Person(p.id, p.name, p.avatar)
+            for (p in people.profiles) known.putIfAbsent(p.id, FuseV2Export.Person(p.id, p.name, p.avatar))
+            val saves = FuseV2Export.saves(kept)
+            // Someone whose saves are here but who isn't listed any more still needs a name to be chosen by.
+            for (id in saves.map { it.person } + kept.holders.values) {
+                if (id != ORPHAN) known.putIfAbsent(id, FuseV2Export.Person(id, if (id == UNCLAIMED) "Nobody's (kept aside)" else "Someone who played here"))
+            }
+            val manifest = FuseV2Export.Manifest(
+                fuse = fuseVersion,
+                device = cached.deviceName.ifBlank { defaultDeviceName },
+                exportedAt = clock(),
+                current = d?.profile ?: _active.value?.id,
+                people = known.values.toList(),
+                saveFolders = cached.saveFolders,
+                holders = FuseV2Export.holders(kept),
+                saves = saves,
+            )
+            val folder = FuseV2Export.target(platform)
+            val done = FuseV2Export.write(folder, manifest, d?.store)
+            log("Everyone's saves were written for Fuse V2 in ${folder.path}: ${done.saves.size} saves of ${done.people.size} people")
+            FuseV2Exported(folder.path, done.people.size, done.saves.size, done.missing)
+        }
+    }
+
     override suspend fun saveFolders(samples: List<SaveQuery>): List<EmulatorSaves> = withContext(Dispatchers.IO) {
         config()
         SaveAdapters.survey(samples, saveEnv)
